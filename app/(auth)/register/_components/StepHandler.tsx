@@ -1,20 +1,29 @@
 import { useRegisterData } from '@/customHooks/useRegisterData'
 import React from 'react'
-import Step1 from './step.1';
+import ChooseStep from './ChooseStep';
+import RegisterStep from './RegisterStep';
+import CompanyRegister from './CompanyRegister';
 
 const StepHandler = () => {
     const {step} = useRegisterData();
 
     function handleShowenStep() {
         switch (step) {
-            case 0:
+            case "choose":
                 return (
-                    <Step1 />
+                    <ChooseStep />
                 )
-
+            case "register":
+                return (
+                    <RegisterStep />
+                )
+            case "companyRegister":
+                return (
+                    <CompanyRegister/>
+                )
             default:
                 return(
-                    <p>Step: {Number(step)}</p>
+                    <p>Step: {step}</p>
                 )
         }
     }

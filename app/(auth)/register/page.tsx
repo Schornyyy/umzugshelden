@@ -1,12 +1,11 @@
 "use client";
 
 
-import React, { useState } from 'react'
+import React from 'react'
 import { RegisterDataProvider } from './provider/RegisterDataProviderr';
 import StepHandler from './_components/StepHandler';
 
 const Page = () => {
-  const [loading, setLoading] = useState<boolean>(false);
 
   return (
     <RegisterDataProvider>
