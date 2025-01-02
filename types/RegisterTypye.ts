@@ -17,6 +17,7 @@ export interface CompanyType  {
     images?: string[],
     title?: string,
     public?: boolean,
+    services?: string[],
     id?: string
 }
 
@@ -35,5 +36,6 @@ export function parseDataToCompanyType(data: DocumentData, id?: string) {
         title: data.title ? data.title : "",
         public: data.public ? data.public : false,
         id: id ? id : "",
+        services: data.services ? data.services :  [],
     }
 }
