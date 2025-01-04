@@ -3,7 +3,6 @@
 
 import React, { Suspense, useEffect, useState } from "react";
 import { fetchCoordinates } from "@/actions/userActions";
-import geolib from "geolib";
 import { collection, query, getDocs, startAfter, limit, where } from "firebase/firestore";
 import { database } from "@/config/firebase";
 import { CompanyType } from "@/types/RegisterTypye";
@@ -42,6 +41,26 @@ function CompanySearchPage() {
     }
   }, [searchParams]);
 
+  const calculateDistance = (
+    point1: { latitude: number; longitude: number },
+    point2: { latitude: number; longitude: number }
+  ): number => {
+    const toRadians = (deg: number) => (deg * Math.PI) / 180;
+  
+    const R = 6371e3; // Radius der Erde in Metern
+    const φ1 = toRadians(point1.latitude);
+    const φ2 = toRadians(point2.latitude);
+    const Δφ = toRadians(point2.latitude - point1.latitude);
+    const Δλ = toRadians(point2.longitude - point1.longitude);
+  
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distanz in Metern
+  };
+
   const handleSearch = async (city: string, zip: string, radius: number, service?: string) => {
     try {
       setLoading(true);
@@ -58,11 +77,11 @@ function CompanySearchPage() {
 
       const filteredCompanies = filterCompaniesByRadius(companies, centerCoordinates!, radius);
       const sortedCompanies = filteredCompanies.sort((a, b) =>
-        geolib.getDistance(
+        calculateDistance(
           { latitude: a.latitude!, longitude: a.longitude! },
           centerCoordinates!
         ) -
-        geolib.getDistance(
+        calculateDistance(
           { latitude: b.latitude!, longitude: b.longitude! },
           centerCoordinates!
         )
