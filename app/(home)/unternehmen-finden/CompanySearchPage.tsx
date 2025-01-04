@@ -14,6 +14,11 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
 function CompanySearchPage() {
   const [results, setResults] = useState<CompanyType[]>([]);
   const [displayedResults, setDisplayedResults] = useState<CompanyType[]>([]);
@@ -88,6 +93,29 @@ function CompanySearchPage() {
     return querySnapshot.docs;
   };
 
+  const haversineDistance = (point1: Coordinates, point2: Coordinates): number => {
+    const toRadians = (deg: number): number => (deg * Math.PI) / 180;
+  
+    const R = 6371e3; // Radius der Erde in Metern
+    const φ1 = toRadians(point1.latitude);
+    const φ2 = toRadians(point2.latitude);
+    const Δφ = toRadians(point2.latitude - point1.latitude);
+    const Δλ = toRadians(point2.longitude - point1.longitude);
+  
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distanz in Metern
+  };
+  
+  const isPointWithinRadius = (point: Coordinates, center: Coordinates, radius: number): boolean => {
+    const distance = haversineDistance(point, center);
+    return distance <= radius;
+  };
+  
+
   const filterCompaniesByRadius = (
     companies: CompanyType[],
     centerCoordinates: { latitude: number; longitude: number },
@@ -95,7 +123,7 @@ function CompanySearchPage() {
   ) => {
     return companies.filter((company) => {
       if (!company.latitude || !company.longitude) return false;
-      return geolib.isPointWithinRadius(
+      return isPointWithinRadius(
         { latitude: company.latitude, longitude: company.longitude },
         centerCoordinates,
         radius * 1000
