@@ -35,6 +35,7 @@ const CompanyInfosUpdate: React.FC = () => {
   });
 
   const [loading, setLoading] = useState<boolean>(false);
+  const [state, setState] = useState<"idle" | "success" | "error">("idle")
 
   const onSubmit = async (data: FormData) => {
     setLoading(true)
@@ -45,11 +46,13 @@ const CompanyInfosUpdate: React.FC = () => {
           companyRef.longitude = res.longitude;
           companyRef.latitude = res.latitude;
           await updateCompanyInDatabase(companyRef);
+          setState("success")
            // Daten speichern
         }
       }); // Koordinaten abrufen
     } catch (error) {
       console.error('Fehler beim Speichern:', error);
+      setState("error")
     }
     setLoading(false);
   };
@@ -174,6 +177,8 @@ const CompanyInfosUpdate: React.FC = () => {
         >
           Speichern
         </button>
+        {state === "success" && <p className="text-green-500">Daten erfolgreich gespeichert</p>}
+        {state === "error" && <p className="text-red-500">Fehler beim Speichern</p>}
       </form>
     
     </>

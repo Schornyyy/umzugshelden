@@ -93,7 +93,7 @@ const ImageUploadComponent: React.FC = () => {
       };
   
       return (
-        <div className="flex flex-row gap-12">
+        <div className="flex flex-col md:flex-row flex-wrap  gap-12">
           {images.map((image, index) => (
             <div key={index} className="relative w-64 h-64 border border-gray-300 rounded-md overflow-hidden">
               {uploading[index] ? (

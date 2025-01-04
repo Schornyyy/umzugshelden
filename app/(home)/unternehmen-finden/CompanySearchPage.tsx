@@ -49,6 +49,8 @@ function CompanySearchPage() {
         id: doc.id,
       })) as CompanyType[];
 
+      if(companies.length === 0) return;
+
       const filteredCompanies = filterCompaniesByRadius(companies, centerCoordinates!, radius);
       const sortedCompanies = filteredCompanies.sort((a, b) =>
         geolib.getDistance(
