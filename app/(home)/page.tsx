@@ -46,7 +46,7 @@ const page = () => {
           <div className="flex justify-center items-center lg:w-1/2">
             <Image 
               alt="JobSmith Hero" 
-              src="/images/JobSmith_hero.png" 
+              src="/images/JobSmith_Hero.png" 
               width={750} 
               height={350} 
               className="object-cover w-full max-w-lg lg:max-w-none" 

@@ -29,7 +29,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="text-2xl font-bold text-green-600">
-          <Image alt="JobSmith Logo" src={"/images/JobSmith_Logo_green.png"} height={128} width={256} className="object-cover"/>
+          <Image alt="JobSmith Logo" src={"/images/JobSmith_Logo_Green.png"} height={128} width={256} className="object-cover"/>
         </Link>
 
         {/* Desktop Navigation */}
