@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -28,7 +29,7 @@ const Navbar = () => {
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
         {/* Logo */}
         <Link href="/" className="text-2xl font-bold text-green-600">
-          Logo
+          <Image alt="JobSmith Logo" src={"/images/JobSmith_Logo_green.png"} height={128} width={256} className="object-cover"/>
         </Link>
 
         {/* Desktop Navigation */}
@@ -36,13 +37,13 @@ const Navbar = () => {
           <Link href="/" className="text-gray-600 hover:text-green-600">
             Startseite
           </Link>
-          <Link href="/for-business" className="text-gray-600 hover:text-green-600">
+          <Link href="/fuer-unternehmen" className="text-gray-600 hover:text-green-600">
             Für Unternehmen
           </Link>
           <Link href="/unternehmen-finden" className="text-gray-600 hover:text-green-600">
             Unternehmen finden
           </Link>
-          <Link href="/contact" className="text-gray-600 hover:text-green-600">
+          <Link href="/kontakt" className="text-gray-600 hover:text-green-600">
             Kontakt
           </Link>
         </div>
@@ -50,7 +51,7 @@ const Navbar = () => {
         {/* Call-to-Action Button */}
         <div className="hidden md:block">
           <Link
-            href="/find-handyman"
+            href="/unternehmen-finden"
             className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
           >
             Jetzt Handwerker finden
@@ -111,28 +112,28 @@ const Navbar = () => {
             Startseite
           </Link>
           <Link
-            href="/for-business"
+            href="/fuer-unternehmen"
             className="text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-200"
             onClick={handleLinkClick}
           >
             Für Unternehmen
           </Link>
           <Link
-            href="/find-companies"
+            href="/unternehmen-finden"
             className="text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-300"
             onClick={handleLinkClick}
           >
             Unternehmen finden
           </Link>
           <Link
-            href="/contact"
+            href="/kontakt"
             className="text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-400"
             onClick={handleLinkClick}
           >
             Kontakt
           </Link>
           <Link
-            href="/find-handyman"
+            href="/unternehmen-finden"
             className="bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700 transition-opacity delay-500"
             onClick={handleLinkClick}
           >

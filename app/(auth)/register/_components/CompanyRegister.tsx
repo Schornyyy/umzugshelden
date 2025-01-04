@@ -41,7 +41,7 @@ const CompanyRegister: React.FC = () => {
       }
     })
     updateData(d);
-    updateStep("register")
+    updateStep("service")
   };
 
   return (

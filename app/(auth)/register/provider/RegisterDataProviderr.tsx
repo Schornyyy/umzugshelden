@@ -8,7 +8,7 @@ interface RegisterDataContextType {
   updateStep: (newValue: StepsName) => void;
 }
 
-type StepsName = "choose" | "register" | "companyRegister";
+type StepsName = "choose" | "register" | "companyRegister" | "service";
 
 export const RegisterDataContext = createContext<RegisterDataContextType | undefined>(undefined);
 

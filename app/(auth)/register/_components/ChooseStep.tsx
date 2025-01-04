@@ -1,5 +1,5 @@
 import { useRegisterData } from '@/customHooks/useRegisterData';
-import { Registertype } from '@/types/RegisterTypye';
+import { CompanyType } from '@/types/RegisterTypye';
 import React, { useState } from 'react';
 
 const ChooseStep = () => {
@@ -7,13 +7,13 @@ const ChooseStep = () => {
   const [selectedType, setSelectedType] = useState<string | null>(null);
 
   const handlePrivatPersonData = () => {
-    const d: Registertype = { ...data, email: data?.email || '', type: 'privatPerson' };
+    const d: CompanyType = { ...data, email: data?.email || '', type: 'privatPerson' };
     updateData(d);
     setSelectedType('privatPerson');
   };
 
   const handleCompanyData = () => {
-    const d: Registertype = { ...data, email: data?.email || '', type: 'company' };
+    const d: CompanyType = { ...data, email: data?.email || '', type: 'company' };
     updateData(d);
     setSelectedType('company');
   };

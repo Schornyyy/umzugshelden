@@ -16,6 +16,22 @@ export const bulletPointsCard: CardType[] = [
     }
 ]
 
+export const bulletPointsCompanyyCard: CardType[] = [
+    {
+        title: "Erhalten Sie Aufträge direkt in Ihrer Nähe",
+        description: "Werden Sie von potenziellen Kunden gefunden und kontaktiert.",
+        iconPath: "/icons/chartIcon.svg",
+    }, {
+        title: "Steigern Sie Ihre Bekanntheit",
+        description: "Erhalten Sie mehr Reichweite für Ihr Unternehmen.",
+        iconPath: "/icons/EyeIcon.svg",
+    }, {
+        title: "Komplett kostenlos",
+        description: "Erhalten Sie alle Vorteile ohne versteckte Kosten.",
+        iconPath: "/icons/handshakeIcon.svg",
+    }
+]
+
 export function getGalbauServices(): string[] {
     return [
       "Gartenplanung und -gestaltung",

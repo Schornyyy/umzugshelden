@@ -3,6 +3,7 @@ import React from 'react'
 import ChooseStep from './ChooseStep';
 import RegisterStep from './RegisterStep';
 import CompanyRegister from './CompanyRegister';
+import ServiceSelector from './ServiceSelector';
 
 const StepHandler = () => {
     const {step} = useRegisterData();
@@ -21,6 +22,10 @@ const StepHandler = () => {
                 return (
                     <CompanyRegister/>
                 )
+                case "service":
+                    return (
+                        <ServiceSelector/>
+                    )
             default:
                 return(
                     <p>Step: {step}</p>

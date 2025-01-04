@@ -45,3 +45,16 @@ export async function updateCompanyInDatabase(data: CompanyType): Promise<Compan
 
     return data;
 }
+
+export async function getAllCompanies(): Promise<CompanyType[]> {
+    const colRef = collection(database, "users");
+    const querySnapshot = await getDocs(colRef);
+
+    const companies: CompanyType[] = [];
+
+    querySnapshot.forEach((doc) => {
+        companies.push(parseDataToCompanyType(doc.data(), doc.id));
+    })
+
+    return companies;
+}

@@ -42,7 +42,7 @@ const RegisterStep = () => {
     setLoading(true);
 
     try {
-      const d:CompanyType = {...data!, email: submitData.email, public: false, images: [], description: ""} ;
+      const d:CompanyType = {...data!, email: submitData.email, public: true, images: [], description: ""} ;
     updateData(d); 
 
     await createCompanyInDatabase(d).then(async () => {
@@ -70,7 +70,7 @@ const RegisterStep = () => {
   };
 
   const handleBack = () => {
-    updateStep('choose')
+    updateStep('service')
   }
 
   return (

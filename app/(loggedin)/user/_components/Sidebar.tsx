@@ -1,23 +1,25 @@
 // components/Sidebar.tsx
 import { auth } from "@/config/firebase";
+import { useCompanyData } from "@/provider/CompanyDataProvider";
 import { signOut } from "firebase/auth";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import React from "react";
 import { useState } from "react";
-import { FiHome, FiLogOut, FiMenu, FiSettings, FiUser } from 'react-icons/fi';
+import { FiLogOut, FiMenu, FiSettings, FiUser } from 'react-icons/fi';
 
 const Sidebar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
+  const {companyData} = useCompanyData()
 
   const navigation = [
-    { name: "Home", icon: <FiHome />, path: "/" },
-    { name: "Profile", icon: <FiUser />, path: "/profile" },
-    { name: "Settings", icon: <FiSettings />, path: "/settings" },
+    { name: "Einstellungen", icon: <FiSettings />, path: "/" },
+    { name: "Dienstleistungen", icon: <FiUser />, path: "/services" },
   ];
 
   const handleNavigation = (path: string) => {
-    router.push(path);
+    router.push(`/user/${companyData!.id}/${path}`);
     setIsOpen(false);
   };
 
@@ -39,11 +41,11 @@ const Sidebar = () => {
       
       {/* Sidebar */}
       <div
-        className={`fixed z-50 top-0 left-0 h-full bg-gray-800 text-white w-40 p-5 transform transition-transform ${
+        className={`fixed z-50 top-0 left-0 h-full bg-gray-800 text-white w-52 p-5 transform transition-transform ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0 md:static`}
       >
-        <h1 className="text-2xl font-bold mb-5">JobSmith</h1>
+        <Image alt="JobSmith Logo" src={"/images/JobSmith_Logo_Green.png"} height={126} width={265} className="object-cover mb-12"/>
         <ul className="space-y-4">
           {navigation.map((item) => (
             <li

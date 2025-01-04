@@ -4,6 +4,33 @@ import SearchBar from './unternehmen-finden/_components/Searchbar'
 import { bulletPointsCard } from '@/statics/Lists'
 import Link from 'next/link'
 
+export async function generateMetadata() {
+  // Hier kannst du auch dynamisch Metadaten erstellen, z. B. aus einer Datenquelle
+  return {
+    title: 'JobSmith - Jetzt den passenden Garten- & Landschaftsbauer finden',
+    description: 'Finden Sie den besten Garten- & Landschaftsbauer in Ihrer Nähe mit JobSmith. Einfach, schnell und zuverlässig!',
+    openGraph: {
+      title: 'JobSmith - Jetzt den passenden Garten- & Landschaftsbauer finden',
+      description: 'Finden Sie den besten Garten- & Landschaftsbauer in Ihrer Nähe mit JobSmith. Einfach, schnell und zuverlässig!',
+      url: 'https://jobsmith.de',
+      images: [
+        {
+          url: '/images/JobSmith_hero.png',
+          width: 750,
+          height: 350,
+          alt: 'JobSmith Hero',
+        }
+      ]
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'JobSmith - Jetzt den passenden Garten- & Landschaftsbauer finden',
+      description: 'Finden Sie den besten Garten- & Landschaftsbauer in Ihrer Nähe mit JobSmith. Einfach, schnell und zuverlässig!',
+      image: '/images/JobSmith_hero.png',
+    },
+  }
+}
+
 const page = () => {
   return (
     <>
@@ -45,7 +72,6 @@ const page = () => {
             </div>
           ))}
         </div>
-
 
         {/* CTA Section */}
         <div className="flex flex-col gap-24 my-32">
@@ -99,7 +125,7 @@ const page = () => {
                 src="/images/JobSmith_CTA_Card.png" 
                 width={512} 
                 height={512} 
-                className="object-cover w-full max-w-xs lg:max-w-none" 
+                className="object-cover w-full max-w-xs lg:max-w-xl" 
               />
             </div>
           </div>

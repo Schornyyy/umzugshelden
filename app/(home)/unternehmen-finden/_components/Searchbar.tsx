@@ -51,7 +51,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onSearch, loading, styling }) => 
   }, [router]);
 
   const handleSearchClick = () => {
-    if (!city || !zip || !service) {
+    if (!city || !zip) {
       alert("Bitte alle Felder ausfüllen!");
       return;
     }

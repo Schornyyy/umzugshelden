@@ -1,3 +1,9 @@
+"use server";
+
+import { database } from "@/config/firebase";
+import { ClickType, StatsType } from "@/types/StatsType";
+import { addDoc, collection } from "firebase/firestore";
+
 export const fetchCoordinates = async (city: string, postalCode: string) => {
     const url = `https://nominatim.openstreetmap.org/search?postalcode=${postalCode}&city=${city}&format=json`;
   
@@ -15,3 +21,14 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
       return null;
     }
   };
+
+  export async function saveClick(type: ClickType, companyId: string) {
+    const click: StatsType = {
+      clickType: type,
+      companyId,
+      timestamp: Date.now()
+    }
+
+    await addDoc(collection(database, 'stats'), click);
+
+  }
