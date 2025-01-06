@@ -182,7 +182,7 @@ function CompanySearchPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto py-12">
+      <div className="max-w-4xl mx-auto py-12 max-md:p-4">
         <SearchBarResults results={displayedResults} loading={loading} />
         <Pagination
           currentPage={currentPage}

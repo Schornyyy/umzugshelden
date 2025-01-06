@@ -34,7 +34,7 @@ export async function generateMetadata() {
 const page = () => {
   return (
     <>
-      <div className="container mx-auto flex flex-col gap-12 px-4 md:py-24">
+      <div className="container mx-auto flex flex-col gap-12 px-4 md:py-24 max-md:mt-12">
         {/* Hero Section */}
         <div className="flex flex-col-reverse lg:flex-row gap-12 lg:items-center">
           <div className="flex flex-col gap-4 lg:w-1/2">

@@ -15,9 +15,9 @@ const SearchBarResults: React.FC<SearchBarResultsProps> = ({ results, loading })
       {loading ? (
         <p>Lade Ergebnisse...</p>
       ) : results.length > 0 ? (
-        <ul className="space-y-2">
+        <ul className="space-y-6 md:space-y-2">
           {results.map((company) => (
-            <div key={company.id} className='border p-4 rounded-lg grid grid-cols-2 w-full'>
+            <div key={company.id} className='border p-4 rounded-lg grid grid-rows-2 md:grid-cols-2 w-full items-center justify-center'>
               {company.images!.length > 0 ? (
                 <Image alt={company.companyName!} src={company.images![0]} width={250} height={250} className='object-contain rounded-xl '  />
               ) : (
@@ -33,7 +33,7 @@ const SearchBarResults: React.FC<SearchBarResultsProps> = ({ results, loading })
                 <p className='text-gray-700'>
                   {company.city}, {company.zip}
                 </p>
-                <Link href={"/unternehmen/" + company.id} className='py-2 px-4 text-white bg-green-500 rounded-lg hover:bg-green-600 w-fit self-end'>
+                <Link href={"/unternehmen/" + company.id} className='py-2 px-4 text-white bg-green-500 rounded-lg hover:bg-green-600 w-fit md:self-end'>
                 Unternehmen Ansehen
                 </Link>
               </div>
