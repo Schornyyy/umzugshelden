@@ -92,9 +92,8 @@ const page = () => {
                   Die Garten- und Landschaftsbauer, die Sie benötigen
                 </h4>
                 <p className="text-base md:text-lg mt-2">
-                  Erstellen Sie kostenfrei einen Auftrag und erhalten Sie Anfragen von Garten- 
-                  & Landschaftsbauern in Ihrer Umgebung. Wählen Sie den passenden Handwerker 
-                  für Ihr Projekt.
+                Finden Sie Garten- & Landschaftsbauer in Ihrer Umgebung und treten Sie direkt 
+                mit ihnen in Kontakt. Wählen Sie den passenden Experten für Ihr Projekt und bringen Sie Ihre Ideen zum Leben!
                 </p>
               </div>
               <div>
@@ -154,8 +153,8 @@ const page = () => {
               </p>
               <p className="text-base md:text-lg">
                 JobSmith ist der einfachste Weg, planbar und zuverlässig neue Aufträge 
-                für Ihren Betrieb zu gewinnen. Registrieren Sie sich jetzt, um direkt 
-                Aufträge in Ihrer Nähe zu finden.
+                für Ihren Betrieb zu gewinnen. Registrieren Sie sich jetzt, um 
+                Aufträge in Ihrer Nähe zu erhalten.
               </p>
               <Link 
                 href="/register" 

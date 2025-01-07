@@ -56,7 +56,7 @@ const page = async () => {
             <li>Finde neue Kunden und Aufträge</li>
           </ul>
           <p className='text-base sm:text-lg text-center lg:text-left'>
-            Warte nicht länger – finde jetzt Kunden, die professionellen Garten- und Landschaftsbau in deiner Nähe
+              Warte nicht länger – lasse dich jettz von potenziellen Kunden in deiner nähe finden, die professionellen Garten- und Landschaftsbau in deiner Nähe
             suchen!
           </p>
           <div className='flex justify-center lg:justify-start'>

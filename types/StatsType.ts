@@ -1,4 +1,4 @@
-export type ClickType = "phone" | "email" | "website" | "adress";
+export type ClickType = "phone" | "email" | "website" | "adress" | "company";
 
 export interface StatsType {
     clickType: ClickType,
