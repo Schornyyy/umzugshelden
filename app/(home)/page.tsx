@@ -7,12 +7,12 @@ import Link from 'next/link'
 export async function generateMetadata() {
   // Hier kannst du auch dynamisch Metadaten erstellen, z. B. aus einer Datenquelle
   return {
-    title: 'JobSmith - Jetzt den passenden Garten- & Landschaftsbauer finden',
+    title: 'Landschaftshelden - Jetzt den passenden Garten- & Landschaftsbauer finden',
     description: 'Finden Sie den besten Garten- & Landschaftsbauer in Ihrer Nähe mit JobSmith. Einfach, schnell und zuverlässig!',
     openGraph: {
-      title: 'JobSmith - Jetzt den passenden Garten- & Landschaftsbauer finden',
+      title: 'Landschaftshelden - Jetzt den passenden Garten- & Landschaftsbauer finden',
       description: 'Finden Sie den besten Garten- & Landschaftsbauer in Ihrer Nähe mit JobSmith. Einfach, schnell und zuverlässig!',
-      url: 'https://jobsmith.de',
+      url: 'https://landschaftshelden.io',
       images: [
         {
           url: '/images/JobSmith_hero.png',
@@ -24,7 +24,7 @@ export async function generateMetadata() {
     },
     twitter: {
       card: 'summary_large_image',
-      title: 'JobSmith - Jetzt den passenden Garten- & Landschaftsbauer finden',
+      title: 'Landschaftshelden - Jetzt den passenden Garten- & Landschaftsbauer finden',
       description: 'Finden Sie den besten Garten- & Landschaftsbauer in Ihrer Nähe mit JobSmith. Einfach, schnell und zuverlässig!',
       image: '/images/JobSmith_hero.png',
     },

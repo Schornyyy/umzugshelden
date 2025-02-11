@@ -37,6 +37,44 @@ const RegisterStep = () => {
 
   const {updateStep, data, updateData} = useRegisterData()
   const [loading, setLoading] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string>()
+
+  const sendEmail = async (companyName: string, toEmail: string) => {
+    try {
+      if (!toEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
+        console.error("Ungültige oder fehlende E-Mail-Adresse:", toEmail);
+        return;
+      }
+  
+      const replacements: { [key: string]: string } = {
+        companyName: companyName,
+      };
+  
+      console.log('Sende E-Mail an:', toEmail);
+  
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          to: toEmail,
+          subject: "Vielen dank für deine Registrierung!",
+          replacements,
+          templatePath: 'RegisterEmail.html', // Pfad zum Template
+        }),
+      });
+  
+      if (response.ok) {
+        console.log("E-Mail erfolgreich gesendet.");
+      } else {
+        console.error("Fehler beim Senden der E-Mail:", await response.json());
+      }
+    } catch (error) {
+      console.error("Fehler beim Senden der E-Mail:", error);
+    }
+  };
+  
 
   const onSubmit = async(submitData: FormData) => {
     setLoading(true);
@@ -47,6 +85,7 @@ const RegisterStep = () => {
 
     await createCompanyInDatabase(d).then(async () => {
         await createUserWithEmailAndPassword(auth, submitData.email, submitData.password)
+        sendEmail(data!.companyName!, submitData.email)
         setLoading(false);
         navigate.push("/login")
     })
@@ -59,12 +98,16 @@ const RegisterStep = () => {
       // Rückgabe eines spezifischen Fehlercodes oder -nachricht
       if (error.code === "auth/email-already-in-use") {
         console.error("Die E-Mail wird bereits verwendet.");
+        setErrorMsg("Die E-Mail wird bereits verwendet.")
       } else if (error.code === "auth/invalid-email") {
         console.error("Ungültige E-Mail-Adresse.");
+        setErrorMsg("Ungültige E-Mail-Adresse.")
       } else if (error.code === "auth/weak-password") {
         console.error("Das Passwort ist zu schwach.");
+        setErrorMsg("Das Passwort ist zu schwach.")
       } else {
         console.error("Unbekannter Fehler:", error.message);
+        setErrorMsg(`Unbekannter Fehler: ${error.message}`)
       }
     }
   };
@@ -125,6 +168,9 @@ const RegisterStep = () => {
         Registrieren
       </button>
       </div>
+      {errorMsg && (
+        <p className='text-red-500'>{errorMsg}</p>
+      )}
     </form>
     </div>
   );
