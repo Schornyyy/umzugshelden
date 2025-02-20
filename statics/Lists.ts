@@ -48,6 +48,9 @@ export function getGalbauServices(): string[] {
       "Winterdienst",
       "Natursteinmauern und Trockenmauern",
       "Beleuchtungskonzepte",
-      "Spielplatzbau und -pflege"
+      "Spielplatzbau und -pflege",
+      "Terrassenüberdachungen",
+      "Pool Bau",
+      "Rasenmähen und Grünpflege"
     ];
   }
