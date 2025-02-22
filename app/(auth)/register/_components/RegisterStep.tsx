@@ -8,6 +8,7 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/config/firebase";
 import { createCompanyInDatabase } from "@/actions/companyActions";
 import { useRouter } from "next/navigation";
+import { addUserToBrevoList } from "@/actions/userActions";
 
 // Zod-Schema
 const schema = z
@@ -94,6 +95,7 @@ const RegisterStep = () => {
         );
         sendEmail(data!.companyName!, submitData.email);
         setLoading(false);
+        addUserToBrevoList(d.email, 4, d.companyName!);
         navigate.push("/login");
       });
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Analytics } from "@vercel/analytics/react"
-
+import CookieBanner from "@/components/CookieBanner";
+import CookieSettings from "@/components/CookieSettings";
 
 export const metadata: Metadata = {
   title: "JobSmith",
@@ -14,14 +14,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang='en'>
       <head>
-      <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel='icon' href='/favicon.ico' sizes='any' />
       </head>
-      <body
-        
-      >
-        <Analytics />
+      <body>
+        <CookieBanner />
+        <CookieSettings />
         {children}
       </body>
     </html>

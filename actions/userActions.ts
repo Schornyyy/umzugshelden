@@ -32,3 +32,42 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
     await addDoc(collection(database, 'stats'), click);
 
   }
+
+  export async function addUserToBrevoList(
+    email: string,
+    listid: number,
+    name: string
+  ): Promise<{ error: boolean; msg: string }> {
+    const apiKey = process.env.BREVO_API;
+  
+    if (!apiKey) {
+      return { error: true, msg: "Brevo API Key fehlt!" };
+    }
+  
+    try {
+      const response = await fetch("https://api.brevo.com/v3/contacts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": apiKey,
+        },
+        body: JSON.stringify({
+          email: email,
+          attributes: {
+            FNAME: name
+          },
+          listIds: [listid], // Die Liste, zu der der User hinzugefügt wird
+          updateEnabled: true, // Falls der User schon existiert, wird er aktualisiert
+        }),
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: true, msg: errorData.message || "Fehler beim Hinzufügen des Nutzers" };
+      }
+  
+      return { error: false, msg: "User erfolgreich hinzugefügt" };
+    } catch (err) {
+      return { error: true, msg: "Ein unerwarteter Fehler ist aufgetreten " + err };
+    }
+  }
