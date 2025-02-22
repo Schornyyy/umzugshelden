@@ -1,20 +1,38 @@
-import React, { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useCompanyData } from '@/provider/CompanyDataProvider';
-import { updateCompanyInDatabase } from '@/actions/companyActions';
-import { CompanyType } from '@/types/RegisterTypye';
-import { fetchCoordinates } from '@/actions/userActions';
+"use client";
 
-// Zod Schema für die Validierung
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useCompanyData } from "@/provider/CompanyDataProvider";
+import { updateCompanyInDatabase } from "@/actions/companyActions";
+import { fetchCoordinates } from "@/actions/userActions";
+import { CompanyType } from "@/types/RegisterTypye";
+
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RichTextEditor } from "@/components/RichTextEditor";
+
+// Zod-Schema für Validierung
 const formSchema = z.object({
   city: z.string().optional(),
   zip: z.string().optional(),
   description: z.string().optional(),
   companyName: z.string().optional(),
   companyNumber: z.string().optional(),
-  companyEmail: z.string().email({ message: 'Bitte eine gültige E-Mail angeben' }).optional(),
+  companyEmail: z
+    .string()
+    .email({ message: "Bitte eine gültige E-Mail angeben" })
+    .optional(),
   companyWebsite: z.string().optional(),
   title: z.string().optional(),
   public: z.boolean(),
@@ -23,165 +41,198 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 const CompanyInfosUpdate: React.FC = () => {
-  const { companyData } = useCompanyData(); // Daten von useCompanyData
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { errors },
-  } = useForm<FormData>({
+  const { companyData } = useCompanyData();
+  const [loading, setLoading] = useState<boolean>(false);
+  const [state, setState] = useState<"idle" | "success" | "error">("idle");
+
+  const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {...companyData}, // Standardwerte aus useCompanyData
+    defaultValues: { ...companyData },
   });
 
-  const [loading, setLoading] = useState<boolean>(false);
-  const [state, setState] = useState<"idle" | "success" | "error">("idle")
-
   const onSubmit = async (data: FormData) => {
-    setLoading(true)
+    setLoading(true);
     try {
-      const companyRef: CompanyType = {...companyData!, ...data}
+      const companyRef: CompanyType = { ...companyData!, ...data };
       await fetchCoordinates(data.city!, data.zip!).then(async (res) => {
-        if(res) {
+        if (res) {
           companyRef.longitude = res.longitude;
           companyRef.latitude = res.latitude;
           await updateCompanyInDatabase(companyRef);
-          setState("success")
-           // Daten speichern
+          setState("success");
         }
-      }); // Koordinaten abrufen
+      });
     } catch (error) {
-      console.error('Fehler beim Speichern:', error);
-      setState("error")
+      console.error("Fehler beim Speichern:", error);
+      setState("error");
     }
     setLoading(false);
   };
 
-  const isPublic = watch('public'); // Für Echtzeit-Überwachung von "public"
-
   return (
-    <>
-      <h1 className="text-xl font-semibold mb-4">Unternehmensformular</h1>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        {/* City */}
-        <div>
-          <label className="block text-sm font-medium">Stadt</label>
-          <input
-            {...register('city')}
-            type="text"
-            className="w-full p-2 border rounded-md"
-            placeholder="Stadt eingeben"
+    <div className=''>
+      <h1 className='text-xl font-semibold mb-4'>Unternehmensformular</h1>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-4'>
+          {/* Stadt */}
+          <FormField
+            control={form.control}
+            name='city'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Stadt</FormLabel>
+                <FormControl>
+                  <Input placeholder='Stadt eingeben' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.city && <p className="text-red-500 text-sm">{errors.city.message}</p>}
-        </div>
 
-        {/* ZIP */}
-        <div>
-          <label className="block text-sm font-medium">PLZ</label>
-          <input
-            {...register('zip')}
-            type="text"
-            className="w-full p-2 border rounded-md"
-            placeholder="PLZ eingeben"
+          {/* PLZ */}
+          <FormField
+            control={form.control}
+            name='zip'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>PLZ</FormLabel>
+                <FormControl>
+                  <Input placeholder='PLZ eingeben' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.zip && <p className="text-red-500 text-sm">{errors.zip.message}</p>}
-        </div>
 
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium">Beschreibung</label>
-          <textarea
-            {...register('description')}
-            className="w-full p-2 border rounded-md"
-            placeholder="Beschreibung eingeben"
+          {/* Beschreibung */}
+          <FormField
+            control={form.control}
+            name='description'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Beschreibung</FormLabel>
+                <FormControl>
+                  <RichTextEditor
+                    field={field}
+                    defaultValue={companyData!.description!}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
-        </div>
 
-        {/* Company Name */}
-        <div>
-          <label className="block text-sm font-medium">Unternehmensname</label>
-          <input
-            {...register('companyName')}
-            type="text"
-            className="w-full p-2 border rounded-md"
-            placeholder="Unternehmensname eingeben"
+          {/* Unternehmensname */}
+          <FormField
+            control={form.control}
+            name='companyName'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unternehmensname</FormLabel>
+                <FormControl>
+                  <Input placeholder='Unternehmensname eingeben' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.companyName && <p className="text-red-500 text-sm">{errors.companyName.message}</p>}
-        </div>
 
-        {/* Company Number */}
-        <div>
-          <label className="block text-sm font-medium">Unternehmensnummer</label>
-          <input
-            {...register('companyNumber')}
-            type="text"
-            className="w-full p-2 border rounded-md"
-            placeholder="Unternehmensnummer eingeben"
+          {/* Unternehmensnummer */}
+          <FormField
+            control={form.control}
+            name='companyNumber'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Unternehmensnummer</FormLabel>
+                <FormControl>
+                  <Input placeholder='Unternehmensnummer eingeben' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.companyNumber && <p className="text-red-500 text-sm">{errors.companyNumber.message}</p>}
-        </div>
 
-        {/* Company Email */}
-        <div>
-          <label className="block text-sm font-medium">E-Mail</label>
-          <input
-            {...register('companyEmail')}
-            type="email"
-            className="w-full p-2 border rounded-md"
-            placeholder="E-Mail eingeben"
+          {/* Unternehmens-E-Mail */}
+          <FormField
+            control={form.control}
+            name='companyEmail'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>E-Mail</FormLabel>
+                <FormControl>
+                  <Input
+                    type='email'
+                    placeholder='E-Mail eingeben'
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.companyEmail && <p className="text-red-500 text-sm">{errors.companyEmail.message}</p>}
-        </div>
 
-        {/* Company Website */}
-        <div>
-          <label className="block text-sm font-medium">Website</label>
-          <input
-            {...register('companyWebsite')}
-            type="url"
-            className="w-full p-2 border rounded-md"
-            placeholder="Website eingeben"
+          {/* Unternehmens-Website */}
+          <FormField
+            control={form.control}
+            name='companyWebsite'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Website</FormLabel>
+                <FormControl>
+                  <Input type='url' placeholder='Website eingeben' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.companyWebsite && <p className="text-red-500 text-sm">{errors.companyWebsite.message}</p>}
-        </div>
 
-        {/* Title */}
-        <div>
-          <label className="block text-sm font-medium">Titel</label>
-          <input
-            {...register('title')}
-            type="text"
-            className="w-full p-2 border rounded-md"
-            placeholder="Titel eingeben"
+          {/* Titel */}
+          <FormField
+            control={form.control}
+            name='title'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Titel</FormLabel>
+                <FormControl>
+                  <Input placeholder='Titel eingeben' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-          {errors.title && <p className="text-red-500 text-sm">{errors.title.message}</p>}
-        </div>
 
-        {/* Public Slider */}
-        <div className="flex items-center space-x-2">
-          <label className="block text-sm font-medium">Öffentlich</label>
-          <input
-            {...register('public')}
-            type="checkbox"
-            className="w-6 h-6"
+          {/* Öffentlich Checkbox */}
+          <FormField
+            control={form.control}
+            name='public'
+            render={({ field }) => (
+              <FormItem className='flex items-center space-x-2'>
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormLabel>Öffentlich</FormLabel>
+              </FormItem>
+            )}
           />
-          <span>{isPublic ? 'Ja' : 'Nein'}</span>
-        </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-green-500 text-white p-2 rounded-md hover:bg-green-600 disabled:opacity-50"
-        >
-          Speichern
-        </button>
-        {state === "success" && <p className="text-green-500">Daten erfolgreich gespeichert</p>}
-        {state === "error" && <p className="text-red-500">Fehler beim Speichern</p>}
-      </form>
-    
-    </>
+          {/* Speichern Button */}
+          <Button type='submit' className='w-full' disabled={loading}>
+            {loading ? "Speichern..." : "Speichern"}
+          </Button>
+
+          {/* Statusnachrichten */}
+          {state === "success" && (
+            <p className='text-green-500'>Daten erfolgreich gespeichert</p>
+          )}
+          {state === "error" && (
+            <p className='text-red-500'>Fehler beim Speichern</p>
+          )}
+        </form>
+      </Form>
+    </div>
   );
 };
 

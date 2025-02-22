@@ -4,24 +4,32 @@ import { CompanyType } from "@/types/RegisterTypye";
 interface RegisterDataContextType {
   data: CompanyType | undefined;
   updateData: (newData: CompanyType) => void;
-  step: StepsName,
+  step: StepsName;
   updateStep: (newValue: StepsName) => void;
 }
 
-type StepsName = "choose" | "register" | "companyRegister" | "service";
+type StepsName =
+  | "choose"
+  | "register"
+  | "companyRegister"
+  | "service"
+  | "companyInfos";
 
-export const RegisterDataContext = createContext<RegisterDataContextType | undefined>(undefined);
+export const RegisterDataContext = createContext<
+  RegisterDataContextType | undefined
+>(undefined);
 
 export const RegisterDataProvider = ({ children }: { children: ReactNode }) => {
   const [data, setData] = useState<CompanyType | undefined>(undefined);
   const [step, setStep] = useState<StepsName>("companyRegister");
 
   const updateData = (newData: CompanyType) => setData(newData);
-  const updateStep = (newValue: StepsName) => setStep(newValue)
+  const updateStep = (newValue: StepsName) => setStep(newValue);
 
   return (
-    <RegisterDataContext.Provider value={{ data, updateData, step, updateStep }}>
+    <RegisterDataContext.Provider
+      value={{ data, updateData, step, updateStep }}>
       {children}
-    </RegisterDataContext.Provider> 
+    </RegisterDataContext.Provider>
   );
 };
