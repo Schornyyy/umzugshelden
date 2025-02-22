@@ -21,8 +21,15 @@ export async function generateMetadata({
   }
 
   return {
-    title: `${companyData.companyName} - JobSmith`,
-    description: `${companyData.companyName} | ${companyData.city} Garten & Landschaftsbau Unternehmen auf JobSmith`,
+    title: `${companyData.companyName} - Landschaftshelden.io`,
+    description: `${companyData.companyName} | ${companyData.city} Garten & Landschaftsbau Unternehmen auf Landschaftshelden.io`,
+    keywords: [
+      companyData.services,
+      `GalaBau Unternehmen in ${companyData.city}`,
+      "Garten und Landschaftsbau",
+      "landschaftshelden.io",
+      "landschaftshelden",
+    ],
   };
 }
 
