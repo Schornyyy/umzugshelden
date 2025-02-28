@@ -56,10 +56,13 @@ const Login: React.FC = () => {
       await signInWithEmailAndPassword(auth, email, password).then(
         async (res) => {
           if (res) {
+            console.log("logged in");
             let account = await findAccountByEmail(email);
             if (!account) {
               account = await createAccount(email);
             }
+
+            console.log("account:", account);
 
             await findCompanyByOwnerId(account.id).then(async (res) => {
               if (!res) {
@@ -77,6 +80,8 @@ const Login: React.FC = () => {
                     navigateUser(company.type, company.id!);
                   }
                 });
+              } else {
+                navigateUser(res.type, res.id!);
               }
             });
           }

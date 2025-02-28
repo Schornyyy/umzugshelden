@@ -77,7 +77,7 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
 export async function navigateUser(type: UserRole, companyid: string) {
   switch (type) {
     case "company":
-      redirect(`/user/${companyid}`);
+      redirect(`/company/${companyid}`);
     case "admin":
       redirect(`/admin/${companyid}`);
   
