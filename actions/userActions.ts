@@ -2,7 +2,9 @@
 
 import { database } from "@/config/firebase";
 import { ClickType, StatsType } from "@/types/StatsType";
+import { UserRole } from "@/types/UserType";
 import { addDoc, collection } from "firebase/firestore";
+import { redirect } from "next/navigation";
 
 export const fetchCoordinates = async (city: string, postalCode: string) => {
     const url = `https://nominatim.openstreetmap.org/search?postalcode=${postalCode}&city=${city}&format=json`;
@@ -71,3 +73,15 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
       return { error: true, msg: "Ein unerwarteter Fehler ist aufgetreten " + err };
     }
   }
+
+export async function navigateUser(type: UserRole, companyid: string) {
+  switch (type) {
+    case "company":
+      redirect(`/user/${companyid}`);
+    case "admin":
+      redirect(`/admin/${companyid}`);
+  
+    default:
+      redirect(`/user/${companyid}`);
+  }
+}

@@ -38,12 +38,17 @@ export async function findCompanyById(id: string): Promise<CompanyType | undefin
 
 export async function updateCompanyInDatabase(data: CompanyType): Promise<CompanyType | undefined> {
     const docRef = doc(database, "users", data.id!);
+    const compRef = {...data}
 
-    await updateDoc(docRef, {...data}).then(() => {
-        return data;
+    if(!compRef.type || compRef.type == undefined) {
+        compRef.type = "company"
+    }
+
+    await updateDoc(docRef, {...compRef}).then(() => {
+        return compRef;
     })
 
-    return data;
+    return compRef;
 }
 
 export async function getAllCompanies(): Promise<CompanyType[]> {

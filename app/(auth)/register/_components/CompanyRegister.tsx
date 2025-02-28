@@ -41,6 +41,7 @@ const CompanyRegister: React.FC = () => {
       companyNumber: submitData.companyNumber,
       companyEmail: submitData.companyEmail,
       companyWebsite: submitData.website,
+      type: "company",
     };
     await fetchCoordinates(submitData.city, submitData.postalCode).then(
       (res) => {

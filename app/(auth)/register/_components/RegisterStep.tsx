@@ -84,6 +84,7 @@ const RegisterStep = () => {
         ...data!,
         email: submitData.email,
         public: true,
+        type: "company",
       };
       updateData(d);
 
