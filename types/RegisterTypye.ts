@@ -18,7 +18,8 @@ export interface CompanyType  {
     title?: string,
     public?: boolean,
     services?: string[],
-    id?: string
+    id?: string,
+    ownerid: string
 }
 
 export function parseDataToCompanyType(data: DocumentData, id?: string) {
@@ -37,5 +38,6 @@ export function parseDataToCompanyType(data: DocumentData, id?: string) {
         public: data.public ? data.public : false,
         id: id ? id : "",
         services: data.services ? data.services :  [],
+        ownerid: data.ownerid ? data.ownerid : "",
     }
 }

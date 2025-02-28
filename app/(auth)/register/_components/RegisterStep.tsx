@@ -9,6 +9,8 @@ import { auth } from "@/config/firebase";
 import { createCompanyInDatabase } from "@/actions/companyActions";
 import { useRouter } from "next/navigation";
 import { addUserToBrevoList } from "@/actions/userActions";
+import { createAccountInDatabase } from "@/actions/AccountActions";
+import { v4 as uuid } from "uuid";
 
 // Zod-Schema
 const schema = z
@@ -78,6 +80,7 @@ const RegisterStep = () => {
 
   const onSubmit = async (submitData: FormData) => {
     setLoading(true);
+    const randomUUID = uuid();
 
     try {
       const d: CompanyType = {
@@ -85,9 +88,14 @@ const RegisterStep = () => {
         email: submitData.email,
         public: true,
         type: "company",
+        ownerid: randomUUID,
       };
       updateData(d);
-
+      await createAccountInDatabase({
+        email: submitData.email,
+        role: "company",
+        id: randomUUID,
+      });
       await createCompanyInDatabase(d).then(async () => {
         await createUserWithEmailAndPassword(
           auth,

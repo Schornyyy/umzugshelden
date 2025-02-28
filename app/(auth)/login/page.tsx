@@ -6,7 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/config/firebase";
-import { findCompanyByEmail } from "@/actions/companyActions";
+import {
+  findCompanyByEmail,
+  findCompanyByOwnerId,
+  updateCompanyInDatabase,
+} from "@/actions/companyActions";
 import { navigateUser } from "@/actions/userActions";
 import {
   createAccountInDatabase,
@@ -42,6 +46,7 @@ const Login: React.FC = () => {
       role: "company",
     };
     createAccountInDatabase(account);
+    return account;
   };
 
   const onSubmit = async (data: LoginFormInputs) => {
@@ -51,17 +56,27 @@ const Login: React.FC = () => {
       await signInWithEmailAndPassword(auth, email, password).then(
         async (res) => {
           if (res) {
-            await findCompanyByEmail(email).then((company) => {
-              if (company) {
-                if (company.type === "company" || company.type == undefined) {
-                  findAccountByEmail(email).then((account) => {
-                    if (!account) {
-                      createAccount(email);
-                    }
-                  });
-                }
+            let account = await findAccountByEmail(email);
+            if (!account) {
+              account = await createAccount(email);
+            }
 
-                navigateUser(company.type, company.id!);
+            await findCompanyByOwnerId(account.id).then(async (res) => {
+              if (!res) {
+                await findCompanyByEmail(email).then((company) => {
+                  if (company) {
+                    if (
+                      company.type === "company" ||
+                      company.type == undefined
+                    ) {
+                      updateCompanyInDatabase({
+                        ...company,
+                        ownerid: account.id,
+                      });
+                    }
+                    navigateUser(company.type, company.id!);
+                  }
+                });
               }
             });
           }
