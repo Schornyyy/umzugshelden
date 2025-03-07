@@ -12,6 +12,7 @@ import CompanyLinks from "./CompanyLinks";
 import { CompanyType } from "@/types/RegisterTypye";
 import Image from "next/image";
 import { convertFromRaw, Editor, EditorState } from "draft-js";
+import ShareButtons from "@/components/ShareButtons";
 
 const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
   const [editorStateDesc, setEditorStateDesc] = useState<EditorState | null>(
@@ -21,7 +22,11 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
   useEffect(() => {
     const loadEditor = () => {
       try {
-        if (companyData.description && companyData.description !== "") {
+        if (
+          companyData.description &&
+          companyData.description !== "" &&
+          companyData.description == "object"
+        ) {
           const parsedContent = JSON.parse(companyData.description);
           const contentState = convertFromRaw(parsedContent);
           setEditorStateDesc(EditorState.createWithContent(contentState));
@@ -65,13 +70,20 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
         </Carousel>
       </div>
       <div className='flex flex-col gap-8 w-full lg:w-2/3'>
+        {/* Company Name*/}
         <h1 className='font-bold text-2xl sm:text-4xl text-center lg:text-left'>
           {companyData.companyName}
         </h1>
+        {/*Company Description*/}
         {editorStateDesc && (
           <Editor editorState={editorStateDesc} onChange={() => {}} />
         )}
+        {companyData.description != "object" && (
+          <p>{companyData.description}</p>
+        )}
+        {/* Links */}
         <CompanyLinks companyData={companyData} />
+        {/* Dienstleistungen */}
         <div className='flex flex-col gap-4'>
           <p className='font-semibold'>Dienstleistungen:</p>
           <div className='flex flex-wrap gap-2'>
@@ -88,6 +100,7 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
             )}
           </div>
         </div>
+        <ShareButtons />
       </div>
     </div>
   );
