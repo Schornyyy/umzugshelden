@@ -46,6 +46,7 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
 
   return (
     <div className='flex flex-col lg:flex-row gap-16'>
+      {/* Company Image Carousel */}
       <div className='relative mx-auto lg:mx-0'>
         <Carousel className='w-80 h-80 sm:w-96 sm:h-96 max-md:mb-24'>
           <CarouselContent>
