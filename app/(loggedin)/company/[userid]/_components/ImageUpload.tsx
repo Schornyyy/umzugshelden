@@ -36,7 +36,7 @@ const ImageUploadComponent: React.FC = () => {
 
     const storageRef = ref(
       storage,
-      `images/${companyData!.id!}/${file.name}-${Date.now()}`
+      `uploads/${companyData!.id!}/${file.name}-${Date.now()}`
     );
     const uploadTask = uploadBytesResumable(storageRef, file);
 

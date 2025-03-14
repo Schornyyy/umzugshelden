@@ -22,11 +22,7 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
   useEffect(() => {
     const loadEditor = () => {
       try {
-        if (
-          companyData.description &&
-          companyData.description !== "" &&
-          companyData.description == "object"
-        ) {
+        if (companyData.description && companyData.description !== "") {
           const parsedContent = JSON.parse(companyData.description);
           const contentState = convertFromRaw(parsedContent);
           setEditorStateDesc(EditorState.createWithContent(contentState));
@@ -76,11 +72,10 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
           {companyData.companyName}
         </h1>
         {/*Company Description*/}
-        {editorStateDesc && (
+        {editorStateDesc ? (
           <Editor editorState={editorStateDesc} onChange={() => {}} />
-        )}
-        {companyData.description != "object" && (
-          <p>{companyData.description}</p>
+        ) : (
+          companyData.description && <p>{companyData.description}</p>
         )}
         {/* Links */}
         <CompanyLinks companyData={companyData} />
