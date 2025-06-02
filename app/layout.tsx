@@ -4,7 +4,7 @@ import CookieBanner from "@/components/CookieBanner";
 import CookieSettings from "@/components/CookieSettings";
 
 export const metadata: Metadata = {
-  title: "JobSmith",
+  title: "Landschaftshelden - Portal für Garten & Landschaftsbauer",
   description: "Das Portal für Garten & Landschaftsbauer",
 };
 

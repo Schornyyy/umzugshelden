@@ -2,7 +2,6 @@ import React from "react";
 import { CompanyType } from "@/types/RegisterTypye";
 import Image from "next/image";
 import Link from "next/link";
-import { saveClick } from "@/actions/userActions";
 
 interface SearchBarResultsProps {
   results: CompanyType[];
@@ -50,8 +49,7 @@ const SearchBarResults: React.FC<SearchBarResultsProps> = ({
                 </p>
                 <Link
                   href={"/unternehmen/" + company.id}
-                  className='py-2 px-4 text-white bg-green-500 rounded-lg hover:bg-green-600 w-fit md:self-end'
-                  onClick={() => saveClick("company", company.id!)}>
+                  className='py-2 px-4 text-white bg-green-500 rounded-lg hover:bg-green-600 w-fit md:self-end'>
                   Unternehmen Ansehen
                 </Link>
               </div>

@@ -20,15 +20,36 @@ export async function generateMetadata({
     };
   }
 
+  const getCompanyServiceKeywords = () => {
+    const list: string[] = [];
+
+    if (companyData.services) {
+      companyData.services.map((service) => {
+        list.push(`${service} in ${companyData.city}`);
+        list.push(`${service} in ${companyData.zip}`);
+      });
+    }
+    return list;
+  };
+
   return {
     title: `${companyData.companyName} - Landschaftshelden.io`,
     description: `${companyData.companyName} | ${companyData.city} Garten & Landschaftsbau Unternehmen auf Landschaftshelden.io`,
     keywords: [
       companyData.services,
       `GalaBau Unternehmen in ${companyData.city}`,
+      `Garten- und Landschaftsbau in ${companyData.city}`,
+      "Garten- und Landschaftsbau",
+      "Garten- und Landschaftsbau Unternehmen",
+      "Garten- und Landschaftsbau Firmen",
+      "Garten- und Landschaftsbau Dienstleister",
+      "Garten- und Landschaftsbau Services",
+      "Garten- und Landschaftsbau Dienstleistungen",
+      "Garten- und Landschaftsbau Firmen in Deutschland",
       "Garten und Landschaftsbau",
       "landschaftshelden.io",
       "landschaftshelden",
+      getCompanyServiceKeywords(),
     ],
   };
 }

@@ -12,18 +12,9 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { unstable_cache } from "next/cache";
-
-// Hilfsfunktion zum Invalidieren des Caches
-const revalidate = async (key: string) => {
-  await unstable_cache(() => Promise.resolve(), [key], {
-    revalidate: 86400, // Cache für einen Tag (24h)
-  })();
-};
 
 // 🔹 ALLE UNTERNEHMEN LADEN (mit Cache)
-export const getAllCompanies = unstable_cache(
-  async (): Promise<CompanyType[]> => {
+export const getAllCompanies = async (): Promise<CompanyType[]> => {
     const colRef = collection(database, "users");
     const querySnapshot = await getDocs(colRef);
 
@@ -32,17 +23,13 @@ export const getAllCompanies = unstable_cache(
     return querySnapshot.docs.map((doc) =>
       parseDataToCompanyType(doc.data(), doc.id)
     );
-  },
-  ["all-companies"],
-  { revalidate: 86400 } // Cache erneuert sich täglich
-);
+  
+  };
 
 // 🔹 UNTERNEHMEN NACH EMAIL LADEN (mit Cache)
 export const findCompanyByEmail = async (
   email: string
 ): Promise<CompanyType | undefined> => {
-  return unstable_cache(
-    async () => {
       const colRef = collection(database, "users");
       const querySnapshot = await getDocs(
         query(colRef, where("email", "==", email))
@@ -54,18 +41,12 @@ export const findCompanyByEmail = async (
         querySnapshot.docs[0].data(),
         querySnapshot.docs[0].id
       );
-    },
-    [`company-email-${email}`],
-    { revalidate: 86400 }
-  )();
 };
 
 // 🔹 UNTERNEHMEN NACH OWNER ID LADEN (mit Cache)
 export const findCompanyByOwnerId = async (
   id: string
 ): Promise<CompanyType | undefined> => {
-  return unstable_cache(
-    async () => {
       const colRef = collection(database, "users");
       const querySnapshot = await getDocs(
         query(colRef, where("ownerid", "==", id))
@@ -77,28 +58,19 @@ export const findCompanyByOwnerId = async (
         querySnapshot.docs[0].data(),
         querySnapshot.docs[0].id
       );
-    },
-    [`company-owner-${id}`],
-    { revalidate: 86400 }
-  )();
 };
 
 // 🔹 UNTERNEHMEN NACH ID LADEN (mit Cache)
 export const findCompanyById = async (
   id: string
 ): Promise<CompanyType | undefined> => {
-  return unstable_cache(
-    async () => {
       const docRef = doc(database, "users", id);
       const companyDocRef = await getDoc(docRef);
 
       if (!companyDocRef.exists()) return undefined;
 
       return parseDataToCompanyType(companyDocRef.data()!, companyDocRef.id);
-    },
-    [`company-id-${id}`],
-    { revalidate: 86400 }
-  )();
+    
 };
 
 // 🔹 UNTERNEHMEN ERSTELLEN (Cache invalidieren)
@@ -108,7 +80,6 @@ export async function createCompanyInDatabase(
   const colRef = collection(database, "users");
 
   await addDoc(colRef, { ...data });
-  await revalidate("all-companies");
 
   return true;
 }
@@ -126,8 +97,49 @@ export async function updateCompanyInDatabase(
 
   await updateDoc(docRef, { ...updatedData });
 
-  await revalidate(`company-id-${data.id}`);
-  await revalidate("all-companies");
-
   return updatedData;
 }
+
+export async function getAllCompanysFromDatabaseByCity(city: string): Promise<CompanyType[]> {
+    const list: CompanyType[] = [];
+
+    const capitalizedCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+    const colRef = collection(database, "users");
+    const queryRef = query(
+        colRef,
+        where("city", "==", capitalizedCity)
+    );
+    const docsRef = await getDocs(queryRef);
+
+    if (docsRef.docs.length === 0) return list;
+
+    docsRef.docs.forEach((doc) => {
+        list.push(parseDataToCompanyType(doc.data(), doc.id));
+    });
+
+    return list;
+}
+
+export async function getCompaniesByCityAndService(city: string, service: string): Promise<CompanyType[]> {
+  const result: CompanyType[] = [];
+
+  const capitalizedCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+
+  const colRef = collection(database, "users");
+  const queryRef = query(
+    colRef,
+    where("city", "==", capitalizedCity),
+    where("services", "array-contains", service.toLowerCase())
+  );
+
+  const docsSnap = await getDocs(queryRef);
+
+  if (docsSnap.empty) return result;
+
+  docsSnap.docs.forEach(doc => {
+    result.push(parseDataToCompanyType(doc.data(), doc.id));
+  });
+
+  return result;
+}
+

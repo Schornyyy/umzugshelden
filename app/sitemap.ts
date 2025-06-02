@@ -1,4 +1,6 @@
 import { getAllCompanies } from "@/actions/companyActions";
+import { cities, getGalbauServices } from "@/statics/Lists";
+import { slugify } from "@/utils/slugify";
 import { MetadataRoute } from "next";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -71,6 +73,33 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     if(!companys) return [];
 
+      const companyCityService = cities.flatMap((city) =>
+  getGalbauServices().map((service) => ({
+    url: `https://www.landschaftshelden.io/${city}/${slugify(service)}`,
+    lastModified: new Date(),
+    priority: 0.8,
+    changeFrequency: "weekly",
+    alternates: {
+      languages: {
+        de: `https://www.landschaftshelden.io/${city}/${slugify(service)}`,
+      },
+    },
+  }))
+);
+
+
+  const companyCities = cities.map((city) => ({
+    url: `https://www.landschaftshelden.io/${city}`,
+    lastModified: new Date(),
+    priority: 0.8,
+    changeFrequency: "weekly",
+    alternates: {
+      languages: {
+        de: `https://www.landschaftshelden.io/${city}`,
+      },
+    },
+  }))
+
     const companyPages = companys.map((company) => ({
         url: `https://www.landschaftshelden.io/unternehmen/${company.id}`,
         lastModified: new Date(), // Falls vorhanden
@@ -84,5 +113,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         },
     }))
 
-    return [...staticPages, ...companyPages]
+    return [...staticPages, ...companyPages, ...companyCityService, ...companyCities]
 }
