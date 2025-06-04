@@ -69,7 +69,7 @@ export const RichTextEditor = ({
   return (
     <div className='border rounded-md p-4'>
       {/* Formatierungs-Toolbar */}
-      <div className='mb-4 flex space-x-2'>
+      <div className='mb-4 flex space-x-2 max-md:space-y-2 flex-row flex-wrap'>
         {/* Inline Style Buttons */}
         <button
           type='button'

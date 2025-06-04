@@ -85,3 +85,7 @@ export async function navigateUser(type: UserRole, companyid: string) {
       redirect(`/user/${companyid}`);
   }
 }
+
+export async function redirectUser(route: string) {
+  redirect(route);
+}
