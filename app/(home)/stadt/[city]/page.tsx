@@ -91,6 +91,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
 
         {/* Ergebnisse */}
         <div className='mt-12 md:w-7xl'>
+          <></>
           <ul className='space-y-6 md:space-y-2'>
             <SearchBarResults loading={false} results={companys} />
           </ul>
