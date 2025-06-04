@@ -75,13 +75,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
       const companyCityService = cities.flatMap((city) =>
   getGalbauServices().map((service) => ({
-    url: `https://www.landschaftshelden.io/${city}/${slugify(service)}`,
+    url: `https://www.landschaftshelden.io/stadt/${city}/${slugify(service)}`,
     lastModified: new Date(),
     priority: 0.8,
     changeFrequency: "weekly",
     alternates: {
       languages: {
-        de: `https://www.landschaftshelden.io/${city}/${slugify(service)}`,
+        de: `https://www.landschaftshelden.io/stadt/${city}/${slugify(service)}`,
       },
     },
   }))
@@ -89,13 +89,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 
   const companyCities = cities.map((city) => ({
-    url: `https://www.landschaftshelden.io/${city}`,
+    url: `https://www.landschaftshelden.io/stadt/${city}`,
     lastModified: new Date(),
     priority: 0.8,
     changeFrequency: "weekly",
     alternates: {
       languages: {
-        de: `https://www.landschaftshelden.io/${city}`,
+        de: `https://www.landschaftshelden.io/stadt/${city}`,
       },
     },
   }))
