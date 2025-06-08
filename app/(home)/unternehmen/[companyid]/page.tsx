@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import React from "react";
 import CompanyInfos from "./_components/CompanyInfos";
+import CompanyContractForm from "./_components/CompanyContactForm";
 
 // Generate metadata for SEO
 export async function generateMetadata({
@@ -80,6 +81,7 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
       <div className='container mx-auto pt-24 flex flex-col gap-24 px-4'>
         {/* Hero Section */}
         <CompanyInfos companyData={companyData} />
+        <CompanyContractForm company={companyData} />
 
         {/* Call-to-action Sections */}
         <div className='flex flex-col gap-24 my-24'>

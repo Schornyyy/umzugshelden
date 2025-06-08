@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Neue Auftragsanfrage</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 600px;
+      margin: 20px auto;
+      background-color: #ffffff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header {
+      text-align: center;
+      color: #328a2a;
+      font-size: 20px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .content {
+      font-size: 16px;
+      color: #333333;
+      margin-top: 10px;
+    }
+
+    .content p {
+      margin: 8px 0;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      font-size: 14px;
+      color: #777777;
+    }
+
+    .button {
+      display: inline-block;
+      margin-top: 20px;
+      background-color: #328a2a;
+      color: #ffffff !important;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+
+    .button:hover {
+      background-color: #328a2a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="http://landschaftshelden.io/images/JobSmith_Logo_Green.png" alt="Logo" style="max-width: 180px;" />
+    </div>
+
+    <div class="header">
+      Du hast eine neue Auftragsanfrage erhalten
+    </div>
+
+    <div class="content">
+      <div style="text-align: center;">
+        <a href="{{contractLink}}" class="button">Jetzt ansehen</a>
+      </div>
+    </div>
+
+    <div class="footer">
+      Diese Anfrage sollte zeitnah bearbeitet werden.
+    </div>
+  </div>
+</body>
+</html>

@@ -23,6 +23,7 @@
     "@vercel/analytics": "^1.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "csv-parse": "^5.6.0",
     "draft-js": "^0.11.7",
     "embla-carousel-react": "^8.5.1",
     "firebase": "^11.1.0",

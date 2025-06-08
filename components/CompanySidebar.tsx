@@ -36,6 +36,10 @@ const data = {
           title: "Dienstleistungen",
           url: "/services",
         },
+        {
+          title: "Anfragen",
+          url: "/inquiry",
+        },
       ],
     },
   ],
