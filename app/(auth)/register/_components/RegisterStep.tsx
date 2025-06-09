@@ -6,7 +6,11 @@ import { useRegisterData } from "@/customHooks/useRegisterData";
 import { CompanyType } from "@/types/RegisterTypye";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/config/firebase";
-import { createCompanyInDatabase } from "@/actions/companyActions";
+import {
+  createCompanyInDatabase,
+  deleteCompanyFromDatabase,
+  findCompanyByEmail,
+} from "@/actions/companyActions";
 import { useRouter } from "next/navigation";
 import { addUserToBrevoList } from "@/actions/userActions";
 import { createAccountInDatabase } from "@/actions/AccountActions";
@@ -96,6 +100,12 @@ const RegisterStep = () => {
         role: "company",
         id: randomUUID,
       });
+
+      const foundComp = await findCompanyByEmail(submitData.email);
+      if (foundComp) {
+        await deleteCompanyFromDatabase(foundComp.id!);
+      }
+
       await createCompanyInDatabase(d).then(async () => {
         await createUserWithEmailAndPassword(
           auth,

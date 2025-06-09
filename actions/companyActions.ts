@@ -5,6 +5,7 @@ import { CompanyType, parseDataToCompanyType } from "@/types/RegisterTypye";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -82,6 +83,17 @@ export async function createCompanyInDatabase(
   await addDoc(colRef, { ...data });
 
   return true;
+}
+
+export async function deleteCompanyFromDatabase(id: string): Promise<boolean> {
+  try {
+    const docRef = doc(database, "users", id);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error("Fehler beim Löschen des Unternehmens:", error);
+    return false;
+  }
 }
 
 // 🔹 UNTERNEHMEN AKTUALISIEREN (Cache invalidieren)

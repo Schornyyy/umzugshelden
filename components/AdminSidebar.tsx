@@ -33,8 +33,8 @@ const data = {
           url: "/",
         },
         {
-          title: "Dienstleistungen",
-          url: "/services",
+          title: "Importieren",
+          url: "/imports",
         },
       ],
     },
@@ -55,7 +55,7 @@ export function AdminSideBar({
     <Sidebar {...props} className='bg-slate-800 sticky left-0 top-0'>
       <SidebarHeader className='p-6'>
         <Image
-          src={"/images/Logo.png"}
+          src={"/images/JobSmith_Logo.png"}
           alt='Reinigungshelden Logo'
           height={420}
           width={420}

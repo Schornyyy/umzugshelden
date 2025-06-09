@@ -6,11 +6,15 @@ import Link from "next/link";
 interface SearchBarResultsProps {
   results: CompanyType[];
   loading: boolean;
+  admin?: boolean;
+  adminid?: string;
 }
 
 const SearchBarResults: React.FC<SearchBarResultsProps> = ({
   results,
   loading,
+  admin = false,
+  adminid,
 }) => {
   return (
     <div className='mt-6'>
@@ -23,7 +27,7 @@ const SearchBarResults: React.FC<SearchBarResultsProps> = ({
             <div
               key={company.id}
               className='border p-4 rounded-lg grid grid-rows-2 md:grid-cols-2 md:grid-rows-1 w-full items-center justify-center'>
-              {company.images!.length > 0 ? (
+              {company.images && company.images!.length > 0 ? (
                 <Image
                   alt={company.companyName!}
                   src={company.images![0]}
@@ -48,7 +52,11 @@ const SearchBarResults: React.FC<SearchBarResultsProps> = ({
                   {company.city}, {company.zip}
                 </p>
                 <Link
-                  href={"/unternehmen/" + company.id}
+                  href={
+                    admin
+                      ? `/admin/${adminid}/companys/` + company.id
+                      : "/unternehmen/" + company.id
+                  }
                   className='py-2 px-4 text-white bg-green-500 rounded-lg hover:bg-green-600 w-fit md:self-end'>
                   Unternehmen Ansehen
                 </Link>

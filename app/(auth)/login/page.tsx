@@ -76,6 +76,10 @@ const Login: React.FC = () => {
                     }
                     navigateUser(company.type, company.id!);
                   }
+
+                  if (company?.type === "admin") {
+                    navigateUser("admin", company.id!);
+                  }
                 });
               } else {
                 navigateUser(res.type, res.id!);
