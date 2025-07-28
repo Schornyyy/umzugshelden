@@ -10,19 +10,49 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
     const url = `https://nominatim.openstreetmap.org/search?postalcode=${postalCode}&city=${city}&format=json`;
   
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: {
+        'User-Agent': 'landschaftshelden.io/1.0 (support@landschaftshelden.io)' // Optional aber empfohlen von Nominatim
+      }
+      });
+      console.log('Response from Nominatim:', response);
       const data = await response.json();
+      console.log('Data received from Nominatim:', data);
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
+        console.log('Coordinates found:', { lat, lon });
         return { latitude: parseFloat(lat), longitude: parseFloat(lon) };
       } else {
         throw new Error('Keine Koordinaten gefunden.');
       }
     } catch (error) {
       console.error('Fehler beim Abrufen der Koordinaten:', error);
+      fetchCoordinatesMeteo(city, postalCode);
       return null;
     }
   };
+
+
+  export const fetchCoordinatesMeteo = async (city: string, postalCode: string) => {
+  const query = `${postalCode} ${city}`;
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=de&format=json`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data && data.results && data.results.length > 0) {
+      const { latitude, longitude } = data.results[0];
+      return { latitude, longitude };
+    } else {
+      throw new Error('Keine Koordinaten gefunden.');
+    }
+  } catch (error) {
+    console.error('Fehler beim Abrufen der Koordinaten:', error);
+    return null;
+  }
+};
+
 
   export async function saveClick(type: ClickType, companyId: string) {
     const click: StatsType = {
