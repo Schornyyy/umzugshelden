@@ -36,6 +36,10 @@ const data = {
           title: "Importieren",
           url: "/imports",
         },
+        {
+          title: "Aufträge",
+          url: "/contracts",
+        },
       ],
     },
   ],

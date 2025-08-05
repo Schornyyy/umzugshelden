@@ -26,9 +26,9 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
         throw new Error('Keine Koordinaten gefunden.');
       }
     } catch (error) {
-      console.error('Fehler beim Abrufen der Koordinaten:', error);
-      fetchCoordinatesMeteo(city, postalCode);
-      return null;
+      console.error('Fehler beim Abrufen der Koordinaten von Nominatim:', error);
+      console.log('Versuche Open-Meteo als Fallback...');
+      return await fetchCoordinatesMeteo(city, postalCode);
     }
   };
 

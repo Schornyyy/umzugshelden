@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auftrag bestätigen - Landschaftshelden.io</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #334155;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            padding: 30px 40px;
+            text-align: center;
+            color: white;
+        }
+        
+        .logo {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            color: white;
+        }
+        
+        .tagline {
+            font-size: 16px;
+            opacity: 0.9;
+            margin: 0;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .greeting {
+            font-size: 20px;
+            font-weight: 600;
+            color: #16a34a;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            font-size: 16px;
+            margin-bottom: 30px;
+            color: #475569;
+        }
+        
+        .cta-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            color: white;
+            text-decoration: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin: 20px 0 30px 0;
+            box-shadow: 0 4px 14px 0 rgba(22, 163, 74, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px 0 rgba(22, 163, 74, 0.4);
+        }
+        
+        .steps-section {
+            background-color: #f1f5f9;
+            border-radius: 12px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .steps-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #16a34a;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .step {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .step:last-child {
+            margin-bottom: 0;
+        }
+        
+        .step-number {
+            background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: #16a34a;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .step-description {
+            color: #64748b;
+            font-size: 14px;
+        }
+        
+        .warning {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 25px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        .warning-text {
+            color: #92400e;
+            font-size: 14px;
+            margin: 0;
+        }
+        
+        .footer {
+            background-color: #1e293b;
+            color: #94a3b8;
+            padding: 30px 40px;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .footer-logo {
+            color: #16a34a;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .footer-links {
+            margin: 15px 0;
+        }
+        
+        .footer-links a {
+            color: #16a34a;
+            text-decoration: none;
+            margin: 0 15px;
+        }
+        
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .contract-info {
+            background-color: #f8f9fa;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .contract-info h4 {
+            margin: 0 0 10px 0;
+            color: #16a34a;
+            font-size: 16px;
+        }
+        
+        .contract-info p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #64748b;
+        }
+        
+        @media (max-width: 600px) {
+            .content {
+                padding: 20px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .steps-section {
+                padding: 20px;
+            }
+            
+            .step {
+                padding: 12px;
+            }
+            
+            .cta-button {
+                padding: 14px 24px;
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo"> Landschaftshelden.io</div>
+            <p class="tagline">Ihr Partner für professionelle Garten- und Landschaftspflege</p>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            <h1 class="greeting">Hallo {{customerName}},</h1>
+            
+            <p class="message">
+                vielen Dank für Ihr Vertrauen in Landschaftshelden.io! Ihr Auftrag wurde erfolgreich bei uns eingereicht.
+            </p>
+            
+            <p class="message">
+                Um Ihren Auftrag zu aktivieren und passende Galabau-Unternehmen zu benachrichtigen, bestätigen Sie bitte Ihre E-Mail-Adresse:
+            </p>
+            
+            <!-- CTA Button -->
+            <div style="text-align: center;">
+                <a href="{{verificationLink}}" class="cta-button">
+                    ✓ E-Mail bestätigen & Auftrag aktivieren
+                </a>
+            </div>
+            
+            <!-- Contract Info -->
+            <div class="contract-info">
+                <h4>📋 Ihr Auftrag im Überblick:</h4>
+                <p><strong>Service:</strong> {{service}}</p>
+                <p><strong>Standort:</strong> {{location}}</p>
+                <p><strong>Auftragsnummer:</strong> {{contractId}}</p>
+            </div>
+            
+            <!-- Steps Section -->
+            <div class="steps-section">
+                <h3 class="steps-title">🚀 So geht es weiter:</h3>
+                
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <div class="step-title">Passende Unternehmen werden benachrichtigt</div>
+                        <div class="step-description">Nach der Bestätigung informieren wir automatisch qualifizierte Galabau-Unternehmen in Ihrer Region über Ihren Auftrag.</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <div class="step-title">Unternehmen melden sich bei Ihnen</div>
+                        <div class="step-description">Interessierte Betriebe kontaktieren Sie direkt per E-Mail oder Telefon mit individuellen Angeboten für Ihr Projekt.</div>
+                    </div>
+                </div>
+                
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <div class="step-title">Für den passenden Galabauer entscheiden</div>
+                        <div class="step-description">Vergleichen Sie die Angebote, Referenzen und Bewertungen und wählen Sie den Anbieter aus, der am besten zu Ihrem Projekt passt.</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Warning -->
+            <div class="warning">
+                <p class="warning-text">
+                    <strong>⏰ Wichtig:</strong> Dieser Bestätigungslink ist nur 24 Stunden gültig. Nach Ablauf der Frist wird Ihr Auftrag automatisch gelöscht.
+                </p>
+            </div>
+            
+            <p class="message">
+                Bei Fragen stehen wir Ihnen gerne zur Verfügung. Antworten Sie einfach auf diese E-Mail oder kontaktieren Sie uns unter <a href="mailto:support@landschaftshelden.io" style="color: #16a34a;">support@landschaftshelden.io</a>.
+            </p>
+            
+            <p class="message">
+                Wir freuen uns darauf, Ihnen bei der Umsetzung Ihres Gartenprojekts zu helfen!
+            </p>
+            
+            <p style="margin-top: 30px; color: #64748b;">
+                Mit grünen Grüßen,<br>
+                <strong>Ihr Landschaftshelden.io Team</strong>
+            </p>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-logo"> Landschaftshelden.io</div>
+            <p>Ihr Marktplatz für professionelle Garten- und Landschaftspflege</p>
+            
+            <div class="footer-links">
+                <a href="https://landschaftshelden.io">Website</a>
+                <a href="https://landschaftshelden.io/datenschutz">Datenschutz</a>
+                <a href="https://landschaftshelden.io/impressum">Impressum</a>
+                <a href="mailto:support@landschaftshelden.io">Support</a>
+            </div>
+            
+            <p style="margin-top: 20px; font-size: 12px; color: #64748b;">
+                Diese E-Mail wurde automatisch generiert. Falls Sie diese E-Mail fälschlicherweise erhalten haben, ignorieren Sie sie bitte.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

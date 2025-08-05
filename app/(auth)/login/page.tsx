@@ -62,8 +62,10 @@ const Login: React.FC = () => {
             }
 
             await findCompanyByOwnerId(account.id).then(async (res) => {
+              console.log("Company found:", res);
               if (!res) {
                 await findCompanyByEmail(email).then((company) => {
+                  console.log("Company by email found:", company);
                   if (company) {
                     if (
                       company.type === "company" ||

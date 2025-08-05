@@ -11,6 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             url: "https://landschaftshelden.io",
             lastModified: new Date(),
             priority: 1.0,
+            changeFrequency: "weekly" as const,
             alternates: {
               languages: {
                 de: "https://landschaftshelden.io",
@@ -18,52 +19,134 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
             },
         },
         {
-            url: "https://www.landschaftshelden.io/fuer-unternehmen",
+            url: "https://landschaftshelden.io/fuer-unternehmen",
             lastModified: new Date(),
-            priority: 1.0,
+            priority: 0.9,
+            changeFrequency: "monthly" as const,
             alternates: {
               languages: {
-                de: "https://www.landschaftshelden.io/fuer-unternehmen",
+                de: "https://landschaftshelden.io/fuer-unternehmen",
               },
             },
         },
         {
-            url: "https://www.landschaftshelden.io/unternehmen-finden",
+            url: "https://landschaftshelden.io/unternehmen-finden",
             lastModified: new Date(),
-            priority: 1.0,
+            priority: 0.9,
+            changeFrequency: "daily" as const,
             alternates: {
               languages: {
-                de: "https://www.landschaftshelden.io/unternehmen-finden",
+                de: "https://landschaftshelden.io/unternehmen-finden",
               },
             },
         },
         {
-            url: "https://www.landschaftshelden.io/kontakt",
+            url: "https://landschaftshelden.io/auftrag-erstellen",
             lastModified: new Date(),
-            priority: 1.0,
+            priority: 0.9,
+            changeFrequency: "monthly" as const,
             alternates: {
               languages: {
-                de: "https://www.landschaftshelden.io/kontakt",
+                de: "https://landschaftshelden.io/auftrag-erstellen",
               },
             },
         },
         {
-            url: "https://www.landschaftshelden.io/impressum",
+            url: "https://landschaftshelden.io/auftrag-bestaetigung",
             lastModified: new Date(),
-            priority: 1.0,
+            priority: 0.6,
+            changeFrequency: "monthly" as const,
             alternates: {
               languages: {
-                de: "https://www.landschaftshelden.io/impressum",
+                de: "https://landschaftshelden.io/auftrag-bestaetigung",
               },
             },
         },
         {
-            url: "https://www.landschaftshelden.io/datenschutz",
+            url: "https://landschaftshelden.io/stadt",
             lastModified: new Date(),
-            priority: 1.0,
+            priority: 0.8,
+            changeFrequency: "weekly" as const,
             alternates: {
               languages: {
-                de: "https://www.landschaftshelden.io/datenschutz",
+                de: "https://landschaftshelden.io/stadt",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/login",
+            lastModified: new Date(),
+            priority: 0.7,
+            changeFrequency: "monthly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/login",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/register/company",
+            lastModified: new Date(),
+            priority: 0.8,
+            changeFrequency: "monthly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/register/company",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/forgot-password",
+            lastModified: new Date(),
+            priority: 0.3,
+            changeFrequency: "yearly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/forgot-password",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/contract/verify",
+            lastModified: new Date(),
+            priority: 0.5,
+            changeFrequency: "monthly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/contract/verify",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/kontakt",
+            lastModified: new Date(),
+            priority: 0.6,
+            changeFrequency: "monthly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/kontakt",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/impressum",
+            lastModified: new Date(),
+            priority: 0.4,
+            changeFrequency: "yearly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/impressum",
+              },
+            },
+        },
+        {
+            url: "https://landschaftshelden.io/datenschutz",
+            lastModified: new Date(),
+            priority: 0.4,
+            changeFrequency: "yearly" as const,
+            alternates: {
+              languages: {
+                de: "https://landschaftshelden.io/datenschutz",
               },
             },
         },
@@ -75,13 +158,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
       const companyCityService = cities.flatMap((city) =>
   getGalbauServices().map((service) => ({
-    url: `https://www.landschaftshelden.io/stadt/${city}/${slugify(service)}`,
+    url: `https://landschaftshelden.io/stadt/${city}/${slugify(service)}`,
     lastModified: new Date(),
     priority: 0.8,
-    changeFrequency: "weekly",
+    changeFrequency: "weekly" as const,
     alternates: {
       languages: {
-        de: `https://www.landschaftshelden.io/stadt/${city}/${slugify(service)}`,
+        de: `https://landschaftshelden.io/stadt/${city}/${slugify(service)}`,
       },
     },
   }))
@@ -89,26 +172,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 
   const companyCities = cities.map((city) => ({
-    url: `https://www.landschaftshelden.io/stadt/${city}`,
+    url: `https://landschaftshelden.io/stadt/${city}`,
     lastModified: new Date(),
     priority: 0.8,
-    changeFrequency: "weekly",
+    changeFrequency: "weekly" as const,
     alternates: {
       languages: {
-        de: `https://www.landschaftshelden.io/stadt/${city}`,
+        de: `https://landschaftshelden.io/stadt/${city}`,
       },
     },
   }))
 
     const companyPages = companys.map((company) => ({
-        url: `https://www.landschaftshelden.io/unternehmen/${company.id}`,
+        url: `https://landschaftshelden.io/unternehmen/${company.id}`,
         lastModified: new Date(), // Falls vorhanden
         priority: 0.8,
-        mobileFriendly: true,
-        changeFrequency: "weekly",
+        changeFrequency: "weekly" as const,
         alternates: {
         languages: {
-            de: `https://www.landschaftshelden.io/kontakt`,
+            de: `https://landschaftshelden.io/unternehmen/${company.id}`,
         },
         },
     }))

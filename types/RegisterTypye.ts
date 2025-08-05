@@ -28,6 +28,8 @@ export function parseDataToCompanyType(data: DocumentData, id?: string) {
         type: data.type as UserRole,
         city: data.city ? data.city : "",
         zip: data.zip ? data.zip : "",
+        longitude: data.longitude ? data.longitude : undefined,
+        latitude: data.latitude ? data.latitude : undefined,
         description: data.description ? data.description : "",
         companyName: data.companyName ? data.companyName : "",
         companyNumber: data.companyNumber ? data.companyNumber : "",

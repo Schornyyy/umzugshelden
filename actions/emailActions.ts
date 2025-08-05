@@ -21,9 +21,13 @@ export async function sendCustomEmail({
   templatePath: string;
 }) {
   try {
-    
     // Korrigiere den Pfad relativ zum Wurzelverzeichnis
     const htmlTemplatePath = path.join(process.cwd(), "/emailtemplates/" ,  templatePath);
+
+    // Prüfe, ob die Template-Datei existiert
+    if (!fs.existsSync(htmlTemplatePath)) {
+      throw new Error(`Template-Datei nicht gefunden: ${htmlTemplatePath}`);
+    }
 
     // Versuche, die HTML-Datei zu laden
     const htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf-8');
@@ -31,25 +35,24 @@ export async function sendCustomEmail({
     // Platzhalter ersetzen
     const emailContentHtml = replaceTemplatePlaceholders(htmlTemplate, replacements);
 
-    // SMTP-Transporter einrichten und E-Mail senden (wie zuvor)
+    // SMTP-Transporter einrichten und E-Mail senden
     const transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST,
       port: Number(process.env.SMTP_PORT) || 587,
-      secure: true,
+      secure: Number(process.env.SMTP_PORT) === 465, // true für Port 465, false für andere Ports
       auth: {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
     });
 
-    const info = await transporter.sendMail({
+    await transporter.sendMail({
       from: `"Landschaftshelden.io" <${process.env.SMTP_USER}>`,
       to,
       subject,
       html: emailContentHtml,
     });
 
-    console.log('E-Mail gesendet: %s', info.messageId);
     return { success: true };
   } catch (error) {
     console.error('Fehler beim Senden der E-Mail:', error);

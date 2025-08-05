@@ -40,6 +40,10 @@ const data = {
           title: "Anfragen",
           url: "/inquiry",
         },
+        {
+          title: "Aufträge",
+          url: "/contracts",
+        },
       ],
     },
   ],

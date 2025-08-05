@@ -50,6 +50,9 @@ const Footer = () => {
               <Link href='/kontakt' className='text-white hover:text-green-400'>
                 Kontakt
               </Link>
+              <Link href='/blog' className='text-white hover:text-green-400'>
+                Blog
+              </Link>
             </div>
           </div>
 
@@ -83,6 +86,11 @@ const Footer = () => {
             </h6>
             <div className='w-12 h-[2px] bg-green-100 mb-4 mx-auto md:mx-0'></div>
             <div className='flex flex-col gap-2'>
+              <Link
+                href='/auftrag-erstellen'
+                className='text-white hover:text-green-400'>
+                Auftrag erstellen
+              </Link>
               <Link
                 href='/unternehmen-finden'
                 className='text-white hover:text-green-400'>
