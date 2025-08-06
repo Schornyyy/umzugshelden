@@ -14,12 +14,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const companyCityService = cities.flatMap((city) =>
   getGalbauServices().map((service) => ({
-    url: `https://landschaftshelden.io/stadt/${city}/${slugify(service)}`,
+    url: `https://www.landschaftshelden.io/stadt/${city}/${slugify(service)}`,
     lastModified: new Date(),
     priority: 0.8,
     alternates: {
       languages: {
-        de: `https://landschaftshelden.io/stadt/${city}/${slugify(service)}`,
+        de: `https://www.landschaftshelden.io/stadt/${city}/${slugify(service)}`,
       },
     },
   }))

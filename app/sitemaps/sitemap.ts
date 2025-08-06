@@ -1,7 +1,7 @@
 import { cities, getGalbauBranches, getGalbauServices } from '@/statics/Lists';
 import { slugify } from '@/utils/slugify';
 import type { MetadataRoute } from 'next';
-const BASE_URL = 'https://landschaftshelden.io';
+const BASE_URL = 'https://www.landschaftshelden.io';
 const CHUNK_SIZE = 20000;
 
 function generateAllUrls(): MetadataRoute.Sitemap {

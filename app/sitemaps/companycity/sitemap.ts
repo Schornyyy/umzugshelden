@@ -13,12 +13,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 
   const companyCities = cities.map((city) => ({
-    url: `https://landschaftshelden.io/stadt/${city}`,
+    url: `https://www.landschaftshelden.io/stadt/${city}`,
     lastModified: new Date(),
     priority: 0.8,
     alternates: {
       languages: {
-        de: `https://landschaftshelden.io/stadt/${city}`,
+        de: `https://www.landschaftshelden.io/stadt/${city}`,
       },
     },
   }))
