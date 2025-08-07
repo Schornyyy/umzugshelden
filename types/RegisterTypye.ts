@@ -19,7 +19,8 @@ export interface CompanyType  {
     public?: boolean,
     services?: string[],
     id?: string,
-    ownerid: string
+    ownerid: string,
+    automatic?: boolean, // Neu hinzugefügt für automatische Firmen
 }
 
 export function parseDataToCompanyType(data: DocumentData, id?: string) {
@@ -41,5 +42,6 @@ export function parseDataToCompanyType(data: DocumentData, id?: string) {
         id: id ? id : "",
         services: data.services ? data.services :  [],
         ownerid: data.ownerid ? data.ownerid : "",
+        automatic: data.automatic !== undefined ? data.automatic : false, // Standardwert für automatische Firmen
     }
 }

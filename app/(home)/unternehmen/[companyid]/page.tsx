@@ -363,7 +363,9 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
               Angebote.
             </p>
           </div>
-          <CompanyContractForm company={companyData} />
+          {!companyData.automatic && (
+            <CompanyContractForm company={companyData} />
+          )}
         </div>
 
         {/* Call-to-Action Sections */}

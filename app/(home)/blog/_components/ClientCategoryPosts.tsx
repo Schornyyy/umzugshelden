@@ -37,7 +37,7 @@ const ClientCategoryPosts = ({ categorySlug }: { categorySlug: string }) => {
                 alt={post.acf.featured_image.alt || "Beitragsbild"}
                 width={700}
                 height={250}
-                className='rounded-lg mb-2'
+                className='rounded-lg mb-2 h-[250px] object-cover'
               />
             )}
             <Headings level={3}>{post.title.rendered}</Headings>
