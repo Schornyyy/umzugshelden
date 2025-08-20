@@ -31,6 +31,23 @@ interface ExtendedContract extends Contract {
   status?: "pending" | "verified" | "completed" | "cancelled";
 }
 
+// New: Types for metrics
+type ContractStats = {
+  views: number;
+  purchaseAttempts: number;
+  emailClicks: number;
+  notifiedCount: number;
+};
+
+type ContractEvent = {
+  id: string;
+  type: string;
+  companyEmail?: string | null;
+  companyId?: string | null;
+  createdAt?: { seconds: number; nanoseconds: number } | null;
+  meta?: unknown;
+};
+
 const AdminContractsPage = () => {
   const [contracts, setContracts] = useState<ExtendedContract[]>([]);
   const [filteredContracts, setFilteredContracts] = useState<
@@ -43,6 +60,17 @@ const AdminContractsPage = () => {
   const [sortBy, setSortBy] = useState<string>("newest");
   const [selectedContract, setSelectedContract] =
     useState<ExtendedContract | null>(null);
+
+  // New: UI state for metrics and notify
+  const [stats, setStats] = useState<ContractStats | null>(null);
+  const [events, setEvents] = useState<ContractEvent[]>([]);
+  const [loadingMetrics, setLoadingMetrics] = useState(false);
+  const [notifying, setNotifying] = useState(false);
+  const [notifyResult, setNotifyResult] = useState<null | {
+    notified: number;
+    total: number;
+    errors: number;
+  }>(null);
 
   // Alle verfügbaren Services für Filter
   const services = getAllServices();
@@ -144,6 +172,39 @@ const AdminContractsPage = () => {
     filterAndSortContracts();
   }, [filterAndSortContracts]);
 
+  // Load metrics when a contract is selected
+  useEffect(() => {
+    const loadMetrics = async () => {
+      if (!selectedContract) {
+        setStats(null);
+        setEvents([]);
+        return;
+      }
+      try {
+        setLoadingMetrics(true);
+        const res = await fetch(
+          `/api/contracts/metrics?contractId=${selectedContract.id}`,
+          { cache: "no-store" }
+        );
+        const data = await res.json();
+        if (data.success) {
+          setStats(data.stats as ContractStats);
+          setEvents(data.recentEvents as ContractEvent[]);
+        } else {
+          setStats(null);
+          setEvents([]);
+        }
+      } catch (e) {
+        console.error("Fehler beim Laden der Metriken", e);
+        setStats(null);
+        setEvents([]);
+      } finally {
+        setLoadingMetrics(false);
+      }
+    };
+    loadMetrics();
+  }, [selectedContract]);
+
   const updateContractStatus = async (
     contractId: string,
     newStatus: string
@@ -193,6 +254,45 @@ const AdminContractsPage = () => {
     }
   };
 
+  // Trigger notify-all for the selected contract
+  const notifyCompanies = async () => {
+    if (!selectedContract) return;
+    try {
+      setNotifying(true);
+      setNotifyResult(null);
+      const res = await fetch("/api/notify-companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractId: selectedContract.id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNotifyResult({
+          notified: data.stats?.notified ?? 0,
+          total: data.stats?.total ?? 0,
+          errors: data.stats?.errors ?? 0,
+        });
+        // refresh metrics
+        const metricsRes = await fetch(
+          `/api/contracts/metrics?contractId=${selectedContract.id}`,
+          { cache: "no-store" }
+        );
+        const metrics = await metricsRes.json();
+        if (metrics.success) {
+          setStats(metrics.stats as ContractStats);
+          setEvents(metrics.recentEvents as ContractEvent[]);
+        }
+      } else {
+        alert(data.error || "Fehler beim Senden der Benachrichtigungen");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Fehler beim Senden der Benachrichtigungen");
+    } finally {
+      setNotifying(false);
+    }
+  };
+
   const getStatusBadgeColor = (status?: string) => {
     switch (status) {
       case "pending":
@@ -237,6 +337,15 @@ const AdminContractsPage = () => {
     } else {
       return `vor ${diffInDays} Tag${diffInDays !== 1 ? "en" : ""}`;
     }
+  };
+
+  // Helper to format Firestore timestamps
+  const formatEventTime = (
+    ts?: { seconds: number; nanoseconds: number } | null
+  ) => {
+    if (!ts) return "";
+    const d = new Date(ts.seconds * 1000 + Math.floor(ts.nanoseconds / 1e6));
+    return d.toLocaleString("de-DE");
   };
 
   if (loading) {
@@ -545,6 +654,18 @@ const AdminContractsPage = () => {
 
                 <div className='space-y-2'>
                   <Button
+                    className='w-full'
+                    onClick={() => {
+                      const pathParts =
+                        typeof window !== "undefined"
+                          ? window.location.pathname.split("/")
+                          : [];
+                      const url = `/admin/${pathParts[2]}/contracts/${selectedContract.id}`;
+                      window.open(url, "_blank");
+                    }}>
+                    Dashboard öffnen
+                  </Button>
+                  <Button
                     variant='destructive'
                     className='w-full'
                     onClick={() => deleteContract(selectedContract.id)}>
@@ -560,6 +681,106 @@ const AdminContractsPage = () => {
                     <strong>Erstellt:</strong>{" "}
                     {selectedContract.createdAt.toLocaleString("de-DE")}
                   </p>
+                </div>
+
+                {/* New: Notify and Metrics Panel */}
+                <div className='mt-4'>
+                  <Button
+                    onClick={notifyCompanies}
+                    className='w-full'
+                    disabled={notifying}>
+                    Alle Firmen benachrichtigen
+                  </Button>
+
+                  {notifyResult && (
+                    <div className='mt-2 text-sm text-gray-700'>
+                      {notifyResult.notified} von {notifyResult.total} Firmen
+                      benachrichtigt.
+                    </div>
+                  )}
+                </div>
+
+                <div className='mt-4'>
+                  <h4 className='font-semibold mb-2'>Metriken</h4>
+                  {loadingMetrics ? (
+                    <div className='text-center text-sm text-gray-500'>
+                      Lade Metriken...
+                    </div>
+                  ) : stats ? (
+                    <div className='grid grid-cols-2 gap-4 text-sm'>
+                      <div>
+                        <span className='font-medium'>Aufrufe:</span>{" "}
+                        {stats.views}
+                      </div>
+                      <div>
+                        <span className='font-medium'>Kaufversuche:</span>{" "}
+                        {stats.purchaseAttempts}
+                      </div>
+                      <div>
+                        <span className='font-medium'>E-Mail Klicks:</span>{" "}
+                        {stats.emailClicks}
+                      </div>
+                      <div>
+                        <span className='font-medium'>
+                          Benachrichtigte Firmen:
+                        </span>{" "}
+                        {stats.notifiedCount}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className='text-center text-sm text-gray-500'>
+                      Keine Metriken verfügbar.
+                    </div>
+                  )}
+                </div>
+
+                <div className='mt-4'>
+                  <h4 className='font-semibold mb-2'>Letzte Ereignisse</h4>
+                  {loadingMetrics ? (
+                    <div className='text-center text-sm text-gray-500'>
+                      Lade Ereignisse...
+                    </div>
+                  ) : events.length > 0 ? (
+                    <div className='space-y-2'>
+                      {events.map((event) => (
+                        <div
+                          key={event.id}
+                          className='p-3 rounded-lg bg-gray-50 border'>
+                          <div className='flex justify-between text-xs text-gray-500'>
+                            <span>
+                              {event.type} - {formatEventTime(event.createdAt)}{" "}
+                              {/* New: Show company email if available */}
+                              {event.companyEmail && (
+                                <span className='text-gray-700'>
+                                  ({event.companyEmail})
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                          <div className='text-sm text-gray-700'>
+                            {/* New: Show meta information if available */}
+                            {typeof event.meta !== "undefined" && (
+                              <div className='mb-1'>
+                                <strong>Meta:</strong>{" "}
+                                {(() => {
+                                  try {
+                                    return JSON.stringify(event.meta);
+                                  } catch {
+                                    return String(event.meta);
+                                  }
+                                })()}
+                              </div>
+                            )}
+                            {/* Existing content can go here */}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className='text-center text-sm text-gray-500'>
+                      Keine Ereignisse verfügbar.
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

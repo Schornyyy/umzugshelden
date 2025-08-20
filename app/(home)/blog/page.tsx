@@ -48,6 +48,9 @@ const noto = Noto_Sans({
   weight: ["400", "700"],
 });
 
+const BLOG_CATEGORY_SLUG =
+  process.env.NEXT_PUBLIC_BLOG_CATEGORY_SLUG || "landschaftshelden";
+
 export default function BlogPage() {
   return (
     <div className='w-full bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen'>
@@ -83,7 +86,7 @@ export default function BlogPage() {
 
         {/* Blog Posts */}
         <div className='bg-white rounded-2xl shadow-lg p-8'>
-          <ClientCategoryPosts categorySlug={"landschaftshelden"} />
+          <ClientCategoryPosts categorySlug={BLOG_CATEGORY_SLUG} />
         </div>
       </div>
     </div>

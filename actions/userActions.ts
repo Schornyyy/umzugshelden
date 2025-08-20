@@ -3,7 +3,7 @@
 import { database } from "@/config/firebase";
 import { ClickType, StatsType } from "@/types/StatsType";
 import { UserRole } from "@/types/UserType";
-import { addDoc, collection } from "firebase/firestore";
+import { addDoc, collection, doc, setDoc, increment } from "firebase/firestore";
 import { redirect } from "next/navigation";
 
 export const fetchCoordinates = async (city: string, postalCode: string) => {
@@ -62,7 +62,22 @@ export const fetchCoordinates = async (city: string, postalCode: string) => {
     }
 
     await addDoc(collection(database, 'stats'), click);
-
+    // Also increment lightweight aggregates for cheap admin reads
+    try {
+      const aggRef = doc(database, 'company_stats', companyId);
+      await setDoc(
+        aggRef,
+        {
+          updatedAt: Date.now(),
+          total: increment(1),
+          [type]: increment(1),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      // Non-fatal: fallback is counting queries elsewhere
+      console.warn('Failed to update aggregate stats:', e);
+    }
   }
 
   export async function addUserToBrevoList(

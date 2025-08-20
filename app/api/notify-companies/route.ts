@@ -5,15 +5,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { findContractById } from '@/actions/contractActions';
 import { fetchCoordinates } from '@/actions/userActions';
 import { sendCustomEmail } from '@/actions/emailActions';
+import { collection, query, getDocs, limit, where, doc, updateDoc, increment, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { CompanyType } from '@/types/RegisterTypye';
 import { Contract } from '@/types/Contract';
-import {
-  collection,
-  query,
-  getDocs,
-  limit,
-  where,
-} from "firebase/firestore";
 import { database } from "@/config/firebase";
 
 type Coordinates = {
@@ -97,32 +91,26 @@ async function sendEmailNotification(company: CompanyType, contract: Contract) {
 
     // Erstelle Replacements für das Template
     const replacements = {
-      companyName: company.companyName || 'Unbekanntes Unternehmen',
-      contractType: contract.type,
-      zip: contract.zip?.toString() || 'Nicht angegeben',
-      dashboardUrl: `${process.env.NEXT_PUBLIC_BASE_URL}/login`
-    };
+      // Link in die App (kann später auf eine spezifische Contract-Detailseite geändert werden)
+      contractLink: `${process.env.NEXT_PUBLIC_BASE_URL}/login`,
+    } as Record<string, string>;
 
     // Verwende das Template-System aus emailActions
     const result = await sendCustomEmail({
       to: company.email,
-      subject: `🎯 Neuer ${contract.type}-Auftrag in Ihrer Nähe verfügbar!`,
-      replacements: replacements,
-      templatePath: 'ContractNotificationEmail.html'
+  subject: `🎯 Neuer ${contract.type}-Auftrag${contract.zip ? ' (' + contract.zip + ')' : ''} in Ihrer Nähe verfügbar!`,
+  replacements: replacements,
+  templatePath: 'CompanyContractEmail.html'
     });
 
     if (!result.success) {
       throw new Error('E-Mail-Versand fehlgeschlagen');
     }
 
-    return { success: true, company: company.companyName || 'Unbekannt' };
+  return { success: true, company: company.companyName || 'Unbekannt', email: company.email };
   } catch (error) {
     console.error(`Fehler beim Senden der E-Mail an ${company.companyName}:`, error);
-    return { 
-      success: false, 
-      company: company.companyName || 'Unbekannt', 
-      error: error instanceof Error ? error.message : 'Unbekannter Fehler' 
-    };
+  return { success: false, company: company.companyName || 'Unbekannt', error: error instanceof Error ? error.message : 'Unbekannter Fehler' };
   }
 }
 
@@ -199,11 +187,11 @@ export async function POST(request: NextRequest) {
 
     // Sende E-Mails parallel (aber mit Limit um Server nicht zu überlasten)
     const BATCH_SIZE = 5; // Maximal 5 E-Mails parallel
-    const results: Array<{ success: boolean, company: string, error?: string }> = [];
+  const results: Array<{ success: boolean, company: string, email?: string, error?: string }> = [];
 
     for (let i = 0; i < companiesInRange.length; i += BATCH_SIZE) {
       const batch = companiesInRange.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map(company => sendEmailNotification(company, contract));
+  const batchPromises = batch.map(company => sendEmailNotification(company, contract));
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
 
@@ -213,8 +201,28 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const successful = results.filter(r => r.success).length;
+    const successfulResults = results.filter(r => r.success);
+    const successful = successfulResults.length;
     const failed = results.filter(r => !r.success);
+
+    // Log notify_sent events and increment notifiedCount
+    if (successful > 0) {
+      const statsRef = doc(database, 'contracts', contractId, 'metrics', 'stats');
+      const statsSnap = await getDoc(statsRef);
+      if (!statsSnap.exists()) {
+        await setDoc(statsRef, { views: 0, purchaseAttempts: 0, emailClicks: 0, notifiedCount: 0 }, { merge: true });
+      }
+      await updateDoc(statsRef, { notifiedCount: increment(successful) });
+
+      const eventsCol = collection(database, 'contracts', contractId, 'events');
+      await Promise.all(successfulResults.map((r) => addDoc(eventsCol, {
+        type: 'notify_sent',
+        companyEmail: r.email || null,
+        companyId: null,
+        meta: { company: r.company },
+        createdAt: serverTimestamp(),
+      })));
+    }
 
     console.log(`E-Mail-Benachrichtigungen abgeschlossen: ${successful}/${companiesInRange.length} erfolgreich`);
 

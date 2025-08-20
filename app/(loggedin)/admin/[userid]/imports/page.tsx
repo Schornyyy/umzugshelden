@@ -13,24 +13,40 @@ import { fetchCoordinates } from "@/actions/userActions";
 import { ContentState, convertToRaw } from "draft-js";
 
 export default function CompanyImporter() {
-  const { register, handleSubmit } = useForm();
+  const { register, handleSubmit, reset } = useForm();
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [progress, setProgress] = useState<number>(0);
   const [uploading, setUploading] = useState<boolean>(false);
+  const [fileCount, setFileCount] = useState<number>(0);
+
+  async function parseFile(file: File): Promise<any[]> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const wb = XLSX.read(e.target?.result as string, { type: "binary" });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const json = XLSX.utils.sheet_to_json(sheet);
+          resolve(json as any[]);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = reject;
+      reader.readAsBinaryString(file);
+    });
+  }
 
   const handleFilePreview = async (data: any) => {
-    const file = data.file[0];
-    const reader = new FileReader();
+    const files: File[] = Array.from((data.file as FileList) ?? []);
+    if (!files.length) return;
 
-    reader.onload = async (e) => {
-      const workbook = XLSX.read(e.target?.result, { type: "binary" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
+    setFileCount(files.length);
 
-      setPreviewData(jsonData as any[]);
-    };
-
-    reader.readAsBinaryString(file);
+    // Parse all selected files and combine
+    const results = await Promise.all(files.map((f) => parseFile(f)));
+    const combined = results.flat();
+    setPreviewData(combined);
   };
 
   function generateDraftJSDescription(text: string): string {
@@ -59,18 +75,19 @@ Vertrauen Sie auf einen zuverlässigen Partner vor Ort – Ihr Galabauer in ${ci
       const company: CompanyType = {
         email: entry.email,
         type: "company",
-        companyName: entry.name,
+        companyName: entry.name || entry.firmenname,
         companyWebsite: entry.website,
         companyEmail: entry.email,
         ownerid: crypto.randomUUID(),
         services: getAllServices(),
         city: entry.ort,
-        zip: entry.zip,
+        zip: entry.postleitzahl,
         public: true,
         companyNumber: entry.telefonnummer,
         id: crypto.randomUUID(),
-        title: entry.name,
+        title: entry.name || entry.firmenname,
         description: description,
+        automatic: true,
       };
 
       await fetchCoordinates(company.city!, company.zip!).then((res) => {
@@ -86,22 +103,35 @@ Vertrauen Sie auf einen zuverlässigen Partner vor Ort – Ihr Galabauer in ${ci
     }
 
     setUploading(false);
-    setPreviewData([]); // optional: reset nach Upload
+    setPreviewData([]);
+    setFileCount(0);
+    reset();
   };
 
   return (
     <div className=''>
       <form onSubmit={handleSubmit(handleFilePreview)} className='space-y-4'>
-        <Input type='file' {...register("file")} accept='.xlsx, .xls, .csv' />
+        <Input
+          type='file'
+          multiple
+          {...register("file")}
+          accept='.xlsx, .xls, .csv'
+        />
         <Button type='submit'>Vorschau anzeigen</Button>
       </form>
+
+      {fileCount > 0 && (
+        <p className='text-sm text-gray-600 mt-2'>
+          Ausgewählte Dateien: {fileCount}
+        </p>
+      )}
 
       {previewData.length > 0 && (
         <div className='overflow-auto border border-gray-300 rounded-lg mt-6'>
           <table className='w-full table-auto text-sm text-left'>
             <thead className='bg-gray-100'>
               <tr>
-                <th className='p-2 border'>Name</th>
+                <th className='p-2 border'>Firmenname</th>
                 <th className='p-2 border'>Straße</th>
                 <th className='p-2 border'>Telefon</th>
                 <th className='p-2 border'>Website</th>
@@ -113,13 +143,13 @@ Vertrauen Sie auf einen zuverlässigen Partner vor Ort – Ihr Galabauer in ${ci
             <tbody>
               {previewData.map((row, idx) => (
                 <tr key={idx} className='hover:bg-gray-50'>
-                  <td className='p-2 border'>{row.name}</td>
+                  <td className='p-2 border'>{row.firmenname || row.name}</td>
                   <td className='p-2 border'>{row.straße}</td>
                   <td className='p-2 border'>{row.telefonnummer}</td>
                   <td className='p-2 border'>{row.website}</td>
                   <td className='p-2 border'>{row.email}</td>
                   <td className='p-2 border'>{row.ort}</td>
-                  <td className='p-2 border'>{row.zip}</td>
+                  <td className='p-2 border'>{row.postleitzahl}</td>
                 </tr>
               ))}
             </tbody>

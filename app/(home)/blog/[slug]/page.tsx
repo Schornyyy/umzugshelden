@@ -1,6 +1,6 @@
+/* eslint-disable @next/next/no-img-element */
 import { getPostBySlug } from "@/actions/blogActions";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
 import Link from "next/link";
 import parse, {
   domToReact,
@@ -17,6 +17,16 @@ export async function generateMetadata({
 }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
+
+  // Debug log in generateMetadata after fetching post
+  console.log(
+    "[Blog][generateMetadata] slug=",
+    slug,
+    "found=",
+    !!post,
+    "title=",
+    post?.title?.rendered
+  );
 
   if (!post) {
     return {
@@ -74,6 +84,17 @@ export default async function PostPage({
 }) {
   const { slug } = await params;
   const post = await getPostBySlug(slug);
+
+  // Debug log after fetching post in page component
+  const initialContentLen = post?.content?.rendered
+    ? post.content.rendered.length
+    : 0;
+  console.log("[Blog][PostPage] fetched", {
+    slug,
+    found: !!post,
+    title: post?.title?.rendered,
+    contentLen: initialContentLen,
+  });
 
   if (!post) {
     return (
@@ -151,12 +172,11 @@ export default async function PostPage({
         switch (el.name) {
           case "img":
             return (
-              <Image
+              <img
                 src={el.attribs.src}
                 alt={el.attribs.alt || ""}
                 className='rounded-lg w-full h-[50vh] md:h-[25vh] object-cover shadow-lg'
-                width={1200}
-                height={500}
+                loading='lazy'
               />
             );
 
@@ -267,6 +287,180 @@ export default async function PostPage({
   const title =
     typeof post.title === "string" ? post.title : post.title.rendered;
 
+  // Log before parsing content
+  console.log("[Blog][PostPage] parsing content", { slug });
+
+  // Helper: recursively collect string values from an object/array
+  const collectStrings = (value: unknown, acc: string[] = []): string[] => {
+    if (!value) return acc;
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length) acc.push(trimmed);
+      return acc;
+    }
+    if (Array.isArray(value)) {
+      for (const v of value) collectStrings(v, acc);
+      return acc;
+    }
+    if (typeof value === "object") {
+      for (const v of Object.values(value as Record<string, unknown>)) {
+        collectStrings(v, acc);
+      }
+      return acc;
+    }
+    return acc;
+  };
+
+  // Diagnostics and content fallbacks
+  const contentProtected = Boolean(
+    (post as unknown as { content?: { protected?: boolean } }).content
+      ?.protected
+  );
+  const excerptRendered = post.excerpt?.rendered ?? "";
+  type AcfKnown = {
+    featured_image?: {
+      url: string;
+      alt?: string;
+      width?: number;
+      height?: number;
+    };
+    meta_description?: string;
+    keywords?: string;
+    [key: string]: unknown;
+  };
+  const acf = (post.acf ?? {}) as AcfKnown;
+
+  // Prefer specific content keys first
+  const acfContentKeyOrder = [
+    "content_html",
+    "body_html",
+    "content",
+    "body",
+    "text",
+    "beschreibung",
+    "inhalt",
+    "artikel",
+  ];
+
+  // Build a reduced ACF object excluding obvious non-content keys
+  const reducedAcf: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(acf)) {
+    if (
+      k === "keywords" ||
+      k === "featured_image" ||
+      k === "meta_description" ||
+      k.endsWith("_image") ||
+      k.includes("image") ||
+      k.includes("bild")
+    ) {
+      continue;
+    }
+    reducedAcf[k] = v;
+  }
+
+  // Collect string values from reduced ACF and drop likely keyword blobs and URLs
+  const acfStrings = collectStrings(reducedAcf)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .filter((s) => !/^https?:\/\//i.test(s))
+    .filter((s) => s.split(",").length < 4 || s.length > 120);
+
+  console.log("[Blog][PostPage] acfStrings after filtering", {
+    count: acfStrings.length,
+  });
+
+  let effectiveContent = (content || "").trim();
+
+  // Prefer known ACF content keys if present
+  if (!effectiveContent) {
+    for (const key of acfContentKeyOrder) {
+      const val = (acf as Record<string, unknown>)[key];
+      if (typeof val === "string" && val.trim().length > 0) {
+        effectiveContent = val.trim();
+        console.log("[Blog][PostPage] using specific ACF key as content", {
+          key,
+          len: effectiveContent.length,
+        });
+        break;
+      }
+    }
+  }
+
+  // Fallback 1: Use combined ACF strings if WP content is empty
+  if (!effectiveContent && acfStrings.length > 0) {
+    const htmlLike = acfStrings.filter(
+      (s) => /<[^>]+>/.test(s) || s.length > 120
+    );
+    const parts = (htmlLike.length ? htmlLike : acfStrings).map(
+      (s, i) => `<section data-acf-part="${i}">${s}</section>`
+    );
+    effectiveContent = parts.join("\n\n");
+    console.log("[Blog][PostPage] using ACF fallback", {
+      parts: parts.length,
+      combinedLen: effectiveContent.length,
+    });
+  }
+
+  // Fallback 2: Use excerpt if still empty
+  if (!effectiveContent && excerptRendered) {
+    effectiveContent = `<div class="lede">${excerptRendered}</div>`;
+    console.log("[Blog][PostPage] using excerpt fallback", {
+      excerptLen: excerptRendered.length,
+    });
+  }
+
+  if (!effectiveContent && contentProtected) {
+    console.warn(
+      "[Blog][PostPage] content appears protected (WP password). Public API returns empty content."
+    );
+  }
+
+  // Debug a small preview of the effective content
+  console.log("[Blog][PostPage] effectiveContent preview", {
+    len: effectiveContent.length,
+    sample: effectiveContent.slice(0, 160),
+  });
+
+  const safeParseContent = (html: string, options: HTMLReactParserOptions) => {
+    try {
+      if (!html || html.trim().length === 0) {
+        return (
+          <p className='text-gray-600'>
+            Für diesen Artikel liefert die WordPress-API aktuell keinen
+            sichtbaren Inhalt. Prüfe bitte, ob der Beitrag ACF-Inhalte nutzt
+            oder passwortgeschützt ist.
+          </p>
+        );
+      }
+
+      // If no HTML tags present, convert plain text/newlines into paragraphs
+      const hasTags = /<\w+[^>]*>/.test(html);
+      const preparedHtml = hasTags
+        ? html
+        : html
+            .split(/\n{2,}/)
+            .map((block) => `<p>${block.replace(/\n/g, "<br/>")}</p>`)
+            .join("\n");
+
+      const parsed = parse(preparedHtml, options);
+      if (!parsed || (Array.isArray(parsed) && parsed.length === 0)) {
+        // Fallback: render raw HTML
+        return (
+          <div
+            className='prose'
+            dangerouslySetInnerHTML={{ __html: preparedHtml }}
+          />
+        );
+      }
+      return parsed;
+    } catch (error) {
+      console.error("[Blog][PostPage] parse error", error);
+      return (
+        <div className='prose' dangerouslySetInnerHTML={{ __html: html }} />
+      );
+    }
+  };
+
   return (
     <div className='bg-gradient-to-br from-green-50 to-emerald-50 min-h-screen'>
       <article className='container mx-auto px-4 py-12 max-w-7xl'>
@@ -293,7 +487,7 @@ export default async function PostPage({
         {/* Content */}
         <div className='bg-white rounded-2xl shadow-lg p-8 md:p-12'>
           <div className='prose prose-lg max-w-none'>
-            {parse(content, options)}
+            {safeParseContent(effectiveContent, options)}
           </div>
         </div>
 
