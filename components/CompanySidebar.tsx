@@ -44,6 +44,10 @@ const data = {
           title: "Aufträge",
           url: "/contracts",
         },
+        {
+          title: "Statistiken",
+          url: "/stats",
+        },
       ],
     },
   ],

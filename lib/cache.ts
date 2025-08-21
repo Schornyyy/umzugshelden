@@ -200,6 +200,10 @@ export const CACHE_KEYS = {
   
   // General
   ALL_CONTRACTS: 'all-contracts',
+
+  // Company Stats
+  COMPANY_STATS: (companyId: string) => `company-stats:${companyId}`,
+  COMPANY_EVENTS: (companyId: string) => `company-events:${companyId}`,
 } as const;
 
 // Cache-Optionen für verschiedene Datentypen
@@ -232,6 +236,18 @@ export const CACHE_OPTIONS = {
   COMPANY_DETAILS: {
     ttl: 2 * 60 * 60 * 1000, // 2 Stunden
     refreshInterval: 2 * 60 * 60 * 1000 // Alle 2 Stunden aktualisieren
+  },
+
+  // Company Stats Aggregates: 10 Minuten Cache (häufige Abrufe, seltene Updates)
+  COMPANY_STATS: {
+    ttl: 10 * 60 * 1000, // 10 Minuten
+    refreshInterval: 10 * 60 * 1000
+  },
+
+  // Company Recent Events: 5 Minuten Cache (optional kurzzeitige Zwischenspeicherung)
+  COMPANY_EVENTS: {
+    ttl: 5 * 60 * 1000, // 5 Minuten
+    refreshInterval: 5 * 60 * 1000
   }
 } as const;
 

@@ -7,17 +7,19 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import CompanyLinks from "./CompanyLinks";
 import { CompanyType } from "@/types/RegisterTypye";
 import Image from "next/image";
 import { convertFromRaw, Editor, EditorState } from "draft-js";
 import ShareButtons from "@/components/ShareButtons";
+import { saveClick } from "@/actions/userActions";
 
 const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
   const [editorStateDesc, setEditorStateDesc] = useState<EditorState | null>(
     null
   );
+  const trackedRef = useRef(false);
 
   useEffect(() => {
     const loadEditor = () => {
@@ -39,6 +41,13 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
 
     loadEditor();
   }, [companyData.description]);
+
+  // Track a profile view once per mount for this company
+  useEffect(() => {
+    if (!companyData?.id || trackedRef.current) return;
+    trackedRef.current = true;
+    void saveClick('company', companyData.id);
+  }, [companyData?.id]);
 
   return (
     <div className='flex flex-col lg:flex-row gap-16'>
