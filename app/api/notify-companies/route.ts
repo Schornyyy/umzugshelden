@@ -3,6 +3,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { findContractById } from '@/actions/contractActions';
+import { calculateContractPriceFromData } from '@/lib/pricing';
 import { fetchCoordinates } from '@/actions/userActions';
 import { sendCustomEmail } from '@/actions/emailActions';
 import { collection, query, getDocs, limit, where, doc, updateDoc, increment, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -81,6 +82,45 @@ const filterCompaniesByRadius = (
   });
 };
 
+// Hilfsfunktionen für Labels
+function mapContractSize(size: Contract['contractSize']): string {
+  switch (size) {
+    case 'new':
+      return 'Neuanlage';
+    case 'small changes':
+      return 'Kleine Änderungen';
+    case 'request':
+      return 'Beratung/Anfrage';
+    default:
+      return String(size);
+  }
+}
+
+function mapProjectBegin(p: Contract['projektBeginn']): string {
+  switch (p) {
+    case 'fast':
+      return 'Schnellstmöglich';
+    case '2weeks':
+      return 'In ca. 2 Wochen';
+    case '1month':
+      return 'In ca. 1 Monat';
+    case 'fewmonths':
+      return 'In den nächsten Monaten';
+    case 'request':
+      return 'Nach Absprache';
+    default:
+      return String(p);
+  }
+}
+
+function yesNo(v: boolean | undefined): string { return v ? 'Ja' : 'Nein'; }
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // Funktion zum Senden der E-Mail-Benachrichtigung (mit emailActions Template-System)
 async function sendEmailNotification(company: CompanyType, contract: Contract) {
   try {
@@ -89,10 +129,27 @@ async function sendEmailNotification(company: CompanyType, contract: Contract) {
       throw new Error('Keine E-Mail-Adresse vorhanden');
     }
 
+    // Preis berechnen (halbiert und 10–30€ Band)
+    const price = calculateContractPriceFromData({
+      gardenSize: contract.gardenSize,
+      contractSize: contract.contractSize,
+      planningAvaillable: contract.planningAvaillable,
+      repeatService: contract.repeatService,
+    });
+
     // Erstelle Replacements für das Template
     const replacements = {
       // Link in die App (kann später auf eine spezifische Contract-Detailseite geändert werden)
       contractLink: `${process.env.NEXT_PUBLIC_BASE_URL}/login`,
+      contractTypeLabel: String(contract.type),
+      zip: String(contract.zip ?? ''),
+      gardenSize: String(contract.gardenSize ?? ''),
+      contractSizeLabel: mapContractSize(contract.contractSize),
+      planningLabel: yesNo(contract.planningAvaillable),
+      repeatLabel: yesNo(contract.repeatService),
+      projectBeginLabel: mapProjectBegin(contract.projektBeginn),
+      priceEuro: `${price.toFixed(2)} €`,
+      description: escapeHtml((contract.description || '').slice(0, 600)),
     } as Record<string, string>;
 
     // Verwende das Template-System aus emailActions

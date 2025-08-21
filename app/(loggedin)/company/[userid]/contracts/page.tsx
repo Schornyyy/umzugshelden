@@ -111,8 +111,7 @@ const CompanyContractsPage = ({ params }: CompanyContractsPageProps) => {
           ) {
             const coordinates = await updateCompanyCoordinates(
               companyData.id!,
-              companyData.zip,
-              companyData.city
+              companyData.zip
             );
 
             if (coordinates) {

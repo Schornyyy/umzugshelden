@@ -58,45 +58,40 @@ export interface PurchasedContractClient {
 
 // Preisberechnung basierend auf Contract-Daten
 export const calculateContractPrice = async (contract: ContractPreview): Promise<number> => {
-  let basePrice = 15.00; // Grundpreis in Euro
+  // Vereinheitlichte Logik wie serverseitig: Basis 25€, Zuschläge und dann halbieren, Band 10–30€
+  let basePrice = 25.0;
 
-  // Preisanpassung basierend auf Gartengröße
-  if (contract.gardenSize <= 100) {
-    basePrice += 5;
-  } else if (contract.gardenSize <= 300) {
-    basePrice += 12;
-  } else if (contract.gardenSize <= 500) {
-    basePrice += 20;
-  } else {
-    basePrice += 30;
-  }
-
-  // Preisanpassung basierend auf Contract-Größe
-  switch (contract.contractSize) {
-    case 'klein':
-      basePrice += 3;
-      break;
-    case 'mittel':
-      basePrice += 8;
-      break;
-    case 'groß':
-      basePrice += 15;
-      break;
-    default:
-      basePrice += 5;
-  }
-
-  // Aufschlag für Planungsleistungen
-  if (contract.planningAvaillable) {
+  if (contract.gardenSize > 500) {
+    basePrice += 25;
+  } else if (contract.gardenSize > 200) {
     basePrice += 10;
+  } else if (contract.gardenSize > 100) {
+    basePrice += 5;
   }
 
-  // Aufschlag für wiederkehrende Services
+  switch (contract.contractSize) {
+    case 'new':
+      basePrice += 25;
+      break;
+    case 'small changes':
+      basePrice += 10;
+      break;
+    case 'request':
+      basePrice += 0;
+      break;
+  }
+
+  if (contract.planningAvaillable) {
+    basePrice += 0;
+  }
+
   if (contract.repeatService) {
-    basePrice += 8;
+    basePrice += 15;
   }
 
-  return Math.round(basePrice * 100) / 100; // Auf 2 Dezimalstellen runden
+  const halved = basePrice * 0.5;
+  const clamped = Math.max(10, Math.min(30, halved));
+  return Math.round(clamped * 100) / 100;
 };
 
 // Kauf initialisieren (erstellt echte Stripe Checkout-Session)

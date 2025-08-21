@@ -220,11 +220,12 @@ class CacheRefreshService {
       const radius = company.radius || 50;
       
       // Job für vollständige Contract-Daten
+      // Verwende vereinheitlichten Services-Key ['ALL'] für Radius-Caches
       const contractsKey = CACHE_KEYS.CONTRACTS_IN_RADIUS(
-        company.latitude, 
-        company.longitude, 
-        radius, 
-        company.services
+        company.latitude,
+        company.longitude,
+        radius,
+        ["ALL"]
       );
 
       this.addJob({
@@ -236,7 +237,8 @@ class CacheRefreshService {
             radius,
             company.services,
             undefined,
-            50 // Mehr Contracts laden für Cache
+            50, // Mehr Contracts laden für Cache
+            false // Frisch laden und internen ['ALL']-Key befüllen
           );
           return result;
         },
@@ -245,10 +247,10 @@ class CacheRefreshService {
 
       // Job für Contract-Previews
       const previewsKey = CACHE_KEYS.CONTRACT_PREVIEWS(
-        company.latitude, 
-        company.longitude, 
-        radius, 
-        company.services
+        company.latitude,
+        company.longitude,
+        radius,
+        ["ALL"]
       );
 
       this.addJob({
@@ -260,7 +262,8 @@ class CacheRefreshService {
             radius,
             company.services,
             undefined,
-            50 // Mehr Previews laden für Cache
+            50, // Mehr Previews laden für Cache
+            false // Frisch laden und internen ['ALL']-Key befüllen
           );
           return result;
         },

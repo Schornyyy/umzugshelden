@@ -45,7 +45,8 @@ export const useContractData = (company: CompanyType | null) => {
           radiusFilter,
           filteredServices,
           loadMore ? lastDocId : undefined,
-          20
+          20,
+          false
         );
 
         if (loadMore) {

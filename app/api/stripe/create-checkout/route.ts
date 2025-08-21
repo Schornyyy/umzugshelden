@@ -5,9 +5,7 @@ import { database } from '@/config/firebase';
 import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 // Stripe initialisieren
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-07-30.basil',
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 // Interface für Purchase-Daten
 interface PurchasedContract {
@@ -60,7 +58,8 @@ export async function POST(request: NextRequest) {
 
     // Erstelle Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card', 'sepa_debit', "paypal", "klarna"],
+      // Keep it simple and reliable: accept cards. Enable SEPA/Klarna in Dashboard and add them here when available.
+      payment_method_types: ['card', "paypal", "klarna"],
       line_items: [
         {
           price_data: {

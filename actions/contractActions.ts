@@ -2,7 +2,9 @@
 
 import { database, storage } from "@/config/firebase";
 import { Contract } from "@/types/Contract";
+import { calculateContractPriceFromData } from "@/lib/pricing";
 import { fetchCoordinates } from "./userActions";
+// slugify was used for service matching, which is now disabled
 import { cacheManager, CACHE_KEYS, CACHE_OPTIONS, invalidateContractCaches } from "@/lib/cache";
 import {
   addDoc,
@@ -74,6 +76,9 @@ export interface ContractPreview {
   // Keine Kontaktdaten, keine Files, keine internen Felder
 }
 
+// 🔹 Gemeinsame Preisberechnung (halbiert und auf 10–30 € begrenzt)
+// moved to lib/pricing.ts to keep this server actions file async-only exports
+
 // 🔹 NEUEN CONTRACT ERSTELLEN
 export const createContract = async (
   contractData: Omit<Contract, 'verified'>,
@@ -85,10 +90,10 @@ export const createContract = async (
     
     // Hole Koordinaten basierend auf PLZ
     let coordinates = null;
-    if (contractData.zip) {
+  if (contractData.zip) {
       try {
-        // Verwende die PLZ als Stadt-Parameter (Nominatim kann mit PLZ alleine arbeiten)
-        coordinates = await fetchCoordinates(contractData.zip.toString(), contractData.zip.toString());
+    // Verwende Land + PLZ für robustere Geokodierung
+    coordinates = await fetchCoordinates('Deutschland', contractData.zip.toString());
       } catch (error) {
         console.error("Fehler beim Abrufen der Koordinaten:", error);
         // Weiter ohne Koordinaten - nicht kritisch für Contract-Erstellung
@@ -363,7 +368,7 @@ export const getContractPreviewsInRadius = async (
       companyLatitude,
       companyLongitude,
       radiusKm,
-      companyServices
+      ["ALL"]
     );
 
     // Versuche aus Cache zu laden (nur wenn keine Pagination)
@@ -412,30 +417,35 @@ export const getContractPreviewsInRadius = async (
     const querySnapshot = await getDocs(q);
 
     // Verarbeite alle Contracts asynchron mit Service- und Verfügbarkeitsprüfung
-    const contractPromises = querySnapshot.docs.map(async (doc) => {
-      const contractData = { id: doc.id, ...doc.data() } as ContractDocument;
+    let geocodeAttempts = 0;
+    const GEOCODE_LIMIT = 3; // Limitiere externe Anfragen pro Aufruf
+    const contractPromises = querySnapshot.docs.map(async (snap) => {
+      const contractData = { id: snap.id, ...snap.data() } as ContractDocument;
       
-      // Prüfe Service-Match
-      const normalizedCompanyServices = companyServices.map(service => 
-        service.toLowerCase().trim()
-      );
-      
-      const contractServiceNormalized = contractData.type.toLowerCase().trim();
-      const serviceMatches = normalizedCompanyServices.some(companyService => 
-        companyService === contractServiceNormalized ||
-        contractData.type === companyService ||
-        contractData.type === companyService.charAt(0).toUpperCase() + companyService.slice(1)
-      );
-
-      if (!serviceMatches) {
-        return null;
-      }
+  // Service-Filter deaktiviert: alle Services werden angezeigt
       
       const isAvailable = await isContractAvailable(contractData);
       if (!isAvailable) {
         return null;
       }
       
+      // Sicherstellen, dass Koordinaten vorhanden sind (Fallback-Geocoding)
+      if ((!contractData.latitude || !contractData.longitude) && geocodeAttempts < GEOCODE_LIMIT && contractData.zip) {
+        try {
+          geocodeAttempts++;
+          const coords = await fetchCoordinates('Deutschland', String(contractData.zip));
+          if (coords) {
+            contractData.latitude = coords.latitude;
+            contractData.longitude = coords.longitude;
+            // Persistiere für zukünftige Abfragen (best-effort)
+            const ref = doc(database, 'contracts', contractData.id!);
+            await updateDoc(ref, { latitude: coords.latitude, longitude: coords.longitude });
+          }
+        } catch (e) {
+          console.warn('Geocoding Fallback fehlgeschlagen:', e);
+        }
+      }
+
       if (contractData.latitude && contractData.longitude) {
         if (isContractWithinRadius(
           contractData.latitude,
@@ -542,7 +552,7 @@ export const getContractsInRadius = async (
       companyLatitude,
       companyLongitude,
       radiusKm,
-      companyServices
+      ["ALL"]
     );
 
     // Versuche aus Cache zu laden (nur wenn keine Pagination)
@@ -594,25 +604,12 @@ export const getContractsInRadius = async (
     console.log(`Gesamte Contracts gefunden: ${querySnapshot.docs.length}`);
 
     // Verarbeite alle Contracts asynchron mit Service- und Verfügbarkeitsprüfung
-    const contractPromises = querySnapshot.docs.map(async (doc) => {
-      const contractData = { id: doc.id, ...doc.data() } as ContractDocument;
+    let geocodeAttempts = 0;
+    const GEOCODE_LIMIT = 3; // Limitiere externe Anfragen pro Aufruf
+    const contractPromises = querySnapshot.docs.map(async (snap) => {
+      const contractData = { id: snap.id, ...snap.data() } as ContractDocument;
       
-      // Prüfe Service-Match
-      const normalizedCompanyServices = companyServices.map(service => 
-        service.toLowerCase().trim()
-      );
-      
-      const contractServiceNormalized = contractData.type.toLowerCase().trim();
-      const serviceMatches = normalizedCompanyServices.some(companyService => 
-        companyService === contractServiceNormalized ||
-        contractData.type === companyService ||
-        contractData.type === companyService.charAt(0).toUpperCase() + companyService.slice(1)
-      );
-
-      // Falls Service nicht passt, überspringe Contract
-      if (!serviceMatches) {
-        return null;
-      }
+  // Service-Filter deaktiviert: alle Services werden angezeigt
       
       // Prüfe Verfügbarkeit (Kaufanzahl)
       const isAvailable = await isContractAvailable(contractData);
@@ -620,6 +617,23 @@ export const getContractsInRadius = async (
         return null;
       }
       
+      // Sicherstellen, dass Koordinaten vorhanden sind (Fallback-Geocoding)
+      if ((!contractData.latitude || !contractData.longitude) && geocodeAttempts < GEOCODE_LIMIT && contractData.zip) {
+        try {
+          geocodeAttempts++;
+          const coords = await fetchCoordinates('Deutschland', String(contractData.zip));
+          if (coords) {
+            contractData.latitude = coords.latitude;
+            contractData.longitude = coords.longitude;
+            // Persistiere für zukünftige Abfragen (best-effort)
+            const ref = doc(database, 'contracts', contractData.id!);
+            await updateDoc(ref, { latitude: coords.latitude, longitude: coords.longitude });
+          }
+        } catch (e) {
+          console.warn('Geocoding Fallback fehlgeschlagen:', e);
+        }
+      }
+
       // Prüfe Distanz
       if (contractData.latitude && contractData.longitude) {
         if (isContractWithinRadius(
@@ -1021,40 +1035,14 @@ function isContractWithinRadius(
   return distance <= radiusKm;
 }
 
+// Service-Filter ist deaktiviert – alle Services werden angezeigt
+
 // Berechne Contract-Preis basierend auf Eigenschaften
 export async function calculateContractPrice(contract: ContractDocument): Promise<number> {
-  let basePrice = 25; // Grundpreis in Euro
-  
-  // Preis basierend auf Gartengröße
-  if (contract.gardenSize > 500) {
-    basePrice += 25;
-  } else if (contract.gardenSize > 200) {
-    basePrice += 10;
-  } else if (contract.gardenSize > 100) {
-    basePrice += 5;
-  }
-  
-  // Preis basierend auf Projektumfang
-  switch (contract.contractSize) {
-    case 'new':
-      basePrice += 25;
-      break;
-    case 'small changes':
-      basePrice += 10;
-      break;
-    case 'request':
-      basePrice += 0; // Nur Beratung
-      break;
-  }
-  
-  // Zusätzliche Services
-  if (contract.planningAvaillable) {
-    basePrice += 0;
-  }
-  
-  if (contract.repeatService) {
-    basePrice += 25;
-  }
-  
-  return basePrice;
+  return calculateContractPriceFromData({
+    gardenSize: contract.gardenSize,
+    contractSize: contract.contractSize,
+    planningAvaillable: contract.planningAvaillable,
+    repeatService: contract.repeatService
+  });
 }

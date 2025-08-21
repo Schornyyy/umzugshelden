@@ -7,14 +7,13 @@ import { fetchCoordinates } from "./userActions";
 // 🔹 KOORDINATEN FÜR COMPANY BASIEREND AUF PLZ AKTUALISIEREN
 export const updateCompanyCoordinates = async (
   companyId: string,
-  zip: string,
-  city?: string
+  zip: string
 ): Promise<{ latitude: number; longitude: number } | null> => {
   try {
     console.log(`Aktualisiere Koordinaten für Company ${companyId} mit PLZ: ${zip}`);
     
-    // Hole Koordinaten basierend auf PLZ und Stadt
-    const coordinates = await fetchCoordinates(city || zip, zip);
+  // Hole Koordinaten robust basierend auf Land + PLZ
+  const coordinates = await fetchCoordinates('Deutschland', zip);
     
     if (coordinates) {
       // Aktualisiere Company-Dokument mit Koordinaten

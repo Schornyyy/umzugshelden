@@ -111,8 +111,9 @@ export function removeCompanyFromCache(
 ) {
   try {
     // Entferne beide Cache-Keys für dieses Unternehmen
-    const contractsKey = CACHE_KEYS.CONTRACTS_IN_RADIUS(latitude, longitude, radius, services);
-    const previewsKey = CACHE_KEYS.CONTRACT_PREVIEWS(latitude, longitude, radius, services);
+  // Verwende vereinheitlichten Services-Key ['ALL']
+  const contractsKey = CACHE_KEYS.CONTRACTS_IN_RADIUS(latitude, longitude, radius, ["ALL"]);
+  const previewsKey = CACHE_KEYS.CONTRACT_PREVIEWS(latitude, longitude, radius, ["ALL"]);
     const purchasedKey = CACHE_KEYS.PURCHASED_CONTRACTS(companyId);
 
     cacheManager.delete(contractsKey);

@@ -37,7 +37,10 @@ export const calculateContractPrice = (contract: ContractPreview): number => {
     basePrice += 15;
   }
 
-  return basePrice;
+  // Preis halbieren und in Preisspanne 10–30 € begrenzen
+  const halved = basePrice * 0.5;
+  const clamped = Math.max(10, Math.min(30, halved));
+  return Math.round(clamped * 100) / 100;
 };
 
 export const formatTimeAgo = (timestamp: Date | undefined): string => {
