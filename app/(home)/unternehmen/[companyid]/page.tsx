@@ -97,7 +97,7 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
     }
 
     return (
-  <div className='max-w-7xl mx-auto pt-12 pb-24 px-4'>
+      <div className='max-w-7xl mx-auto pt-12 pb-24 px-4'>
         {/* Local SEO Schema JSON-LD */}
         <script
           type='application/ld+json'

@@ -30,9 +30,14 @@ export default function CompanyStatsPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/company-stats/${companyId}?max=50`, { cache: 'no-store' });
-        if (!res.ok) throw new Error('Failed');
-        const data = await res.json() as { aggregate: CompanyStatsAggregate; events: Array<StatsType & { id: string }>; };
+        const res = await fetch(`/api/company-stats/${companyId}?max=50`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error("Failed");
+        const data = (await res.json()) as {
+          aggregate: CompanyStatsAggregate;
+          events: Array<StatsType & { id: string }>;
+        };
         if (!cancelled) {
           setAgg(data.aggregate);
           setEvents(data.events);
@@ -45,33 +50,38 @@ export default function CompanyStatsPage() {
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [companyId]);
 
-  const countItems = useMemo(() => ([
-    { key: 'total' as const, label: 'Gesamt' },
-    { key: 'company' as const, label: 'Profil-Aufrufe' },
-    { key: 'email' as const, label: 'E-Mail-Klicks' },
-    { key: 'phone' as const, label: 'Telefon-Klicks' },
-    { key: 'website' as const, label: 'Website-Klicks' },
-    { key: 'adress' as const, label: 'Adresse-Klicks' },
-  ]), []);
+  const countItems = useMemo(
+    () => [
+      { key: "total" as const, label: "Gesamt" },
+      { key: "company" as const, label: "Profil-Aufrufe" },
+      { key: "email" as const, label: "E-Mail-Klicks" },
+      { key: "phone" as const, label: "Telefon-Klicks" },
+      { key: "website" as const, label: "Website-Klicks" },
+      { key: "adress" as const, label: "Adresse-Klicks" },
+    ],
+    []
+  );
 
   return (
-    <div className="flex flex-col gap-8">
-      <h1 className="text-2xl font-semibold">Statistiken</h1>
+    <div className='flex flex-col gap-8'>
+      <h1 className='text-2xl font-semibold'>Statistiken</h1>
       {loading && <p>Lade Statistiken…</p>}
-      {error && <p className="text-red-600">{error}</p>}
+      {error && <p className='text-red-600'>{error}</p>}
 
       {!loading && agg && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
           {countItems.map((c) => (
             <Card key={c.key}>
               <CardHeader>
-                <CardTitle className="text-base">{c.label}</CardTitle>
+                <CardTitle className='text-base'>{c.label}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{agg[c.key] ?? 0}</div>
+                <div className='text-3xl font-bold'>{agg[c.key] ?? 0}</div>
               </CardContent>
             </Card>
           ))}
@@ -85,13 +95,19 @@ export default function CompanyStatsPage() {
           </CardHeader>
           <CardContent>
             {events.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Keine Ereignisse vorhanden.</p>
+              <p className='text-sm text-muted-foreground'>
+                Keine Ereignisse vorhanden.
+              </p>
             ) : (
-              <ul className="divide-y">
+              <ul className='divide-y'>
                 {events.map((ev) => (
-                  <li key={ev.id} className="py-2 text-sm flex items-center justify-between">
-                    <span className="capitalize">{ev.clickType}</span>
-                    <span className="text-xs text-muted-foreground">{new Date(ev.timestamp).toLocaleString()}</span>
+                  <li
+                    key={ev.id}
+                    className='py-2 text-sm flex items-center justify-between'>
+                    <span className='capitalize'>{ev.clickType}</span>
+                    <span className='text-xs text-muted-foreground'>
+                      {new Date(ev.timestamp).toLocaleString()}
+                    </span>
                   </li>
                 ))}
               </ul>

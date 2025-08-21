@@ -1,6 +1,7 @@
 "use client";
 
-import { getAllCompanies } from "@/actions/companyActions";
+// import { getAllCompanies } from "@/actions/companyActions"; // replaced by paginated fetch
+import { getCompaniesPage } from "@/actions/companyPaginationActions";
 import SearchBarResults from "@/app/(home)/unternehmen-finden/_components/SearchbarResults";
 import { CompanyType } from "@/types/RegisterTypye";
 import { useParams } from "next/navigation";
@@ -24,10 +25,12 @@ type FilterFormValues = {
 
 const Page = () => {
   const [loading, setLoading] = useState<boolean>(true);
-  const [allCompanies, setAllCompanies] = useState<CompanyType[]>([]);
-  const [filteredCompanies, setFilteredCompanies] = useState<CompanyType[]>([]);
+  const [companies, setCompanies] = useState<CompanyType[]>([]); // currently loaded pages concatenated
+  const [filteredCompanies, setFilteredCompanies] = useState<CompanyType[]>([]); // filter over loaded subset
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const PAGE_SIZE = 12;
+  const [cursor, setCursor] = useState<string | null>(null); // next cursor for further loading
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const PAGE_SIZE = 12; // page size for display & backend fetch
   const params = useParams<{ userid: string }>();
 
   const form = useForm<FilterFormValues>({
@@ -38,13 +41,21 @@ const Page = () => {
   });
 
   useEffect(() => {
-    async function fetchCompanies() {
-      const comps = await getAllCompanies();
-      setAllCompanies(comps);
-      setFilteredCompanies(comps); // initially show all
+    let cancelled = false;
+    async function initialLoad() {
+      setLoading(true);
+      const page = await getCompaniesPage(PAGE_SIZE);
+      if (cancelled) return;
+      setCompanies(page.companies);
+      setFilteredCompanies(page.companies);
+      setCursor(page.nextCursor);
+      setHasMore(page.hasMore);
       setLoading(false);
     }
-    fetchCompanies();
+    initialLoad();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Keep current page within bounds when the list changes
@@ -71,7 +82,7 @@ const Page = () => {
   );
 
   const onSubmit = (data: FilterFormValues) => {
-    const filtered = allCompanies.filter((company) => {
+    const filtered = companies.filter((company) => {
       const nameMatch = company
         .companyName!.toLowerCase()
         .includes(data.name.toLowerCase());
@@ -83,6 +94,33 @@ const Page = () => {
     setFilteredCompanies(filtered);
     setCurrentPage(1);
   };
+
+  async function loadMore() {
+    if (!hasMore || loading) return;
+    setLoading(true);
+    const page = await getCompaniesPage(PAGE_SIZE, cursor || undefined);
+    setCompanies((prev) => [...prev, ...page.companies]);
+    // If a filter is active re-apply filter logic; else extend filtered list
+    const values = form.getValues();
+    const isFiltering = values.name || values.email;
+    if (isFiltering) {
+      const filtered = [...companies, ...page.companies].filter((c) => {
+        const nameMatch = c
+          .companyName!.toLowerCase()
+          .includes(values.name.toLowerCase());
+        const emailMatch = c.email
+          .toLowerCase()
+          .includes(values.email.toLowerCase());
+        return nameMatch && emailMatch;
+      });
+      setFilteredCompanies(filtered);
+    } else {
+      setFilteredCompanies((prev) => [...prev, ...page.companies]);
+    }
+    setCursor(page.nextCursor);
+    setHasMore(page.hasMore);
+    setLoading(false);
+  }
 
   return (
     <div className='flex flex-col gap-8'>
@@ -159,6 +197,11 @@ const Page = () => {
                 }>
                 Weiter
               </Button>
+              {hasMore && currentPage === totalPages && (
+                <Button variant='default' onClick={loadMore} disabled={loading}>
+                  {loading ? "Lade..." : "Mehr laden"}
+                </Button>
+              )}
             </div>
           </div>
         </>

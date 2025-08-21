@@ -6,6 +6,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "blog",
     "companycity",
     "companycityservice",
+    "companies",
     "page"
   ]
 

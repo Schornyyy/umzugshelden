@@ -46,7 +46,7 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
   useEffect(() => {
     if (!companyData?.id || trackedRef.current) return;
     trackedRef.current = true;
-    void saveClick('company', companyData.id);
+    void saveClick("company", companyData.id);
   }, [companyData?.id]);
 
   return (

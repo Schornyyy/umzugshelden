@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useEffect, useRef } from 'react';
-import { saveClick } from '@/actions/userActions';
+import { useEffect, useRef } from "react";
+import { saveClick } from "@/actions/userActions";
 
 export default function TrackCompanyView({ companyId }: { companyId: string }) {
   const sentRef = useRef(false);
@@ -10,7 +10,7 @@ export default function TrackCompanyView({ companyId }: { companyId: string }) {
     if (!companyId || sentRef.current) return;
     sentRef.current = true;
     // Log a profile view for this company
-    void saveClick('company', companyId);
+    void saveClick("company", companyId);
   }, [companyId]);
 
   return null;
