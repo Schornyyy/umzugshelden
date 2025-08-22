@@ -1,11 +1,13 @@
 import { getCompanyRecentEvents, getCompanyStats } from "@/actions/companyStatsActions";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+// Typed via RouteContext helper: path matches folder structure
 export async function GET(
-  request: Request,
-  { params }: { params: { companyId: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ companyId: string }> }
 ) {
-  const { companyId } = params;
+  const { companyId } = await params;
   const { searchParams } = new URL(request.url);
   const max = Number(searchParams.get("max") ?? 50);
 
