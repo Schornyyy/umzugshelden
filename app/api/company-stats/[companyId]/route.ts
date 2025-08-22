@@ -1,8 +1,9 @@
-import { NextRequest } from "next/server";
 import { getCompanyRecentEvents, getCompanyStats } from "@/actions/companyStatsActions";
 
-export async function GET(request: NextRequest, { params }: { params: { companyId: string } }) {
-  const { companyId } = params;
+// Using the Web Fetch API Request type to avoid Next route type mismatch in build
+type Ctx = { params?: { companyId?: string } };
+export async function GET(request: Request, context: Ctx) {
+  const companyId: string | undefined = context.params?.companyId;
   const { searchParams } = new URL(request.url);
   const max = Number(searchParams.get("max") ?? 50);
 
