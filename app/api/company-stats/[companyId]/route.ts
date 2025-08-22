@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import { getCompanyRecentEvents, getCompanyStats } from "@/actions/companyStatsActions";
 
-export async function GET(request: NextRequest, { params }: { params: { companyId: string } }) {
-  const { companyId } = params;
+type RouteContext = { params?: { companyId?: string } };
+
+export async function GET(request: NextRequest, ctx: RouteContext) {
+  const companyId: string | undefined = ctx.params?.companyId;
   const { searchParams } = new URL(request.url);
   const max = Number(searchParams.get("max") ?? 50);
 
