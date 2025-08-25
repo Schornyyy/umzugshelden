@@ -6,7 +6,7 @@ import { findContractById } from '@/actions/contractActions';
 import { calculateContractPriceFromData } from '@/lib/pricing';
 import { fetchCoordinates } from '@/actions/userActions';
 import { sendCustomEmail } from '@/actions/emailActions';
-import { collection, query, getDocs, limit, where, doc, updateDoc, increment, setDoc, getDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, limit, where, doc, updateDoc, increment, setDoc, getDoc, addDoc, serverTimestamp, orderBy, startAfter, QueryDocumentSnapshot, DocumentData, QueryConstraint } from 'firebase/firestore';
 import { CompanyType } from '@/types/RegisterTypye';
 import { Contract } from '@/types/Contract';
 import { database } from "@/config/firebase";
@@ -47,23 +47,56 @@ const isPointWithinRadius = (
   return distance <= radius;
 };
 
-// Lädt alle Unternehmen aus Firebase (wie in CompanySearchPage)
-const fetchCompaniesFromFirestore = async (service?: string) => {
-  const ref = collection(database, "users");
-  let baseQuery = query(ref, limit(500));
+// Lädt bis zu 5.000 Unternehmen in Batches (erst Cache, dann Firestore)
+const MAX_COMPANIES = 5000;
+const FETCH_BATCH_SIZE = 500; // pro Firestore-Abfrage (Kosten & Limits beachten)
+// Einfache In-Memory Cache Nutzung (globale CacheManager könnte integriert werden)
+// Für Service-Filter separater Key
+import { cacheManager, CACHE_KEYS } from '@/lib/cache';
 
-  if (service) {
-    baseQuery = query(
-      baseQuery,
-      where("services", "array-contains", service)
-    );
+const getCompaniesBatched = async (service?: string): Promise<CompanyType[]> => {
+  const cacheKey = service ? `all-companies:service:${service}` : CACHE_KEYS.ALL_COMPANIES;
+  const cached = cacheManager.get<CompanyType[]>(cacheKey) || [];
+  if (cached.length >= MAX_COMPANIES) {
+    return cached.slice(0, MAX_COMPANIES);
   }
 
-  const querySnapshot = await getDocs(baseQuery);
-  return querySnapshot.docs.map((doc) => ({
-    ...doc.data(),
-    id: doc.id,
-  })) as CompanyType[];
+  const companies: CompanyType[] = [...cached];
+  const seen = new Set(companies.map(c => c.id));
+
+  let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
+  let fetchedAny = true;
+
+  while (companies.length < MAX_COMPANIES && fetchedAny) {
+    const baseConstraints: QueryConstraint[] = [orderBy('__name__'), limit(FETCH_BATCH_SIZE)];
+    if (service) baseConstraints.push(where('services', 'array-contains', service));
+    if (lastDoc) baseConstraints.push(startAfter(lastDoc));
+    const q = query(collection(database, 'users'), ...baseConstraints);
+    const snap = await getDocs(q);
+    if (snap.empty) {
+      fetchedAny = false;
+      break;
+    }
+    let added = 0;
+    snap.docs.forEach(d => {
+      if (!seen.has(d.id)) {
+        const data = d.data() as CompanyType;
+        companies.push({ ...data, id: d.id });
+        seen.add(d.id);
+        added++;
+      }
+    });
+    lastDoc = snap.docs[snap.docs.length - 1];
+    if (added === 0) {
+      // Keine neuen Datensätze -> Abbruch um Endlosschleifen zu vermeiden
+      break;
+    }
+  }
+
+  // In Cache schreiben (einfach, ohne TTL-Anpassung hier)
+  cacheManager.set(cacheKey, companies);
+
+  return companies.slice(0, MAX_COMPANIES);
 };
 
 // Filtert Unternehmen im angegebenen Radius (wie in CompanySearchPage)
@@ -193,28 +226,27 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Hole die Koordinaten für die Contract-PLZ (wie in CompanySearchPage)
+    // Bestimme Koordinaten des Contracts (wie in CompanySearchPage -> vorhandene Lat/Lng bevorzugen)
     const contractZip = contract.zip?.toString() || '';
-    
+
     if (!contractZip) {
-      return NextResponse.json({
-        success: false,
-        error: 'PLZ des Contracts nicht verfügbar'
-      }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'PLZ des Contracts nicht verfügbar' }, { status: 400 });
     }
 
-    // Verwende eine Standard-Stadt für die PLZ-Koordinaten-Ermittlung
-    const contractCoords = await fetchCoordinates('Deutschland', contractZip);
+    // Falls der Contract bereits Koordinaten besitzt, nutze diese; sonst per ZIP (und optional Stadt) holen
+    // CompanySearchPage ruft fetchCoordinates(city, zip) auf. Ein Contract speichert aktuell keine Stadt,
+    // daher fallback auf 'Deutschland' wie bestehender Code – kann später erweitert werden, wenn city verfügbar ist.
+    const contractCoords = (contract.latitude && contract.longitude)
+      ? { latitude: contract.latitude, longitude: contract.longitude }
+      : await fetchCoordinates('Deutschland', contractZip); // TODO: city hinzufügen sobald im Contract vorhanden
+
     if (!contractCoords) {
-      console.error('Koordinaten für Contract PLZ konnten nicht ermittelt werden');
-      return NextResponse.json({
-        success: false,
-        error: 'Koordinaten konnten nicht ermittelt werden'  
-      }, { status: 500 });
+      console.error('Koordinaten für Contract konnten nicht ermittelt werden');
+      return NextResponse.json({ success: false, error: 'Koordinaten konnten nicht ermittelt werden' }, { status: 500 });
     }
 
-    // Lade alle Unternehmen aus Firebase (wie in CompanySearchPage)
-    const allCompanies = await fetchCompaniesFromFirestore(contract.type);
+  // Lade bis zu 5.000 Unternehmen (Batch + Cache)
+  const allCompanies = await getCompaniesBatched(contract.type);
     
     if (!allCompanies || allCompanies.length === 0) {
       console.log('Keine Unternehmen gefunden');
@@ -232,7 +264,19 @@ export async function POST(request: NextRequest) {
       50 // 50km Radius
     );
 
-    console.log(`${companiesInRange.length} Unternehmen im 50km Umkreis gefunden`);
+    // Sortiere nach Distanz (wie in CompanySearchPage) für deterministische Reihenfolge
+    const companiesSorted = companiesInRange
+      .map(c => ({
+        company: c,
+        distance: haversineDistance(
+          { latitude: c.latitude!, longitude: c.longitude! },
+          contractCoords
+        )
+      }))
+      .sort((a, b) => a.distance - b.distance)
+      .map(c => c.company);
+
+    console.log(`${companiesSorted.length} Unternehmen im 50km Umkreis gefunden (sortiert nach Distanz)`);
 
     if (companiesInRange.length === 0) {
       return NextResponse.json({
@@ -242,18 +286,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Unternehmen ohne gültige E-Mail überspringen (nicht als Fehler zählen)
+  const companiesToNotify = companiesSorted.filter(c => c.email && c.email.trim() !== '');
+  const skipped = companiesSorted.length - companiesToNotify.length;
+
+    if (companiesToNotify.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'Keine Unternehmen mit gültiger E-Mail-Adresse im Radius',
+        stats: { total: 0, notified: 0, errors: 0, skipped }
+      });
+    }
+
     // Sende E-Mails parallel (aber mit Limit um Server nicht zu überlasten)
     const BATCH_SIZE = 5; // Maximal 5 E-Mails parallel
   const results: Array<{ success: boolean, company: string, email?: string, error?: string }> = [];
 
-    for (let i = 0; i < companiesInRange.length; i += BATCH_SIZE) {
-      const batch = companiesInRange.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < companiesToNotify.length; i += BATCH_SIZE) {
+      const batch = companiesToNotify.slice(i, i + BATCH_SIZE);
   const batchPromises = batch.map(company => sendEmailNotification(company, contract));
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
 
       // Kurze Pause zwischen Batches
-      if (i + BATCH_SIZE < companiesInRange.length) {
+      if (i + BATCH_SIZE < companiesToNotify.length) {
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
@@ -281,7 +337,7 @@ export async function POST(request: NextRequest) {
       })));
     }
 
-    console.log(`E-Mail-Benachrichtigungen abgeschlossen: ${successful}/${companiesInRange.length} erfolgreich`);
+  console.log(`E-Mail-Benachrichtigungen abgeschlossen: ${successful}/${companiesToNotify.length} erfolgreich (übersprungen ohne E-Mail: ${skipped})`);
 
     if (failed.length > 0) {
       console.error('Fehlgeschlagene E-Mails:', failed);
@@ -291,9 +347,10 @@ export async function POST(request: NextRequest) {
       success: true,
       message: `E-Mail-Benachrichtigungen versendet`,
       stats: {
-        total: companiesInRange.length,
+        total: companiesToNotify.length,
         notified: successful,
-        errors: failed.length
+        errors: failed.length,
+        skipped
       },
       errors: failed.map(f => ({ company: f.company, error: f.error }))
     });
