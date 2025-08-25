@@ -13,12 +13,14 @@ export async function sendCustomEmail({
   to,
   subject,
   replacements,
-  templatePath
+  templatePath,
+  tracking
 }: {
   to: string;
   subject: string;
   replacements: { [key: string]: string };
   templatePath: string;
+  tracking?: { contractId?: string; companyEmail?: string };
 }) {
   try {
     // Korrigiere den Pfad relativ zum Wurzelverzeichnis
@@ -33,7 +35,19 @@ export async function sendCustomEmail({
     const htmlTemplate = fs.readFileSync(htmlTemplatePath, 'utf-8');
 
     // Platzhalter ersetzen
-    const emailContentHtml = replaceTemplatePlaceholders(htmlTemplate, replacements);
+    let emailContentHtml = replaceTemplatePlaceholders(htmlTemplate, replacements);
+
+    // Tracking-Pixel für Öffnungen anhängen
+    if (tracking?.contractId) {
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
+      const pixelUrl = `${baseUrl}/api/email/track/open?contractId=${encodeURIComponent(tracking.contractId)}${tracking.companyEmail ? `&companyEmail=${encodeURIComponent(tracking.companyEmail)}` : ''}`;
+      // Vor </body> einfügen, sonst ans Ende
+      if (emailContentHtml.includes('</body>')) {
+        emailContentHtml = emailContentHtml.replace('</body>', `<img src="${pixelUrl}" alt="" width="1" height="1" style="display:none;" /></body>`);
+      } else {
+        emailContentHtml += `<img src="${pixelUrl}" alt="" width="1" height="1" style="display:none;" />`;
+      }
+    }
 
     // SMTP-Transporter einrichten und E-Mail senden
     const transporter = nodemailer.createTransport({

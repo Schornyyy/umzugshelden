@@ -193,7 +193,7 @@
             
             <!-- CTA Button -->
             <div style="text-align: center;">
-                <a href="{{contractLink}}" class="cta-button">
+                <a href="{{trackedContractLink}}" class="cta-button">
                     👀 Auftrag jetzt ansehen & Angebot erstellen
                 </a>
             </div>
@@ -208,15 +208,35 @@
             <!-- Details -->
             <div class="details">
                 <h3>Auftragsdetails</h3>
-                <div class="details-grid">
-                    <div class="details-label">Service:</div><div>{{contractTypeLabel}}</div>
-                    <div class="details-label">PLZ:</div><div>{{zip}}</div>
-                    <div class="details-label">Gartengröße:</div><div>{{gardenSize}} m²</div>
-                    <div class="details-label">Projektumfang:</div><div>{{contractSizeLabel}}</div>
-                    <div class="details-label">Planung enthalten:</div><div>{{planningLabel}}</div>
-                    <div class="details-label">Wiederkehrender Service:</div><div>{{repeatLabel}}</div>
-                    <div class="details-label">Projektbeginn:</div><div>{{projectBeginLabel}}</div>
-                    <div class="details-label">Voraussichtlicher Preis:</div><div><strong>{{priceEuro}}</strong></div>
+                <div style="display:flex;flex-direction:column;gap:12px;font-size:14px;">
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">Service</div>
+                        <div>{{contractTypeLabel}}</div>
+                    </div>
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">PLZ</div>
+                        <div>{{zip}}</div>
+                    </div>
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">Gartengröße</div>
+                        <div>{{gardenSize}} m²</div>
+                    </div>
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">Projektumfang</div>
+                        <div>{{contractSizeLabel}}</div>
+                    </div>
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">Planung enthalten</div>
+                        <div>{{planningLabel}}</div>
+                    </div>
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">Wiederkehrender Service</div>
+                        <div>{{repeatLabel}}</div>
+                    </div>
+                    <div>
+                        <div class="details-label" style="margin-bottom:2px;">Projektbeginn</div>
+                        <div>{{projectBeginLabel}}</div>
+                    </div>
                 </div>
             </div>
 

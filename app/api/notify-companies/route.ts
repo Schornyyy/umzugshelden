@@ -3,7 +3,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { findContractById } from '@/actions/contractActions';
-import { calculateContractPriceFromData } from '@/lib/pricing';
 import { fetchCoordinates } from '@/actions/userActions';
 import { sendCustomEmail } from '@/actions/emailActions';
 import { collection, query, getDocs, limit, where, doc, updateDoc, increment, setDoc, getDoc, addDoc, serverTimestamp, orderBy, startAfter, QueryDocumentSnapshot, DocumentData, QueryConstraint } from 'firebase/firestore';
@@ -155,25 +154,22 @@ function escapeHtml(s: string): string {
 }
 
 // Funktion zum Senden der E-Mail-Benachrichtigung (mit emailActions Template-System)
-async function sendEmailNotification(company: CompanyType, contract: Contract) {
+async function sendEmailNotification(company: CompanyType, contract: Contract, contractId: string) {
   try {
     // Prüfe ob Unternehmen eine E-Mail-Adresse hat
     if (!company.email) {
       throw new Error('Keine E-Mail-Adresse vorhanden');
     }
 
-    // Preis berechnen (halbiert und 10–30€ Band)
-    const price = calculateContractPriceFromData({
-      gardenSize: contract.gardenSize,
-      contractSize: contract.contractSize,
-      planningAvaillable: contract.planningAvaillable,
-      repeatService: contract.repeatService,
-    });
 
     // Erstelle Replacements für das Template
+  const trackingBase = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const trackedLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(`${trackingBase}/login`)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+
     const replacements = {
       // Link in die App (kann später auf eine spezifische Contract-Detailseite geändert werden)
       contractLink: `${process.env.NEXT_PUBLIC_BASE_URL}/login`,
+      trackedContractLink: trackedLink,
       contractTypeLabel: String(contract.type),
       zip: String(contract.zip ?? ''),
       gardenSize: String(contract.gardenSize ?? ''),
@@ -181,16 +177,16 @@ async function sendEmailNotification(company: CompanyType, contract: Contract) {
       planningLabel: yesNo(contract.planningAvaillable),
       repeatLabel: yesNo(contract.repeatService),
       projectBeginLabel: mapProjectBegin(contract.projektBeginn),
-      priceEuro: `${price.toFixed(2)} €`,
       description: escapeHtml((contract.description || '').slice(0, 600)),
     } as Record<string, string>;
 
     // Verwende das Template-System aus emailActions
     const result = await sendCustomEmail({
       to: company.email,
-  subject: `🎯 Neuer ${contract.type}-Auftrag${contract.zip ? ' (' + contract.zip + ')' : ''} in Ihrer Nähe verfügbar!`,
-  replacements: replacements,
-  templatePath: 'CompanyContractEmail.html'
+      subject: `🎯 Neuer ${contract.type}-Auftrag${contract.zip ? ' (' + contract.zip + ')' : ''} in Ihrer Nähe verfügbar!`,
+      replacements: replacements,
+      templatePath: 'CompanyContractEmail.html',
+      tracking: { contractId, companyEmail: company.email }
     });
 
     if (!result.success) {
@@ -304,7 +300,7 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < companiesToNotify.length; i += BATCH_SIZE) {
       const batch = companiesToNotify.slice(i, i + BATCH_SIZE);
-  const batchPromises = batch.map(company => sendEmailNotification(company, contract));
+  const batchPromises = batch.map(company => sendEmailNotification(company, contract, contractId));
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
 
