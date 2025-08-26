@@ -48,6 +48,10 @@ const data = {
           title: "Statistiken",
           url: "/stats",
         },
+        {
+          title: "Partner",
+          url: "/partner",
+        },
       ],
     },
   ],

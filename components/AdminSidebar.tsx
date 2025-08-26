@@ -40,6 +40,10 @@ const data = {
           title: "Aufträge",
           url: "/contracts",
         },
+        {
+          title: "Partner",
+          url: "/partners",
+        },
       ],
     },
   ],
