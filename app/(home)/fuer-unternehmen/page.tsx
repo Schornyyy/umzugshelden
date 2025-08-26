@@ -2,7 +2,6 @@ import { bulletPointsCompanyyCard } from "@/statics/Lists";
 import Image from "next/image";
 import Link from "next/link";
 import React from "react";
-// @ts-expect-error – Typen werden ggf. nicht gefunden zur Buildzeit
 import RoiCalculator from "./_components/RoiCalculator";
 
 // Kleine Hilfs-Card für Abschnitts-Überschriften
