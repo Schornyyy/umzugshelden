@@ -256,10 +256,10 @@ export default function AdminPartnersPage() {
                 <p className='text-xs text-slate-600 line-clamp-4 mb-3 whitespace-pre-wrap'>
                   {p.benefit}
                 </p>
-                <div className='mt-auto flex gap-2 pt-2'>
-                  {typeof p.clicks === 'number' && (
+                <div className='mt-auto flex flex-row flex-wrap gap-2 gap-y-2 pt-2'>
+                  {typeof p.clicks === "number" && (
                     <span className='text-[10px] px-2 py-1 rounded bg-slate-100 border border-slate-200 text-slate-600'>
-                      {p.clicks} Klick{p.clicks === 1 ? '' : 's'}
+                      {p.clicks} Klick{p.clicks === 1 ? "" : "s"}
                     </span>
                   )}
                   <button
