@@ -168,7 +168,7 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
     const replacements = {
       // Link in die App (kann später auf eine spezifische Contract-Detailseite geändert werden)
-      contractLink: `${process.env.NEXT_PUBLIC_BASE_URL}/login`,
+      contractLink: `${process.env.NEXT_PUBLIC_URL}/login`,
       trackedContractLink: trackedLink,
       contractTypeLabel: String(contract.type),
       zip: String(contract.zip ?? ''),
