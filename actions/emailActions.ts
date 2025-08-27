@@ -9,6 +9,24 @@ const replaceTemplatePlaceholders = (template: string, replacements: { [key: str
   });
 };
 
+// Reuse a single transporter instance to reduce connection overhead in batch operations
+let sharedTransporter: nodemailer.Transporter | null = null;
+
+function getTransporter() {
+  if (!sharedTransporter) {
+    sharedTransporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT) || 587,
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
+  return sharedTransporter;
+}
+
 export async function sendCustomEmail({
   to,
   subject,
@@ -50,15 +68,7 @@ export async function sendCustomEmail({
     }
 
     // SMTP-Transporter einrichten und E-Mail senden
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465, // true für Port 465, false für andere Ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+  const transporter = getTransporter();
 
     await transporter.sendMail({
       from: `"Landschaftshelden.io" <${process.env.SMTP_USER}>`,

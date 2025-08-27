@@ -202,7 +202,7 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
 export async function POST(request: NextRequest) {
   try {
-    const { contractId } = await request.json();
+  const { contractId, cursor = 0, limit = 40 } = await request.json();
 
     if (!contractId) {
       return NextResponse.json({
@@ -294,23 +294,26 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Sende E-Mails parallel (aber mit Limit um Server nicht zu überlasten)
-    const BATCH_SIZE = 5; // Maximal 5 E-Mails parallel
-  const results: Array<{ success: boolean, company: string, email?: string, error?: string }> = [];
+    // Cursor / limit gesteuerte Verarbeitung zur Vermeidung von Timeouts
+    const startIndex = Math.max(0, Number(cursor) || 0);
+    const slice = companiesToNotify.slice(startIndex, startIndex + Math.min(Number(limit) || 40, 250));
 
-    for (let i = 0; i < companiesToNotify.length; i += BATCH_SIZE) {
-      const batch = companiesToNotify.slice(i, i + BATCH_SIZE);
-  const batchPromises = batch.map(company => sendEmailNotification(company, contract, contractId));
-      const batchResults = await Promise.all(batchPromises);
-      results.push(...batchResults);
-
-      // Kurze Pause zwischen Batches
-      if (i + BATCH_SIZE < companiesToNotify.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+    // Innerhalb des Slices mit begrenzter Parallelität senden
+    const CONCURRENCY = 6;
+    const results: Array<{ success: boolean, company: string, email?: string, error?: string }> = [];
+    let pointer = 0;
+    async function runNext(): Promise<void> {
+      if (pointer >= slice.length) return;
+      const current = slice[pointer++];
+      // contract ist hier garantiert vorhanden (vorher geprüft)
+      const r = await sendEmailNotification(current, contract as Contract, contractId);
+      results.push(r);
+      return runNext();
     }
+    // Starte Worker
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, slice.length) }, () => runNext()));
 
-    const successfulResults = results.filter(r => r.success);
+  const successfulResults = results.filter(r => r.success);
     const successful = successfulResults.length;
     const failed = results.filter(r => !r.success);
 
@@ -339,14 +342,23 @@ export async function POST(request: NextRequest) {
       console.error('Fehlgeschlagene E-Mails:', failed);
     }
 
+    const nextCursor = startIndex + slice.length < companiesToNotify.length ? startIndex + slice.length : null;
+
     return NextResponse.json({
       success: true,
-      message: `E-Mail-Benachrichtigungen versendet`,
+      message: `Batch verarbeitet (${slice.length} Einträge)` ,
+      partial: nextCursor !== null,
+      nextCursor,
+      total: companiesToNotify.length,
+      processed: startIndex + slice.length,
+      batchSize: slice.length,
       stats: {
         total: companiesToNotify.length,
         notified: successful,
         errors: failed.length,
-        skipped
+        skipped,
+        startIndex,
+        endIndex: startIndex + slice.length - 1
       },
       errors: failed.map(f => ({ company: f.company, error: f.error }))
     });
