@@ -163,7 +163,7 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
 
     // Erstelle Replacements für das Template
-  const trackingBase = process.env.NEXT_PUBLIC_BASE_URL || '';
+  const trackingBase = process.env.NEXT_PUBLIC_URL || '';
   const trackedLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(`${trackingBase}/login`)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
 
     const replacements = {
