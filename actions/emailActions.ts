@@ -70,16 +70,34 @@ export async function sendCustomEmail({
     // SMTP-Transporter einrichten und E-Mail senden
   const transporter = getTransporter();
 
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"Landschaftshelden.io" <${process.env.SMTP_USER}>`,
       to,
       subject,
       html: emailContentHtml,
     });
-
-    return { success: true };
+    return { success: true, info };
   } catch (error) {
     console.error('Fehler beim Senden der E-Mail:', error);
-    return { success: false, error };
+    interface SMTPErrorLike {
+      message?: string;
+      code?: string;
+      response?: string;
+      responseCode?: number;
+      command?: string;
+      rejected?: string[];
+    }
+    const err = error as SMTPErrorLike;
+    return { 
+      success: false, 
+      error: err?.message || 'unknown error',
+      smtp: {
+        code: err?.code,
+        response: err?.response,
+        responseCode: err?.responseCode,
+        command: err?.command,
+        rejected: err?.rejected,
+      }
+    };
   }
 }

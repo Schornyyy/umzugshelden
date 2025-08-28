@@ -203,12 +203,13 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
       templatePath,
       tracking: { contractId, companyEmail: company.email }
     });
-
     if (!result.success) {
-      throw new Error('E-Mail-Versand fehlgeschlagen');
+      const smtpSection = (result as unknown as { smtp?: { responseCode?: number } }).smtp;
+      const smtpCode = smtpSection?.responseCode;
+      const classification = smtpCode === 550 ? 'invalid' : 'error';
+      return { success: false, company: company.companyName || 'Unbekannt', email: company.email, error: classification };
     }
-
-  return { success: true, company: company.companyName || 'Unbekannt', email: company.email };
+    return { success: true, company: company.companyName || 'Unbekannt', email: company.email };
   } catch (error) {
     console.error(`Fehler beim Senden der E-Mail an ${company.companyName}:`, error);
   return { success: false, company: company.companyName || 'Unbekannt', error: error instanceof Error ? error.message : 'Unbekannter Fehler' };
@@ -315,7 +316,7 @@ export async function POST(request: NextRequest) {
 
     // Innerhalb des Slices mit begrenzter Parallelität senden
     const CONCURRENCY = 6;
-    const results: Array<{ success: boolean, company: string, email?: string, error?: string }> = [];
+  const results: Array<{ success: boolean, company: string, email?: string, error?: string }> = [];
     let pointer = 0;
     async function runNext(): Promise<void> {
       if (pointer >= slice.length) return;
@@ -331,6 +332,8 @@ export async function POST(request: NextRequest) {
   const successfulResults = results.filter(r => r.success);
     const successful = successfulResults.length;
     const failed = results.filter(r => !r.success);
+    const invalid = failed.filter(f => f.error === 'invalid');
+    const otherErrors = failed.filter(f => f.error !== 'invalid');
 
     // Log notify_sent events and increment notifiedCount
     if (successful > 0) {
@@ -370,12 +373,14 @@ export async function POST(request: NextRequest) {
       stats: {
         total: companiesToNotify.length,
         notified: successful,
-        errors: failed.length,
+        errors: otherErrors.length,
+        invalid: invalid.length,
         skipped,
         startIndex,
         endIndex: startIndex + slice.length - 1
       },
-      errors: failed.map(f => ({ company: f.company, error: f.error }))
+      errors: otherErrors.map(f => ({ company: f.company, error: f.error })),
+      invalid: invalid.map(f => ({ company: f.company }))
     });
 
   } catch (error) {
