@@ -104,12 +104,20 @@ class CacheManager {
       age: number;
     }>;
   } {
-    const entries = Array.from(this.cache.entries()).map(([key, entry]) => ({
-      key,
-      size: JSON.stringify(entry.data).length,
-      expiresAt: new Date(entry.expiresAt),
-      age: Date.now() - entry.timestamp
-    }));
+    const entries = Array.from(this.cache.entries()).map(([key, entry]) => {
+      let json: string | undefined;
+      try {
+        json = JSON.stringify(entry.data);
+      } catch {
+        json = undefined; // Falls nicht serialisierbar
+      }
+      return {
+        key,
+        size: json ? json.length : 0,
+        expiresAt: new Date(entry.expiresAt),
+        age: Date.now() - entry.timestamp
+      };
+    });
 
     return {
       size: this.cache.size,

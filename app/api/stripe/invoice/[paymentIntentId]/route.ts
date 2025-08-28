@@ -20,8 +20,25 @@ export async function GET(
       );
     }
 
-    // Hole das Payment Intent von Stripe
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    // Sonderfall: Kostenloser Erstauftrag -> eigene "Null-Rechnung" ohne Stripe
+    if (paymentIntentId === 'free-first') {
+      const freeHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Nullrechnung - Kostenloser Erstauftrag</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#333;font-size:14px;line-height:1.5;}h1{color:#16a34a;font-size:20px;margin:0 0 10px;}table{width:100%;border-collapse:collapse;margin-top:25px;}th,td{padding:10px;border-bottom:1px solid #eee;text-align:left;}th{background:#f5f5f5;} .total{font-weight:700;} .badge{display:inline-block;background:#dcfce7;color:#166534;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-top:8px;} .footer{margin-top:40px;font-size:11px;color:#555;border-top:1px solid #ddd;padding-top:15px;}</style></head><body><h1>Nullrechnung – Kostenloser Erstauftrag</h1><div class="badge">FREE FIRST CONTRACT</div><p>Diese Rechnung bestätigt den kostenlosen Erwerb Ihres ersten Auftrags über Landschaftshelden.io.</p><table><thead><tr><th>Beschreibung</th><th>Menge</th><th>Einzelpreis</th><th>Gesamt</th></tr></thead><tbody><tr><td>Erster Auftragszugang (Aktivierungsaktion)</td><td>1</td><td>€0.00</td><td>€0.00</td></tr></tbody></table><p class="total" style="text-align:right;">Gesamtbetrag: €0.00</p><div class="footer"><p>Landschaftshelden.io – Ihr Marktplatz für Garten- & Landschaftspflege</p><p>support@landschaftshelden.io • https://landschaftshelden.io</p><p><em>Automatisch erstellt – keine Unterschrift erforderlich.</em></p></div></body></html>`;
+      try {
+        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+        await page.setContent(freeHtml, { waitUntil: 'networkidle0' });
+        const pdf = await page.pdf({ format: 'A4', printBackground: true, margin:{ top:'15mm', right:'15mm', bottom:'15mm', left:'15mm'} });
+        await browser.close();
+  const pdfBuffer = Buffer.from(pdf);
+  return new NextResponse(pdfBuffer, { headers: { 'Content-Type':'application/pdf', 'Content-Disposition':'attachment; filename="nullrechnung_free_first.pdf"' }});
+      } catch (e) {
+        console.error('Fehler beim Erstellen der Nullrechnung:', e);
+        return NextResponse.json({ error: 'Nullrechnung konnte nicht erstellt werden' }, { status: 500 });
+      }
+    }
+
+  // Hole das Payment Intent von Stripe
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
     if (!paymentIntent) {
       return NextResponse.json(
@@ -188,7 +205,7 @@ export async function GET(
     
     await browser.close();
 
-    return new NextResponse(pdfBuffer, {
+  return new NextResponse(Buffer.from(pdfBuffer), {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="rechnung_${paymentIntentId.substring(0, 10)}.pdf"`,

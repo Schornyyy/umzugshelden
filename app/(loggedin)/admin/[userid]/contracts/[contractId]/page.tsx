@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import dynamic from "next/dynamic";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -27,38 +26,7 @@ export default function ContractDashboardPage() {
   const [stats, setStats] = useState<ContractStats | null>(null);
   const [events, setEvents] = useState<ContractEvent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chartError, setChartError] = useState(false);
-
-  const ContractMetricsChart = useMemo(
-    () =>
-      dynamic(() => import("@/components/charts/ContractMetricsChart"), {
-        ssr: false,
-        loading: () => (
-          <div className='text-sm text-gray-500'>Lade Diagramm…</div>
-        ),
-      }),
-    []
-  );
-
-  class ChartErrorBoundary extends React.Component<
-    { children: React.ReactNode },
-    { hasError: boolean }
-  > {
-    constructor(props: { children: React.ReactNode }) {
-      super(props);
-      this.state = { hasError: false };
-    }
-    static getDerivedStateFromError() {
-      return { hasError: true };
-    }
-    componentDidCatch() {
-      setChartError(true);
-    }
-    render() {
-      if (this.state.hasError) return null;
-      return this.props.children as React.ReactElement | null;
-    }
-  }
+  // Chart wurde entfernt (recharts entfernt) – wir aggregieren nur noch Kennzahlen.
 
   useEffect(() => {
     const load = async () => {
@@ -88,38 +56,20 @@ export default function ContractDashboardPage() {
   }, [contractId]);
 
   // Build a simple timeseries per day for email clicks and views
-  const chartData = useMemo(() => {
-    // group events by day
-    const byDay = new Map<
-      string,
-      {
-        date: string;
-        views: number;
-        emailClicks: number;
-        purchaseAttempts: number;
-      }
-    >();
+  const last7 = useMemo(() => {
+    const cutoff = Date.now() - 7 * 86400000;
+    const counters = { views: 0, emailClicks: 0, purchaseAttempts: 0 };
     for (const ev of events) {
-      const ts = ev?.createdAt?.seconds
-        ? new Date(ev.createdAt.seconds * 1000)
-        : new Date();
-      const key = ts.toISOString().slice(0, 10);
-      if (!byDay.has(key)) {
-        byDay.set(key, {
-          date: key,
-          views: 0,
-          emailClicks: 0,
-          purchaseAttempts: 0,
-        });
+      const tsMs = ev?.createdAt?.seconds
+        ? ev.createdAt.seconds * 1000
+        : Date.now();
+      if (tsMs >= cutoff) {
+        if (ev.type === "view") counters.views++;
+        if (ev.type === "email_click") counters.emailClicks++;
+        if (ev.type === "purchase_attempt") counters.purchaseAttempts++;
       }
-      const agg = byDay.get(key)!;
-      if (ev?.type === "view") agg.views += 1;
-      if (ev?.type === "email_click") agg.emailClicks += 1;
-      if (ev?.type === "purchase_attempt") agg.purchaseAttempts += 1;
     }
-    return Array.from(byDay.values()).sort((a, b) =>
-      a.date.localeCompare(b.date)
-    );
+    return counters;
   }, [events]);
 
   const percentData = useMemo(() => {
@@ -142,39 +92,28 @@ export default function ContractDashboardPage() {
         <div className='lg:col-span-2 space-y-6'>
           <Card>
             <CardHeader>
-              <CardTitle>Öffnungen & Klicks</CardTitle>
+              <CardTitle>Metriken (letzte 7 Tage)</CardTitle>
             </CardHeader>
             <CardContent>
-              {!loading && chartData.length > 0 && !chartError ? (
-                <ChartErrorBoundary>
-                  {/* dynamic import is typed to accept MetricsPoint[] */}
-                  <ContractMetricsChart data={chartData} />
-                </ChartErrorBoundary>
+              {loading ? (
+                <div className='text-sm text-gray-500'>Lade...</div>
               ) : (
-                <div className='grid grid-cols-1 sm:grid-cols-2 gap-4'>
-                  <div className='rounded-lg border p-4'>
-                    <div className='text-sm text-gray-600 mb-1'>
-                      Öffnungsrate
-                    </div>
-                    <div className='text-2xl font-semibold'>
-                      {percentData.openRate.toFixed(1)}%
-                    </div>
-                    <div className='text-xs text-gray-500'>
-                      Geöffnet {percentData.opened} von {percentData.sent}{" "}
-                      gesendeten E-Mails
-                    </div>
+                <div className='grid grid-cols-2 md:grid-cols-4 gap-4 text-sm'>
+                  <div className='rounded border p-3'>
+                    <div className='text-xs text-gray-500 mb-1'>Views</div>
+                    <div className='text-lg font-semibold'>{last7.views}</div>
                   </div>
-                  <div className='rounded-lg border p-4'>
-                    <div className='text-sm text-gray-600 mb-1'>
-                      Kaufversuch-Rate
-                    </div>
-                    <div className='text-2xl font-semibold'>
-                      {percentData.purchaseRate.toFixed(1)}%
-                    </div>
-                    <div className='text-xs text-gray-500'>
-                      Kaufversuche {percentData.purchaseAttempts} von{" "}
-                      {percentData.sent} gesendeten E-Mails
-                    </div>
+                  <div className='rounded border p-3'>
+                    <div className='text-xs text-gray-500 mb-1'>E-Mail Klicks</div>
+                    <div className='text-lg font-semibold'>{last7.emailClicks}</div>
+                  </div>
+                  <div className='rounded border p-3'>
+                    <div className='text-xs text-gray-500 mb-1'>Kaufversuche</div>
+                    <div className='text-lg font-semibold'>{last7.purchaseAttempts}</div>
+                  </div>
+                  <div className='rounded border p-3'>
+                    <div className='text-xs text-gray-500 mb-1'>Öffnungsrate</div>
+                    <div className='text-lg font-semibold'>{percentData.openRate.toFixed(1)}%</div>
                   </div>
                 </div>
               )}

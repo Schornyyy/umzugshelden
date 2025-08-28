@@ -21,6 +21,7 @@ export interface CompanyType  {
     id?: string,
     ownerid: string,
     automatic?: boolean, // Neu hinzugefügt für automatische Firmen
+    freeFirstUsed?: boolean, // Kennzeichnet, ob das Gratis-Erstangebot bereits genutzt wurde
 }
 
 export function parseDataToCompanyType(data: DocumentData, id?: string) {
@@ -43,5 +44,6 @@ export function parseDataToCompanyType(data: DocumentData, id?: string) {
         services: data.services ? data.services :  [],
         ownerid: data.ownerid ? data.ownerid : "",
         automatic: data.automatic !== undefined ? data.automatic : false, // Standardwert für automatische Firmen
+    freeFirstUsed: data.freeFirstUsed !== undefined ? data.freeFirstUsed : false,
     }
 }

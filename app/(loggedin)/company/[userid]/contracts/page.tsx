@@ -6,6 +6,10 @@ import { findCompanyById } from "@/actions/companyActions";
 import { updateCompanyCoordinates } from "@/actions/coordinateActions";
 import { CompanyType } from "@/types/RegisterTypye";
 import { ContractPreview } from "@/actions/contractActions";
+import {
+  isCompanyEligibleForFreeFirst,
+  grantFreeFirstContract,
+} from "@/actions/buyedContractActions";
 
 // Components
 import {
@@ -43,6 +47,7 @@ const CompanyContractsPage = ({ params }: CompanyContractsPageProps) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [showErrorMessage, setShowErrorMessage] = useState<string | null>(null);
+  const [freeEligible, setFreeEligible] = useState(false);
 
   // Custom Hook für Contract-Daten
   const {
@@ -150,6 +155,15 @@ const CompanyContractsPage = ({ params }: CompanyContractsPageProps) => {
   useEffect(() => {
     if (company?.id) {
       loadPurchasedContracts();
+      // Prüfe Free-Eligibility sobald Company geladen
+      (async () => {
+        try {
+          const eligible = await isCompanyEligibleForFreeFirst(company.id!);
+          setFreeEligible(eligible);
+        } catch (e) {
+          console.error("Free Eligibility Fehler", e);
+        }
+      })();
     }
   }, [company?.id, loadPurchasedContracts]);
 
@@ -168,6 +182,24 @@ const CompanyContractsPage = ({ params }: CompanyContractsPageProps) => {
 
     try {
       setPurchasing(contract.id!);
+
+      if (freeEligible) {
+        // Free first contract path
+        const resp: { success: boolean } = await grantFreeFirstContract(
+          contract,
+          company.id!,
+          company.companyName || ""
+        );
+        if (resp.success) {
+          setShowSuccessMessage(true);
+          setActiveTab("purchased");
+          setFreeEligible(false);
+          await loadPurchasedContracts();
+          return;
+        } else {
+          console.warn("Gratis-Kauf fehlgeschlagen, fallback zu Stripe");
+        }
+      }
 
       const response = await fetch("/api/stripe/create-checkout", {
         method: "POST",
@@ -332,6 +364,7 @@ const CompanyContractsPage = ({ params }: CompanyContractsPageProps) => {
               calculatePrice={calculateContractPrice}
               calculateValue={calculateContractValue}
               formatTimeAgo={formatTimeAgo}
+              freeEligible={freeEligible}
             />
           ))}
 

@@ -164,7 +164,9 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
     // Erstelle Replacements für das Template
   const trackingBase = process.env.NEXT_PUBLIC_URL || '';
-  const trackedLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(`${trackingBase}/login`)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+  // Standard: Login / Dashboard Link
+  const baseTarget = `${trackingBase}/login`;
+  const trackedLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(baseTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
 
     const replacements = {
       // Link in die App (kann später auf eine spezifische Contract-Detailseite geändert werden)
@@ -181,11 +183,24 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
     } as Record<string, string>;
 
     // Verwende das Template-System aus emailActions
+    // Für automatische (noch nicht registrierte) Profile anderes Template mit CTA zur kostenlosen Registrierung & erstem Gratis-Auftrag
+    let templatePath = 'CompanyContractEmail.html';
+    let subject = `🎯 Neuer ${contract.type}-Auftrag${contract.zip ? ' (' + contract.zip + ')' : ''} in Ihrer Nähe verfügbar!`;
+    const replacementsExtended: Record<string,string> = { ...replacements };
+
+    if (company.automatic) {
+      templatePath = 'AutoProfileInviteEmail.html';
+      subject = `🚀 Gratis erster Auftrag für Sie – ${contract.type}${contract.zip ? ' (' + contract.zip + ')' : ''}`;
+      const registrationTarget = `${trackingBase}/register?firstContract=${encodeURIComponent(String(contractId))}`;
+      const trackedRegistrationLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(registrationTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+      replacementsExtended['trackedRegistrationLink'] = trackedRegistrationLink;
+    }
+
     const result = await sendCustomEmail({
       to: company.email,
-      subject: `🎯 Neuer ${contract.type}-Auftrag${contract.zip ? ' (' + contract.zip + ')' : ''} in Ihrer Nähe verfügbar!`,
-      replacements: replacements,
-      templatePath: 'CompanyContractEmail.html',
+      subject,
+      replacements: replacementsExtended,
+      templatePath,
       tracking: { contractId, companyEmail: company.email }
     });
 

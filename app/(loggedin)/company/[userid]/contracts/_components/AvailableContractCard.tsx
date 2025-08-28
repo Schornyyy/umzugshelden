@@ -14,6 +14,7 @@ interface AvailableContractCardProps {
   calculatePrice: (contract: ContractPreview) => number;
   calculateValue: (contract: ContractPreview) => string;
   formatTimeAgo: (timestamp: Date | undefined) => string;
+  freeEligible?: boolean;
 }
 
 export const AvailableContractCard: React.FC<AvailableContractCardProps> = ({
@@ -23,6 +24,7 @@ export const AvailableContractCard: React.FC<AvailableContractCardProps> = ({
   calculatePrice,
   calculateValue,
   formatTimeAgo,
+  freeEligible = false,
 }) => {
   const contractValue = calculateValue(contract);
 
@@ -109,6 +111,8 @@ export const AvailableContractCard: React.FC<AvailableContractCardProps> = ({
                 <Loader2 className='h-4 w-4 animate-spin mr-2' />
                 Erwirbt...
               </>
+            ) : freeEligible ? (
+              "Jetzt kostenlos sichern"
             ) : (
               "Auftrag erwerben"
             )}

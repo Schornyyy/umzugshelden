@@ -5,6 +5,8 @@ import {
   collection,
   doc,
   getDocs,
+  getDoc,
+  addDoc,
   query,
   updateDoc,
   where,
@@ -13,6 +15,9 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { ContractPreview } from "./contractActions";
+import { CompanyType } from "@/types/RegisterTypye";
+import { getContractById } from "./contractActions";
+import { invalidatePurchasedContractCaches } from "@/lib/cache";
 
 // Interface für gekaufte Verträge (Server-Side)
 export interface PurchasedContract {
@@ -133,6 +138,88 @@ export const initiateContractPurchase = async (
     console.error('Fehler beim Initialisieren des Kaufs:', error);
     throw new Error('Kauf konnte nicht initialisiert werden');
   }
+};
+
+// Prüfen ob Unternehmen bereits einen erfolgreichen Kauf hat (oder freeFirstUsed Flag) – für UI Entscheidung
+export const isCompanyEligibleForFreeFirst = async (companyId: string): Promise<boolean> => {
+  try {
+    const companyRef = doc(database, 'users', companyId);
+    const companySnap = await getDoc(companyRef);
+    if (!companySnap.exists()) return false;
+    const companyData = companySnap.data() as CompanyType;
+    if (companyData.freeFirstUsed) return false;
+    // Prüfe ob schon erfolgreiche Käufe existieren
+    const purchasesQuery = query(
+      collection(database, 'purchased_contracts'),
+      where('companyId', '==', companyId),
+      where('paymentStatus', '==', 'succeeded'),
+      orderBy('purchasedAt', 'desc')
+    );
+    const snap = await getDocs(purchasesQuery);
+    return snap.empty; // nur wenn noch kein Kauf
+  } catch (e) {
+    console.error('Eligibility Check Fehler:', e);
+    return false;
+  }
+};
+
+// Gewährt ersten kostenlosen Vertrag ohne Stripe – atomar versuchen
+export const grantFreeFirstContract = async (contract: ContractPreview, companyId: string, companyName: string) => {
+  if (!contract.id) throw new Error('Contract ID fehlt');
+  const companyRef = doc(database, 'users', companyId);
+  const companySnap = await getDoc(companyRef);
+  if (!companySnap.exists()) throw new Error('Company nicht gefunden');
+  const companyData = companySnap.data() as CompanyType;
+  if (companyData.freeFirstUsed) {
+    throw new Error('Gratis-Erstkauf bereits genutzt');
+  }
+
+  // Double-check auf existierende Käufe
+  const existing = await getDocs(query(
+    collection(database, 'purchased_contracts'),
+    where('companyId', '==', companyId),
+    where('paymentStatus', '==', 'succeeded')
+  ));
+  if (!existing.empty) {
+    throw new Error('Bereits erfolgreiche Käufe vorhanden');
+  }
+
+  // Erstelle Purchase Dokument mit succeeded Status
+  // Versuche vollständige Auftragsdaten zu laden (optional)
+  let fullData: Record<string, unknown> | undefined;
+  try {
+    const full = await getContractById(contract.id);
+    if (full) {
+      fullData = { ...full } as Record<string, unknown>;
+    }
+  } catch (e) {
+    console.warn('Konnte Contract-Daten für Free-Purchase nicht laden', e);
+  }
+
+  const purchaseData = {
+    contractId: contract.id,
+    companyId,
+    companyName,
+    contractTitle: `${contract.type} - ${contract.zip}`,
+    contractType: contract.type,
+    contractZip: contract.zip,
+    amount: 0,
+    currency: 'EUR',
+    stripePaymentIntentId: 'free-first',
+    stripeSessionId: 'free-first',
+    paymentStatus: 'succeeded' as const,
+    purchasedAt: serverTimestamp() as Timestamp,
+    accessGrantedAt: serverTimestamp() as Timestamp,
+    createdAt: serverTimestamp() as Timestamp,
+    updatedAt: serverTimestamp() as Timestamp,
+    contractData: fullData,
+  };
+  await addDoc(collection(database, 'purchased_contracts'), purchaseData);
+  // Flag setzen
+  await updateDoc(companyRef, { freeFirstUsed: true, updatedAt: serverTimestamp() });
+  // Cache invalidieren (gekaufte Contracts)
+  try { invalidatePurchasedContractCaches(); } catch { /* optional */ }
+  return { success: true };
 };
 
 // Zahlung simulieren (für Demo-Zwecke)

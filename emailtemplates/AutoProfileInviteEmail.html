@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ihr kostenloser erster Auftrag wartet – Landschaftshelden.io</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { margin:0; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; background:#f1f5f9; color:#1e293b; }
+    .container { max-width:620px; margin:0 auto; background:#fff; box-shadow:0 4px 12px rgba(0,0,0,.07); }
+    .header { background:linear-gradient(120deg,#16a34a,#15803d); padding:28px 36px; text-align:center; color:#fff; }
+    .logo { font-size:30px; font-weight:700; }
+    h1 { font-size:22px; margin:24px 0 12px; text-align:center; color:#15803d; }
+    p { line-height:1.55; }
+    .content { padding:34px 40px 44px; }
+    .cta { text-align:center; margin:32px 0 38px; }
+    .cta a { background:#16a34a; background:linear-gradient(120deg,#16a34a,#15803d); color:#fff; text-decoration:none; padding:16px 30px; border-radius:8px; font-weight:600; font-size:16px; display:inline-block; box-shadow:0 4px 14px rgba(22,163,74,.35); }
+    .cta a:hover { transform:translateY(-2px); box-shadow:0 6px 22px rgba(22,163,74,.45); }
+    .badge { display:inline-block; background:#dcfce7; color:#15803d; font-weight:600; padding:4px 10px; border-radius:999px; font-size:12px; letter-spacing:.5px; margin-bottom:12px; }
+    .details { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:18px 18px 20px; margin:24px 0 30px; font-size:14px; }
+    .details h3 { margin:0 0 14px; font-size:15px; color:#0f172a; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 18px; }
+    .label { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#64748b; font-weight:600; margin-bottom:2px; }
+    .desc { background:#fff; border:1px solid #e2e8f0; border-radius:8px; padding:12px; white-space:pre-wrap; font-size:14px; }
+    .note { background:#f0fdf4; border-left:4px solid #16a34a; padding:14px 16px; border-radius:0 8px 8px 0; font-size:13px; color:#065f46; margin:26px 0 34px; }
+    .footer { background:#1e293b; color:#94a3b8; text-align:center; padding:30px 40px; font-size:13px; }
+    .footer a { color:#16a34a; text-decoration:none; }
+    .footer a:hover { text-decoration:underline; }
+    .footer .brand { color:#16a34a; font-weight:700; font-size:18px; margin-bottom:8px; }
+    @media (max-width:640px){ .content{padding:26px 22px 38px;} .grid{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🌿 Landschaftshelden.io</div>
+      <div style="opacity:.9;font-size:14px;">Werden Sie jetzt aktiv und sichern Sie sich regionale Aufträge</div>
+    </div>
+    <div class="content">
+      <div class="badge">EXKLUSIV FÜR SIE</div>
+      <h1>Ihr erster Auftrag ist kostenlos!</h1>
+  <p>Wir haben ein neues Projekt in Ihrer Region gefunden, das zu Ihren Leistungen passt. Registrieren Sie sich jetzt kostenlos und holen Sie sich Ihren ersten Auftrag gratis.</p>
+      <div class="cta">
+        <a href="{{trackedRegistrationLink}}">Kostenlos registrieren & Auftrag sichern →</a>
+      </div>
+      <div class="note">
+        <strong>Schnell sein lohnt sich:</strong> Der erste Auftrag ist für Sie kostenlos. Danach zahlen Sie nur für weitere, qualifizierte Leads.
+      </div>
+      <div class="details">
+        <h3>Auftragsdetails (Vorschau)</h3>
+        <div class="grid">
+          <div><div class="label">Service</div><div>{{contractTypeLabel}}</div></div>
+          <div><div class="label">PLZ</div><div>{{zip}}</div></div>
+          <div><div class="label">Gartengröße</div><div>{{gardenSize}} m²</div></div>
+          <div><div class="label">Projektumfang</div><div>{{contractSizeLabel}}</div></div>
+          <div><div class="label">Planung vorhanden</div><div>{{planningLabel}}</div></div>
+          <div><div class="label">Wiederkehrend</div><div>{{repeatLabel}}</div></div>
+          <div><div class="label">Projektbeginn</div><div>{{projectBeginLabel}}</div></div>
+        </div>
+      </div>
+      <div class="desc">{{description}}</div>
+      <p style="margin-top:30px;">Fragen? Antworten gibts direkt per E-Mail: <a href="mailto:support@landschaftshelden.io">support@landschaftshelden.io</a></p>
+      <p style="margin:34px 0 0; font-size:14px; color:#64748b; text-align:center;">Grüne Grüße,<br><strong>Ihr Landschaftshelden.io Team</strong></p>
+    </div>
+    <div class="footer">
+      <div class="brand">🌿 Landschaftshelden.io</div>
+      <p>Ihr Marktplatz für professionelle Garten- und Landschaftspflege</p>
+  <p style="margin-top:18px;font-size:11px;color:#64748b;">Sie erhalten diese Nachricht, weil für Ihre Region ein neues passendes Projekt verfügbar ist.</p>
+      <p style="margin-top:14px;">
+        <a href="https://landschaftshelden.io/impressum">Impressum</a> · 
+        <a href="https://landschaftshelden.io/datenschutz">Datenschutz</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
