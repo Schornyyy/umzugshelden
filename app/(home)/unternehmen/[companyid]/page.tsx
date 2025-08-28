@@ -272,11 +272,13 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
               className='bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg transition-colors inline-flex items-center justify-center'>
               🚀 Kostenlosen Auftrag erstellen
             </Link>
-            <a
-              href={`#kontakt`}
-              className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors inline-flex items-center justify-center'>
-              📞 Direkt kontaktieren
-            </a>
+            {!companyData.automatic && (
+              <a
+                href={`#kontakt`}
+                className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors inline-flex items-center justify-center'>
+                📞 Direkt kontaktieren
+              </a>
+            )}
           </div>
         </div>
 
@@ -353,15 +355,25 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
         {/* Contact Form Section */}
         <div id='kontakt' className='mb-16'>
           <div className='text-center mb-8'>
-            <h2 className='text-2xl md:text-3xl font-bold mb-4'>
-              Kontaktieren Sie {companyData.companyName}
-            </h2>
-            <p className='text-gray-600 max-w-2xl mx-auto'>
-              Haben Sie Fragen zu Ihrem Projekt? Kontaktieren Sie{" "}
-              {companyData.companyName}
-              direkt oder erstellen Sie einen kostenlosen Auftrag für mehrere
-              Angebote.
-            </p>
+            {!companyData.automatic ? (
+              <>
+                <h2 className='text-2xl md:text-3xl font-bold mb-4'>
+                  Kontaktieren Sie {companyData.companyName}
+                </h2>
+                <p className='text-gray-600 max-w-2xl mx-auto'>
+                  Haben Sie Fragen zu Ihrem Projekt? Kontaktieren Sie {companyData.companyName} direkt oder erstellen Sie einen kostenlosen Auftrag für mehrere Angebote.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className='text-2xl md:text-3xl font-bold mb-4'>
+                  {companyData.companyName} – Profil Vorschau
+                </h2>
+                <p className='text-gray-600 max-w-2xl mx-auto'>
+                  Dieses Unternehmensprofil wurde automatisch erstellt. Legen Sie einen Auftrag an – wir leiten ihn passenden Betrieben weiter.
+                </p>
+              </>
+            )}
           </div>
           {!companyData.automatic && (
             <CompanyContractForm company={companyData} />
@@ -384,11 +396,13 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
               className='bg-white text-green-600 hover:bg-gray-100 px-8 py-4 rounded-lg text-lg font-bold shadow-lg transition-colors inline-block'>
               Auftrag erstellen & Angebote vergleichen
             </Link>
-            <a
-              href={`#kontakt`}
-              className='border-2 border-white text-white hover:bg-white hover:text-green-600 px-8 py-4 rounded-lg text-lg font-bold transition-colors inline-block'>
-              {companyData.companyName} direkt kontaktieren
-            </a>
+            {!companyData.automatic && (
+              <a
+                href={`#kontakt`}
+                className='border-2 border-white text-white hover:bg-white hover:text-green-600 px-8 py-4 rounded-lg text-lg font-bold transition-colors inline-block'>
+                {companyData.companyName} direkt kontaktieren
+              </a>
+            )}
           </div>
         </div>
 
@@ -479,11 +493,13 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
               className='bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg transition-colors'>
               🚀 Kostenlosen Auftrag erstellen
             </Link>
-            <a
-              href={`#kontakt`}
-              className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors'>
-              📞 {companyData.companyName} kontaktieren
-            </a>
+            {!companyData.automatic && (
+              <a
+                href={`#kontakt`}
+                className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors'>
+                📞 {companyData.companyName} kontaktieren
+              </a>
+            )}
           </div>
         </div>
       </div>
