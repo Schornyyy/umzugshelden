@@ -1,16 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import {
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
-import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import React from "react";
 
 export type MetricsPoint = {
   date: string;
@@ -19,87 +9,46 @@ export type MetricsPoint = {
   purchaseAttempts: number;
 };
 
+// Minimaler Ersatz für das entfernte Recharts-Diagramm: einfache Tabelle
 export default function ContractMetricsChart({
   data,
 }: {
   data: MetricsPoint[];
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      setReady(Boolean(rect && rect.width > 0 && rect.height > 0));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
   if (!data || data.length === 0) return null;
   return (
-    <ChartContainer
-      config={{
-        views: { label: "Aufrufe", color: "#16a34a" },
-        emailClicks: { label: "E-Mail Klicks", color: "#0ea5e9" },
-        purchaseAttempts: { label: "Kaufversuche", color: "#f59e0b" },
-      }}>
-      <div ref={containerRef} className='w-full h-[280px]'>
-        {!ready ? null : (
-          <ResponsiveContainer width='100%' height='100%'>
-            <LineChart
-              data={data}
-              margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray='3 3' />
-              <XAxis dataKey='date' tick={{ fontSize: 12 }} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-              <Tooltip
-                content={(props) => {
-                  const label = props?.label ?? "";
-                  const payload = (props?.payload ?? []) as unknown as Array<{
-                    dataKey: string;
-                    value: number;
-                    color: string;
-                    name?: string;
-                  }>;
-                  return (
-                    <ChartTooltipContent
-                      label={String(label)}
-                      payload={payload}
-                    />
-                  );
-                }}
-              />
-              <Line
-                type='monotone'
-                dataKey='views'
-                name='Aufrufe'
-                stroke='var(--color-views)'
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type='monotone'
-                dataKey='emailClicks'
-                name='E-Mail Klicks'
-                stroke='var(--color-emailClicks)'
-                strokeWidth={2}
-                dot={false}
-              />
-              <Line
-                type='monotone'
-                dataKey='purchaseAttempts'
-                name='Kaufversuche'
-                stroke='var(--color-purchaseAttempts)'
-                strokeWidth={2}
-                dot={false}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
+    <div className='w-full overflow-x-auto border rounded-md'>
+      <table className='w-full text-sm'>
+        <thead className='bg-gray-50 text-gray-600 text-xs uppercase tracking-wide'>
+          <tr>
+            <th className='px-3 py-2 text-left'>Datum</th>
+            <th className='px-3 py-2 text-right'>Aufrufe</th>
+            <th className='px-3 py-2 text-right'>E-Mail Klicks</th>
+            <th className='px-3 py-2 text-right'>Kaufversuche</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((row) => (
+            <tr key={row.date} className='border-t'>
+              <td className='px-3 py-1.5 font-medium text-gray-800'>
+                {row.date}
+              </td>
+              <td className='px-3 py-1.5 text-right tabular-nums'>
+                {row.views}
+              </td>
+              <td className='px-3 py-1.5 text-right tabular-nums'>
+                {row.emailClicks}
+              </td>
+              <td className='px-3 py-1.5 text-right tabular-nums'>
+                {row.purchaseAttempts}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className='p-2 text-xs text-gray-500'>
+        (Diagramm entfernt – vereinfachte Ansicht)
       </div>
-    </ChartContainer>
+    </div>
   );
 }
