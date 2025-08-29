@@ -4,6 +4,7 @@
 'use server';
 
 import { WPPost } from "@/types/wordpressTypes";
+import { cacheManager, CACHE_KEYS } from '@/lib/cache';
 
 function getAuthHeaders() {
   const user = process.env.WP_REST_USER;
@@ -16,16 +17,18 @@ function getAuthHeaders() {
 }
 
 export async function getPosts(): Promise<WPPost[]> {
-  const res = await fetch(
-    'https://gs-creatives.de/wp-json/wp/v2/posts?per_page=9&acf_format=standard&_fields=id,slug,title,excerpt,date,acf',
-    {
-      next: { revalidate: 60 },
-    }
-  );
-
-  if (!res.ok) throw new Error('Fehler beim Laden der Beiträge');
-
-  return res.json() as Promise<WPPost[]>;
+  return cacheManager.getOrFetch(CACHE_KEYS.BLOG_ALL_POSTS, async () => {
+    const res = await fetch(
+      'https://gs-creatives.de/wp-json/wp/v2/posts?per_page=100&acf_format=standard&_fields=id,slug,title,excerpt,date,acf',
+      {
+        next: { revalidate: 300 },
+      }
+    );
+  
+    if (!res.ok) throw new Error('Fehler beim Laden der Beiträge');
+  
+    return res.json() as Promise<WPPost[]>;
+  }, { ttl: 10 * 60 * 1000 });
 }
 
 export async function getPostBySlug(slug: string): Promise<WPPost | null> {
@@ -117,6 +120,10 @@ export async function getPostBySlug(slug: string): Promise<WPPost | null> {
 }
 
 export async function getPostsByCategory(categorySlug: string): Promise<WPPost[]> {
+  // Cache pro Kategorie
+  const cacheKey = CACHE_KEYS.BLOG_CATEGORY(categorySlug);
+  const cached = cacheManager.get<WPPost[]>(cacheKey);
+  if (cached) return cached;
   const catRes = await fetch(
     `https://gs-creatives.de/wp-json/wp/v2/categories?slug=${categorySlug}`,
     {
@@ -181,6 +188,17 @@ export async function getPostsByCategory(categorySlug: string): Promise<WPPost[]
     })
   );
 
+  cacheManager.set(cacheKey, postsWithACF, { ttl: 10 * 60 * 1000 });
   return postsWithACF;
+}
+
+export async function getPostsFiltered(letter?: string, search?: string): Promise<WPPost[]> {
+  const all = await getPosts();
+  return all.filter(p => {
+    const title = p.title?.rendered || '';
+    const matchesLetter = letter ? title.trim().toLowerCase().startsWith(letter.toLowerCase()) : true;
+    const matchesSearch = search ? (title.toLowerCase().includes(search.toLowerCase()) || (p.excerpt?.rendered || '').toLowerCase().includes(search.toLowerCase())) : true;
+    return matchesLetter && matchesSearch;
+  });
 }
 

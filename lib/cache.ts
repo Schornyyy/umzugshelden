@@ -208,6 +208,9 @@ export const CACHE_KEYS = {
   
   // General
   ALL_CONTRACTS: 'all-contracts',
+  // Blog
+  BLOG_ALL_POSTS: 'blog:all-posts',
+  BLOG_CATEGORY: (slug: string) => `blog:category:${slug}`,
 
   // Company Stats
   COMPANY_STATS: (companyId: string) => `company-stats:${companyId}`,

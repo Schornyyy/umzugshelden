@@ -361,7 +361,9 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
                   Kontaktieren Sie {companyData.companyName}
                 </h2>
                 <p className='text-gray-600 max-w-2xl mx-auto'>
-                  Haben Sie Fragen zu Ihrem Projekt? Kontaktieren Sie {companyData.companyName} direkt oder erstellen Sie einen kostenlosen Auftrag für mehrere Angebote.
+                  Haben Sie Fragen zu Ihrem Projekt? Kontaktieren Sie{" "}
+                  {companyData.companyName} direkt oder erstellen Sie einen
+                  kostenlosen Auftrag für mehrere Angebote.
                 </p>
               </>
             ) : (
@@ -370,7 +372,9 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
                   {companyData.companyName} – Profil Vorschau
                 </h2>
                 <p className='text-gray-600 max-w-2xl mx-auto'>
-                  Dieses Unternehmensprofil wurde automatisch erstellt. Legen Sie einen Auftrag an – wir leiten ihn passenden Betrieben weiter.
+                  Dieses Unternehmensprofil wurde automatisch erstellt. Legen
+                  Sie einen Auftrag an – wir leiten ihn passenden Betrieben
+                  weiter.
                 </p>
               </>
             )}
