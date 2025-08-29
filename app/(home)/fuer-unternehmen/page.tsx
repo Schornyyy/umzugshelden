@@ -74,15 +74,17 @@ const page = async () => {
               </h1>
               <p className='mt-6 text-base md:text-lg text-emerald-50 max-w-xl'>
                 JobSmith bringt qualifizierte private und gewerbliche Anfragen
-                direkt zu Ihrem Betrieb – ohne Kaltakquise, ohne teure
+                direkt zu Ihrem Betrieb – ohne Kaltakquise und ohne teure
                 Streuverluste. Sie fokussieren sich auf Umsetzung & Qualität,
-                wir liefern Ihnen Auftragschancen.
+                wir liefern Ihnen Auftragschancen. Registrierung ist kostenlos,
+                Ihr erster gewonnener Auftrag ebenfalls – danach kaufen Sie nur
+                die Leads, die Sie wirklich möchten.
               </p>
               <div className='mt-8 flex flex-col sm:flex-row gap-4'>
                 <Link
                   href='/register/company'
                   className='inline-flex items-center justify-center rounded-lg bg-white text-green-700 font-semibold px-6 py-3 shadow hover:bg-emerald-50 transition'>
-                  Jetzt kostenlos starten
+                  Jetzt starten – erster Auftrag kostenlos
                 </Link>
                 <Link
                   href='/kontakt'
@@ -91,7 +93,8 @@ const page = async () => {
                 </Link>
               </div>
               <p className='mt-4 text-[12px] tracking-wide uppercase text-emerald-200 font-medium'>
-                Kostenlos registrieren – keine versteckten Gebühren
+                Kostenlose Registrierung • Erster Auftrag gratis • Danach faire
+                Lead-Gebühr ohne Abo
               </p>
             </div>
             <div className='relative'>
@@ -253,10 +256,11 @@ const page = async () => {
               title='Mehr Umsatz – ohne zusätzliche Fixkosten'
             />
             <p className='text-slate-600 leading-relaxed mb-5'>
-              Statt in ineffiziente Werbung oder Plattformen mit hoher Gebühr
+              Statt in ineffiziente Werbung oder teure Pauschalmodelle
               einzuzahlen, nutzen Sie eine Infrastruktur, die echten Mehrwert
               liefert: strukturierte Leads – planbarer Zufluss – bessere
-              Auslastung.
+              Auslastung. Sie zahlen erst für weitere Leads, nachdem Sie den
+              ersten Auftrag kostenlos gewonnen haben.
             </p>
             <ul className='space-y-2 text-sm text-slate-600'>
               <li className='flex gap-2'>
@@ -286,6 +290,57 @@ const page = async () => {
         </div>
       </section>
 
+      {/* PRICING EXPLAINER */}
+      <section className='bg-emerald-50 border-t border-emerald-100 py-20'>
+        <div className='container mx-auto px-4'>
+          <SectionHeading
+            center
+            kicker='Transparente Kosten'
+            title='Wie viel kostet JobSmith?'
+          />
+          <div className='max-w-4xl mx-auto grid md:grid-cols-3 gap-6 mb-10'>
+            <div className='p-6 rounded-xl bg-white shadow border border-emerald-100'>
+              <h3 className='font-semibold text-slate-800 mb-2 text-sm tracking-wide'>
+                1. Registrierung
+              </h3>
+              <p className='text-sm text-slate-600'>
+                Kostenloses Profil anlegen. Keine Grundgebühr. Keine
+                Laufzeitbindung.
+              </p>
+            </div>
+            <div className='p-6 rounded-xl bg-white shadow border border-emerald-100'>
+              <h3 className='font-semibold text-slate-800 mb-2 text-sm tracking-wide'>
+                2. Erster Auftrag
+              </h3>
+              <p className='text-sm text-slate-600'>
+                Ihr erster gewonnener Auftrag über die Plattform ist für Sie
+                komplett kostenlos.
+              </p>
+            </div>
+            <div className='p-6 rounded-xl bg-white shadow border border-emerald-100'>
+              <h3 className='font-semibold text-slate-800 mb-2 text-sm tracking-wide'>
+                3. Weitere Leads
+              </h3>
+              <p className='text-sm text-slate-600'>
+                Ab dem zweiten Auftrag zahlen Sie nur eine geringe, transparente
+                Lead-Gebühr – kein Abo, volle Kontrolle.
+              </p>
+            </div>
+          </div>
+          <div className='text-center'>
+            <Link
+              href='/register/company'
+              className='inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium shadow'>
+              Jetzt Profil erstellen
+            </Link>
+            <p className='mt-4 text-xs text-slate-500'>
+              Sie entscheiden für jeden Lead separat, ob Sie ihn erwerben. Keine
+              Verpflichtung, keine Mindestabnahme.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* FINAL CTA */}
       <section className='bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-24'>
         <div className='container mx-auto px-4 text-center'>
@@ -294,13 +349,14 @@ const page = async () => {
           </h2>
           <p className='text-slate-300 max-w-2xl mx-auto mb-10'>
             Erhalten Sie strukturierte Anfragen & steigern Sie Ihre Auslastung
-            nachhaltig. Ihr Profil ist in wenigen Minuten online.
+            nachhaltig. Erster Auftrag kostenlos – danach faire Lead-Preise. Ihr
+            Profil ist in wenigen Minuten online.
           </p>
           <div className='flex flex-col sm:flex-row gap-4 justify-center'>
             <Link
               href='/register/company'
               className='px-6 py-3 rounded-lg bg-green-600 hover:bg-green-500 text-white font-semibold shadow'>
-              Kostenlos starten
+              Jetzt starten
             </Link>
             <Link
               href='/kontakt'
