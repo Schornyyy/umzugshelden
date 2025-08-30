@@ -2,7 +2,7 @@
 
 import { database } from "@/config/firebase";
 import { CompanyType, parseDataToCompanyType } from "@/types/RegisterTypye";
-import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, startAfter, getCountFromServer } from "firebase/firestore";
 
 export interface CompaniesPageResult {
   companies: CompanyType[];
@@ -32,4 +32,16 @@ export async function getCompaniesPage(pageSize: number = 12, startAfterId?: str
     nextCursor: last ? last.id : null,
     hasMore: !!last && companies.length === pageSize
   };
+}
+
+// Gesamtanzahl aller Unternehmen (für Progress-Anzeigen beim sequentiellen Laden)
+export async function getCompaniesTotalCount(): Promise<number> {
+  const q = query(COL());
+  try {
+    const snap = await getCountFromServer(q); // Aggregation count
+    return snap.data().count || 0;
+  } catch (e) {
+    console.error("Fehler beim Laden der Gesamtanzahl der Unternehmen", e);
+    return 0;
+  }
 }

@@ -16,72 +16,71 @@ export async function generateMetadata({
   params: Promise<{ city: string }>;
 }) {
   const { city } = await params;
-  const companys = await getAllCompanysFromDatabaseByCity(city);
+  const trimmedCity = city.trim();
+  const companys = await getAllCompanysFromDatabaseByCity(trimmedCity);
+  const count = companys.length;
+  const topN = Math.min(count, 5);
 
-  if (companys.length === 0) {
+  if (count === 0) {
     return {
-      title: `Garten- und Landschaftsbau ${city} | Jetzt Auftrag erstellen - Landschaftshelden.io`,
-      description: `Suchen Sie Garten- und Landschaftsbauer in ${city}? Erstellen Sie kostenlos einen Auftrag und erhalten Sie bis zu 5 Angebote von qualifizierten Betrieben in ${city}.`,
+      title: `Gartenbauer ${trimmedCity} ► Jetzt 5 kostenlose Angebote erhalten`,
+      description: `Garten- & Landschaftsbauer in ${trimmedCity} finden: Jetzt kostenlosen Auftrag einstellen und bis zu 5 Angebote vergleichen – unverbindlich & schnell.`,
       keywords: [
-        `Garten Landschaftsbau ${city}`,
-        `GaLaBau ${city}`,
-        `Gartengestaltung ${city}`,
-        `Landschaftsgärtner ${city}`,
-        `Auftrag erstellen ${city}`,
+        `Gartenbauer ${trimmedCity}`,
+        `Garten Landschaftsbau ${trimmedCity}`,
+        `GaLaBau ${trimmedCity}`,
+        `Landschaftsgärtner ${trimmedCity}`,
+        `Gartengestaltung ${trimmedCity}`,
+        `Angebote Gartenbau ${trimmedCity}`,
         "Kostenlose Angebote",
         "Landschaftshelden",
       ],
       openGraph: {
-        title: `Garten- und Landschaftsbau ${city} | Kostenlose Angebote`,
-        description: `Finden Sie die besten Garten- und Landschaftsbauer in ${city}. Kostenlos Auftrag erstellen und bis zu 5 Angebote erhalten.`,
+        title: `Gartenbauer ${trimmedCity} – 5 kostenlose Angebote sichern`,
+        description: `Jetzt Auftrag für Garten- und Landschaftsbau in ${trimmedCity} erstellen und bis zu 5 Angebote qualifizierter Betriebe erhalten.`,
         type: "website",
         locale: "de_DE",
       },
       alternates: {
-        canonical: `https://landschaftshelden.io/stadt/${city}`,
+        canonical: `https://landschaftshelden.io/stadt/${encodeURIComponent(
+          trimmedCity
+        )}`,
       },
     };
   }
 
   return {
-    title: `TOP ${Math.min(
-      companys.length,
-      5
-    )} Garten- und Landschaftsbauer in ${city} | Kostenlose Angebote`,
-    description: `Die besten ${Math.min(
-      companys.length,
-      5
-    )} Garten- und Landschaftsbauer in ${city} auf Landschaftshelden.io. Jetzt kostenlosen Auftrag erstellen und bis zu 5 Angebote von geprüften Betrieben erhalten.`,
+    title: `${trimmedCity}: ${topN} Gartenbauer im Vergleich (0 € Aufwand, 5 Angebote)`,
+    description: `${topN} empfohlene Garten- & Landschaftsbauer in ${trimmedCity} ✔ Jetzt Projekt gratis einstellen & bis zu 5 Angebote vergleichen.`,
     keywords: [
-      `Garten Landschaftsbau ${city}`,
-      `GaLaBau ${city}`,
-      `Gartengestaltung ${city}`,
-      `Landschaftsgärtner ${city}`,
-      `Beste Galabau ${city}`,
-      "Kostenlose Angebote",
-      "Auftrag erstellen",
-      "Landschaftshelden",
+      `Gartenbauer ${trimmedCity}`,
+      `Garten Landschaftsbau ${trimmedCity}`,
+      `GaLaBau ${trimmedCity}`,
+      `Landschaftsgärtner ${trimmedCity}`,
+      `Gartenbau Angebote ${trimmedCity}`,
+      `Kosten Gartenbau ${trimmedCity}`,
     ],
     openGraph: {
-      title: `TOP ${Math.min(
-        companys.length,
-        5
-      )} Garten- und Landschaftsbauer in ${city}`,
-      description: `Vergleichen Sie die besten Galabau-Betriebe in ${city}. Kostenlos Auftrag erstellen und professionelle Angebote erhalten.`,
+      title: `${trimmedCity}: Gartenbauer Vergleich & Angebote`,
+      description: `Vergleichen Sie Garten- und Landschaftsbauer in ${trimmedCity}. Kostenlos Auftrag einstellen & mehrere Angebote erhalten.`,
       type: "website",
       locale: "de_DE",
     },
     alternates: {
-      canonical: `https://landschaftshelden.io/stadt/${city}`,
+      canonical: `https://landschaftshelden.io/stadt/${encodeURIComponent(
+        trimmedCity
+      )}`,
     },
   };
 }
 
 const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
   const { city } = await params;
+  const trimmedCity = city.trim();
+  const cityDisplay = trimmedCity; // could format further if needed
 
   try {
-    const allCompanys = await getAllCompanysFromDatabaseByCity(city);
+    const allCompanys = await getAllCompanysFromDatabaseByCity(trimmedCity);
     // Begrenze auf maximal 5 Unternehmen für bessere Conversion
     const companys = allCompanys.slice(0, 5);
 
@@ -91,12 +90,13 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
           {/* SEO Hero Section */}
           <div className='text-center mb-12'>
             <h1 className='text-4xl md:text-5xl font-bold mb-6'>
-              Garten- und Landschaftsbau in {city}
+              Garten- und Landschaftsbau in {cityDisplay}
             </h1>
             <p className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto'>
-              Suchen Sie professionelle Garten- und Landschaftsbauer in {city}?
-              Erstellen Sie jetzt kostenlos einen Auftrag und erhalten Sie bis
-              zu 5 Angebote von qualifizierten Betrieben aus Ihrer Region.
+              Suchen Sie professionelle Garten- und Landschaftsbauer in{" "}
+              {cityDisplay}? Erstellen Sie jetzt kostenlos einen Auftrag und
+              erhalten Sie bis zu 5 Angebote von qualifizierten Betrieben aus
+              Ihrer Region.
             </p>
 
             {/* Call-to-Action Button */}
@@ -112,14 +112,14 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
           {/* Service Grid */}
           <div className='mb-12'>
             <h2 className='text-2xl font-semibold mb-6 text-center'>
-              Garten- und Landschaftsbau Services in {city}
+              Garten- und Landschaftsbau Services in {cityDisplay}
             </h2>
             <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
               {getGalbauServices().map((service) => (
                 <Link
                   href={`/auftrag-erstellen?service=${encodeURIComponent(
                     service
-                  )}&city=${city}`}
+                  )}&city=${cityDisplay}`}
                   key={service}
                   className='bg-green-500 hover:bg-green-600 p-4 rounded-xl flex items-center justify-center transition-colors'>
                   <span className='text-white md:text-base font-semibold text-center text-sm'>
@@ -132,10 +132,10 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
 
           {/* Local SEO Content */}
           <div className='prose max-w-none'>
-            <h2>Professioneller Garten- und Landschaftsbau in {city}</h2>
+            <h2>Professioneller Garten- und Landschaftsbau in {cityDisplay}</h2>
             <p>
               Sie suchen einen zuverlässigen{" "}
-              <strong>Garten- und Landschaftsbauer in {city}</strong>?
+              <strong>Garten- und Landschaftsbauer in {cityDisplay}</strong>?
               Landschaftshelden.io verbindet Sie kostenlos mit den besten
               Galabau-Betrieben in Ihrer Region. Egal ob Gartengestaltung,
               Pflasterarbeiten oder Baumpflege – unsere Partner bieten
@@ -143,7 +143,8 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
             </p>
             <p>
               <strong>
-                Warum Landschaftshelden.io für Ihr Garten-Projekt in {city}?
+                Warum Landschaftshelden.io für Ihr Garten-Projekt in{" "}
+                {cityDisplay}?
               </strong>
             </p>
             <ul>
@@ -163,14 +164,24 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* SEO-optimized Hero Section */}
         <div className='text-center mb-12'>
           <h1 className='text-4xl md:text-5xl font-bold mb-4'>
-            TOP {companys.length} Garten- und Landschaftsbauer in {city}
+            {cityDisplay}: {companys.length} Gartenbauer im Vergleich (bis zu 5
+            Angebote)
           </h1>
           <p className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto'>
             Vergleichen Sie die besten{" "}
-            <strong>Garten- und Landschaftsbauer in {city}</strong>. Erstellen
-            Sie kostenlos einen Auftrag und erhalten Sie bis zu 5 professionelle
-            Angebote von geprüften Galabau-Betrieben aus Ihrer Region.
+            <strong>Garten- und Landschaftsbauer in {cityDisplay}</strong>.
+            Erstellen Sie kostenlos einen Auftrag und erhalten Sie bis zu 5
+            professionelle Angebote von geprüften Galabau-Betrieben aus Ihrer
+            Region.
           </p>
+          {/* Micro CTA early in content for higher conversion */}
+          <div className='mb-6'>
+            <Link
+              href='/auftrag-erstellen'
+              className='inline-block bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-md text-sm font-semibold shadow'>
+              Jetzt kostenloses Angebot sichern
+            </Link>
+          </div>
 
           {/* Primary CTA */}
           <div className='flex flex-col sm:flex-row gap-4 justify-center mb-8'>
@@ -190,7 +201,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* Service Categories */}
         <div className='mb-12'>
           <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Beliebte Garten- und Landschaftsbau Services in {city}
+            Beliebte Garten- und Landschaftsbau Services in {cityDisplay}
           </h2>
           <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'>
             {getGalbauServices()
@@ -199,7 +210,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
                 <Link
                   href={`/auftrag-erstellen?service=${encodeURIComponent(
                     service
-                  )}&city=${city}`}
+                  )}&city=${cityDisplay}`}
                   key={service}
                   className='bg-green-500 hover:bg-green-600 p-3 rounded-xl flex items-center justify-center transition-colors group'>
                   <span className='text-white text-sm md:text-base font-semibold text-center group-hover:scale-105 transition-transform'>
@@ -214,7 +225,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         <div className='mb-12'>
           <div className='flex items-center justify-between mb-6'>
             <h2 className='text-2xl font-semibold'>
-              Empfohlene Garten- und Landschaftsbauer in {city}
+              Empfohlene Garten- und Landschaftsbauer in {cityDisplay}
             </h2>
             {allCompanys.length > 5 && (
               <Link
@@ -239,8 +250,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
             <div className='text-center mt-8'>
               <div className='bg-gray-50 border rounded-lg p-6'>
                 <h3 className='text-lg font-semibold mb-2'>
-                  Weitere {allCompanys.length - 5} Garten- und Landschaftsbauer
-                  in {city}
+                  Weitere {allCompanys.length - 5} Gartenbauer in {cityDisplay}
                 </h3>
                 <p className='text-gray-600 mb-4'>
                   Verpassen Sie nicht die Chance auf das beste Angebot!
@@ -260,21 +270,25 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* Local SEO Content */}
         <div className='prose max-w-none mb-12'>
           <h2>
-            Professioneller Garten- und Landschaftsbau in {city} – Ihr Weg zum
-            Traumgarten
+            Professioneller Garten- und Landschaftsbau in {cityDisplay} – Ihr
+            Weg zum Traumgarten
           </h2>
           <p>
             Sie planen ein{" "}
-            <strong>Garten- und Landschaftsbau-Projekt in {city}</strong> und
-            suchen den richtigen Partner? Landschaftshelden.io macht es Ihnen
-            einfach: Mit nur einem Auftrag erreichen Sie mehrere qualifizierte
-            <strong> Galabau-Betriebe in {city}</strong> und können die besten
-            Angebote vergleichen.
+            <strong>Garten- und Landschaftsbau-Projekt in {cityDisplay}</strong>{" "}
+            und suchen den richtigen Partner? Landschaftshelden.io macht es
+            Ihnen einfach: Mit nur einem Auftrag erreichen Sie mehrere
+            qualifizierte
+            <strong> Galabau-Betriebe in {cityDisplay}</strong> und können die
+            besten Angebote vergleichen.
           </p>
 
           <h3>Warum sollten Sie mehrere Angebote einholen?</h3>
           <p>
-            Bei <strong>Garten- und Landschaftsbau-Projekten in {city}</strong>{" "}
+            Bei{" "}
+            <strong>
+              Garten- und Landschaftsbau-Projekten in {cityDisplay}
+            </strong>{" "}
             können die Preise stark variieren. Durch den Vergleich mehrerer
             Angebote sparen Sie nicht nur Geld, sondern finden auch den Betrieb,
             der am besten zu Ihren Vorstellungen passt.
@@ -301,16 +315,16 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
                 Projekt
               </li>
               <li>
-                ✅ <strong>Lokale Experten</strong> – Betriebe aus {city} und
-                Umgebung
+                ✅ <strong>Lokale Experten</strong> – Betriebe aus {cityDisplay}{" "}
+                und Umgebung
               </li>
             </ul>
           </div>
 
           <h3>Beliebte Garten- und Landschaftsbau-Services in {city}</h3>
           <p>
-            Unsere Partner-Betriebe in {city} bieten das komplette Spektrum des
-            Garten- und Landschaftsbaus: von der Gartenplanung über
+            Unsere Partner-Betriebe in {cityDisplay} bieten das komplette
+            Spektrum des Garten- und Landschaftsbaus: von der Gartenplanung über
             Pflasterarbeiten bis hin zur Baumpflege. Egal ob Privatgarten oder
             Gewerbeimmobilie – hier finden Sie den passenden Experten.
           </p>
@@ -319,7 +333,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* Call-to-Action Section */}
         <div className='bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-8 text-white text-center mb-12'>
           <h2 className='text-2xl md:text-3xl font-bold mb-4'>
-            Bereit für Ihr Garten-Projekt in {city}?
+            Bereit für Ihr Garten-Projekt in {cityDisplay}?
           </h2>
           <p className='text-xl mb-6 opacity-90'>
             Kostenlos · Unverbindlich · In 2 Minuten erledigt
@@ -334,27 +348,28 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* FAQ Section */}
         <div className='mb-12'>
           <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Häufige Fragen zu Garten- und Landschaftsbau in {city}
+            Häufige Fragen zu Garten- und Landschaftsbau in {cityDisplay}
           </h2>
           <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
             <AccordionItem value='item-1'>
               <AccordionTrigger>
-                Wie finde ich den besten Garten- und Landschaftsbauer in {city}?
+                Wie finde ich den besten Garten- und Landschaftsbauer in{" "}
+                {cityDisplay}?
               </AccordionTrigger>
               <AccordionContent>
                 <p>
                   Der beste Weg ist ein direkter Vergleich mehrerer Anbieter.
                   Mit Landschaftshelden.io können Sie kostenlos einen Auftrag
                   erstellen und erhalten bis zu 5 professionelle Angebote von
-                  geprüften Galabau-Betrieben aus {city} und Umgebung. So finden
-                  Sie garantiert das beste Preis-Leistungs-Verhältnis.
+                  geprüften Galabau-Betrieben aus {cityDisplay} und Umgebung. So
+                  finden Sie garantiert das beste Preis-Leistungs-Verhältnis.
                 </p>
               </AccordionContent>
             </AccordionItem>
 
             <AccordionItem value='item-2'>
               <AccordionTrigger>
-                Was kostet Garten- und Landschaftsbau in {city}?
+                Was kostet Garten- und Landschaftsbau in {cityDisplay}?
               </AccordionTrigger>
               <AccordionContent>
                 <p>
@@ -369,16 +384,16 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
 
             <AccordionItem value='item-3'>
               <AccordionTrigger>
-                Wie schnell erhalte ich Angebote von Galabau-Betrieben in {city}
-                ?
+                Wie schnell erhalte ich Angebote von Galabau-Betrieben in{" "}
+                {cityDisplay}?
               </AccordionTrigger>
               <AccordionContent>
                 <p>
                   Nach der Erstellung Ihres kostenlosen Auftrags werden
-                  qualifizierte Betriebe in {city} automatisch benachrichtigt.
-                  Die ersten Angebote erhalten Sie meist bereits innerhalb von
-                  24 Stunden. Unser System sorgt dafür, dass nur seriöse und
-                  verfügbare Betriebe kontaktiert werden.
+                  qualifizierte Betriebe in {cityDisplay} automatisch
+                  benachrichtigt. Die ersten Angebote erhalten Sie meist bereits
+                  innerhalb von 24 Stunden. Unser System sorgt dafür, dass nur
+                  seriöse und verfügbare Betriebe kontaktiert werden.
                 </p>
               </AccordionContent>
             </AccordionItem>
@@ -394,7 +409,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
                   sie auf Landschaftshelden.io gelistet werden. Wir prüfen
                   Gewerbeanmeldung, Versicherungsschutz und Referenzen. So
                   können Sie sicher sein, dass Sie nur mit seriösen
-                  Galabau-Experten aus {city} zu tun haben.
+                  Galabau-Experten aus {cityDisplay} zu tun haben.
                 </p>
               </AccordionContent>
             </AccordionItem>
@@ -404,7 +419,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* Final CTA */}
         <div className='text-center bg-gray-50 rounded-xl p-8'>
           <h2 className='text-2xl font-bold mb-4'>
-            Starten Sie jetzt Ihr Garten-Projekt in {city}
+            Starten Sie jetzt Ihr Garten-Projekt in {cityDisplay}
           </h2>
           <p className='text-gray-600 mb-6 max-w-2xl mx-auto'>
             Über 1.000 Kunden haben bereits erfolgreich ihren Traumgarten
@@ -418,7 +433,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
               🚀 Kostenlosen Auftrag erstellen
             </Link>
             <Link
-              href={`/unternehmen-finden?city=${city}`}
+              href={`/unternehmen-finden?city=${cityDisplay}`}
               className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors'>
               📋 Alle {allCompanys.length} Anbieter ansehen
             </Link>
@@ -428,18 +443,18 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
         {/* Service-spezifische Stadtseiten Links */}
         <div className='mt-16 border-t pt-12'>
           <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Spezialisierte Services in {city}
+            Spezialisierte Services in {cityDisplay}
           </h2>
           <p className='text-gray-600 text-center mb-8 max-w-3xl mx-auto'>
             Entdecken Sie unsere spezialisierten Seiten für einzelne Garten- und
-            Landschaftsbau-Services in {city}. Hier finden Sie gezielt Experten
-            für Ihren spezifischen Bedarf.
+            Landschaftsbau-Services in {cityDisplay}. Hier finden Sie gezielt
+            Experten für Ihren spezifischen Bedarf.
           </p>
 
           <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
             {getGalbauServices().map((service) => (
               <Link
-                href={`/stadt/${city}/${service
+                href={`/stadt/${cityDisplay}/${service
                   .toLowerCase()
                   .replace(/\s+/g, "-")
                   .replace(/[äöüß]/g, (match) => {
@@ -456,7 +471,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
                 <div className='flex items-center justify-between'>
                   <div>
                     <h3 className='font-semibold text-gray-900 group-hover:text-green-600 transition-colors'>
-                      {service} in {city}
+                      {service} in {cityDisplay}
                     </h3>
                     <p className='text-sm text-gray-600 mt-1'>
                       Spezialisierte Anbieter für {service}
@@ -473,7 +488,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
           <div className='text-center mt-8'>
             <p className='text-gray-600 text-sm'>
               Diese Seiten bieten Ihnen gezielt Experten für spezifische Garten-
-              und Landschaftsbau-Services in {city}
+              und Landschaftsbau-Services in {cityDisplay}
             </p>
           </div>
         </div>

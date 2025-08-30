@@ -597,7 +597,10 @@ const PriceCalculator: React.FC = () => {
                   Schätzung: <strong>{numberFormat(calc.low)}</strong> –{" "}
                   <strong>{numberFormat(calc.high)}</strong> (Bandbreite)
                 </div>
-                <div className='text-[11px] text-slate-500'>Alle internen Kalkulationsanteile enthalten • Regionfaktor {state.regionFactor.toFixed(2)}</div>
+                <div className='text-[11px] text-slate-500'>
+                  Alle internen Kalkulationsanteile enthalten • Regionfaktor{" "}
+                  {state.regionFactor.toFixed(2)}
+                </div>
               </div>
             </div>
           );
