@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/accordion";
 import { getAllCompanysFromDatabaseByCity } from "@/actions/companyActions";
 import { getGalbauServices } from "@/statics/Lists";
+import { getCityContent, buildFAQSchema } from "@/lib/cityContent";
 import SearchBarResults from "../../unternehmen-finden/_components/SearchbarResults";
 
 export async function generateMetadata({
@@ -16,7 +17,15 @@ export async function generateMetadata({
   params: Promise<{ city: string }>;
 }) {
   const { city } = await params;
-  const trimmedCity = city.trim();
+  // Sicherstellen, dass ggf. doppelt/roh encodete Städte (m%C3%BCnchen) sauber angezeigt werden
+  const trimmedCityRaw = city.trim();
+  let decoded = trimmedCityRaw;
+  try {
+    decoded = decodeURIComponent(trimmedCityRaw);
+  } catch {
+    // ignore malformed URI sequences
+  }
+  const trimmedCity = decoded;
   const companys = await getAllCompanysFromDatabaseByCity(trimmedCity);
   const count = companys.length;
   const topN = Math.min(count, 5);
@@ -47,7 +56,7 @@ export async function generateMetadata({
         )}`,
       },
     };
-  }
+  } 
 
   return {
     title: `${trimmedCity}: ${topN} Gartenbauer im Vergleich (0 € Aufwand, 5 Angebote)`,
@@ -76,7 +85,14 @@ export async function generateMetadata({
 
 const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
   const { city } = await params;
-  const trimmedCity = city.trim();
+  // Display-/DB-Version decodieren falls Param encodiert übergeben wurde
+  let raw = city.trim();
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {
+    /* ignore */
+  }
+  const trimmedCity = raw;
   const cityDisplay = trimmedCity; // could format further if needed
 
   try {
@@ -84,19 +100,21 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
     // Begrenze auf maximal 5 Unternehmen für bessere Conversion
     const companys = allCompanys.slice(0, 5);
 
+    const { headline, faq, costLow, costHigh } = getCityContent(cityDisplay);
+
     if (allCompanys.length === 0) {
       return (
         <div className='container mx-auto py-24 px-4'>
           {/* SEO Hero Section */}
           <div className='text-center mb-12'>
-            <h1 className='text-4xl md:text-5xl font-bold mb-6'>
-              Garten- und Landschaftsbau in {cityDisplay}
-            </h1>
+            <h1 className='text-4xl md:text-5xl font-bold mb-6'>{headline}</h1>
             <p className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto'>
               Suchen Sie professionelle Garten- und Landschaftsbauer in{" "}
-              {cityDisplay}? Erstellen Sie jetzt kostenlos einen Auftrag und
-              erhalten Sie bis zu 5 Angebote von qualifizierten Betrieben aus
-              Ihrer Region.
+              {cityDisplay}? Holen Sie jetzt mehrere Angebote ein – viele
+              Projekte liegen typischerweise zwischen{" "}
+              {costLow.toLocaleString("de-DE")} € und{" "}
+              {costHigh.toLocaleString("de-DE")} € abhängig von Umfang &
+              Material.
             </p>
 
             {/* Call-to-Action Button */}
@@ -155,6 +173,29 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
               <li>✅ Transparente Preisvergleiche</li>
             </ul>
           </div>
+
+          {/* Rotierendes FAQ auch bei 0 Unternehmen */}
+          <div className='mt-16'>
+            <h2 className='text-2xl font-semibold mb-6 text-center'>
+              Häufige Fragen zu Garten- & Landschaftsbau in {cityDisplay}
+            </h2>
+            <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
+              {faq.map((item, i) => (
+                <AccordionItem key={i} value={`item-${i}`}>
+                  <AccordionTrigger>{item.question}</AccordionTrigger>
+                  <AccordionContent>
+                    <p>{item.answer}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+            <script
+              type='application/ld+json'
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify(buildFAQSchema(faq)),
+              }}
+            />
+          </div>
         </div>
       );
     }
@@ -163,16 +204,17 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
       <div className='max-w-7xl mx-auto py-12 px-4'>
         {/* SEO-optimized Hero Section */}
         <div className='text-center mb-12'>
-          <h1 className='text-4xl md:text-5xl font-bold mb-4'>
-            {cityDisplay}: {companys.length} Gartenbauer im Vergleich (bis zu 5
-            Angebote)
-          </h1>
+          <h1 className='text-4xl md:text-5xl font-bold mb-4'>{headline}</h1>
+          <p className='text-sm text-gray-500 mb-2'>
+            {companys.length} aktive Betriebe gefunden – jetzt vergleichen
+          </p>
           <p className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto'>
-            Vergleichen Sie die besten{" "}
-            <strong>Garten- und Landschaftsbauer in {cityDisplay}</strong>.
-            Erstellen Sie kostenlos einen Auftrag und erhalten Sie bis zu 5
-            professionelle Angebote von geprüften Galabau-Betrieben aus Ihrer
-            Region.
+            Vergleichen Sie jetzt qualifizierte{" "}
+            <strong>Garten- & Landschaftsbauer in {cityDisplay}</strong>.
+            Typische Projektbereiche starten bei ca.{" "}
+            {costLow.toLocaleString("de-DE")} € – umfangreichere Umgestaltungen
+            erreichen {costHigh.toLocaleString("de-DE")} € oder mehr. Mehrere
+            Angebote schaffen Preisklarheit.
           </p>
           {/* Micro CTA early in content for higher conversion */}
           <div className='mb-6'>
@@ -181,43 +223,6 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
               className='inline-block bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-md text-sm font-semibold shadow'>
               Jetzt kostenloses Angebot sichern
             </Link>
-          </div>
-
-          {/* Primary CTA */}
-          <div className='flex flex-col sm:flex-row gap-4 justify-center mb-8'>
-            <Link
-              href='/auftrag-erstellen'
-              className='bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg transition-colors inline-flex items-center justify-center'>
-              🚀 Kostenlosen Auftrag erstellen
-            </Link>
-            <Link
-              href='/unternehmen-finden'
-              className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors inline-flex items-center justify-center'>
-              📋 Alle Anbieter vergleichen
-            </Link>
-          </div>
-        </div>
-
-        {/* Service Categories */}
-        <div className='mb-12'>
-          <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Beliebte Garten- und Landschaftsbau Services in {cityDisplay}
-          </h2>
-          <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3'>
-            {getGalbauServices()
-              .slice(0, 8)
-              .map((service) => (
-                <Link
-                  href={`/auftrag-erstellen?service=${encodeURIComponent(
-                    service
-                  )}&city=${cityDisplay}`}
-                  key={service}
-                  className='bg-green-500 hover:bg-green-600 p-3 rounded-xl flex items-center justify-center transition-colors group'>
-                  <span className='text-white text-sm md:text-base font-semibold text-center group-hover:scale-105 transition-transform'>
-                    {service}
-                  </span>
-                </Link>
-              ))}
           </div>
         </div>
 
@@ -321,7 +326,7 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
             </ul>
           </div>
 
-          <h3>Beliebte Garten- und Landschaftsbau-Services in {city}</h3>
+          <h3>Beliebte Garten- und Landschaftsbau-Services in {cityDisplay}</h3>
           <p>
             Unsere Partner-Betriebe in {cityDisplay} bieten das komplette
             Spektrum des Garten- und Landschaftsbaus: von der Gartenplanung über
@@ -345,75 +350,27 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
           </Link>
         </div>
 
-        {/* FAQ Section */}
+        {/* FAQ Section (rotierend) */}
         <div className='mb-12'>
           <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Häufige Fragen zu Garten- und Landschaftsbau in {cityDisplay}
+            Häufige Fragen zu Garten- & Landschaftsbau in {cityDisplay}
           </h2>
           <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
-            <AccordionItem value='item-1'>
-              <AccordionTrigger>
-                Wie finde ich den besten Garten- und Landschaftsbauer in{" "}
-                {cityDisplay}?
-              </AccordionTrigger>
-              <AccordionContent>
-                <p>
-                  Der beste Weg ist ein direkter Vergleich mehrerer Anbieter.
-                  Mit Landschaftshelden.io können Sie kostenlos einen Auftrag
-                  erstellen und erhalten bis zu 5 professionelle Angebote von
-                  geprüften Galabau-Betrieben aus {cityDisplay} und Umgebung. So
-                  finden Sie garantiert das beste Preis-Leistungs-Verhältnis.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value='item-2'>
-              <AccordionTrigger>
-                Was kostet Garten- und Landschaftsbau in {cityDisplay}?
-              </AccordionTrigger>
-              <AccordionContent>
-                <p>
-                  Die Kosten variieren je nach Projektumfang und gewählter
-                  Dienstleistung. Gartenplanung, Rasenpflege, Pflasterarbeiten
-                  und Baumfällung haben unterschiedliche Preisstrukturen. Durch
-                  den Vergleich mehrerer Angebote erhalten Sie transparente
-                  Preise und können bis zu 30% sparen.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value='item-3'>
-              <AccordionTrigger>
-                Wie schnell erhalte ich Angebote von Galabau-Betrieben in{" "}
-                {cityDisplay}?
-              </AccordionTrigger>
-              <AccordionContent>
-                <p>
-                  Nach der Erstellung Ihres kostenlosen Auftrags werden
-                  qualifizierte Betriebe in {cityDisplay} automatisch
-                  benachrichtigt. Die ersten Angebote erhalten Sie meist bereits
-                  innerhalb von 24 Stunden. Unser System sorgt dafür, dass nur
-                  seriöse und verfügbare Betriebe kontaktiert werden.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
-
-            <AccordionItem value='item-4'>
-              <AccordionTrigger>
-                Sind alle Garten- und Landschaftsbauer auf der Plattform
-                geprüft?
-              </AccordionTrigger>
-              <AccordionContent>
-                <p>
-                  Ja, alle Betriebe durchlaufen einen Qualifikationscheck bevor
-                  sie auf Landschaftshelden.io gelistet werden. Wir prüfen
-                  Gewerbeanmeldung, Versicherungsschutz und Referenzen. So
-                  können Sie sicher sein, dass Sie nur mit seriösen
-                  Galabau-Experten aus {cityDisplay} zu tun haben.
-                </p>
-              </AccordionContent>
-            </AccordionItem>
+            {faq.map((item, i) => (
+              <AccordionItem key={i} value={`it-${i}`}>
+                <AccordionTrigger>{item.question}</AccordionTrigger>
+                <AccordionContent>
+                  <p>{item.answer}</p>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
           </Accordion>
+          <script
+            type='application/ld+json'
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(buildFAQSchema(faq)),
+            }}
+          />
         </div>
 
         {/* Final CTA */}
