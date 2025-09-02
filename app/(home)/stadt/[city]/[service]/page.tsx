@@ -41,7 +41,7 @@ export async function generateMetadata({
       locale: "de_DE",
     },
     alternates: {
-      canonical: `https://landschaftshelden.io/stadt/${city}/${service}`,
+      canonical: `https://www.landschaftshelden.io/stadt/${city}/${service}`,
     },
   };
 }

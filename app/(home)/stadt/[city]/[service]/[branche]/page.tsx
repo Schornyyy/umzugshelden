@@ -39,14 +39,14 @@ export async function generateMetadata({
       `Landschaftsgärtner ${city}`,
     ],
     alternates: {
-      canonical: `https://landschaftshelden.io/stadt/${city}/${service}/${branche}`,
+      canonical: `https://www.landschaftshelden.io/stadt/${city}/${service}/${branche}`,
     },
     openGraph: {
       title: `TOP ${capitalizedService} in ${city} für ${capitalizedBranch}`,
       description: `Finden Sie spezialisierte ${capitalizedService}-Anbieter in ${city} für ${capitalizedBranch}. Kostenlos Auftrag erstellen und professionelle Angebote erhalten.`,
       type: "website",
       locale: "de_DE",
-      url: `https://landschaftshelden.io/stadt/${city}/${service}/${branche}`,
+      url: `https://www.landschaftshelden.io/stadt/${city}/${service}/${branche}`,
     },
     twitter: {
       card: "summary_large_image",

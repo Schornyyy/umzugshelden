@@ -23,10 +23,10 @@ export const metadata: Metadata = {
       "Qualifizierte Galabau-Betriebe in Ihrer Stadt finden. Kostenlose Angebote von geprüften Garten- und Landschaftsbauern.",
     type: "website",
     locale: "de_DE",
-    url: "https://landschaftshelden.io/stadt",
+    url: "https://www.landschaftshelden.io/stadt",
   },
   alternates: {
-    canonical: "https://landschaftshelden.io/stadt",
+    canonical: "https://www.landschaftshelden.io/stadt",
   },
   robots: {
     index: true,
