@@ -44,6 +44,10 @@ const data = {
           title: "Partner",
           url: "/partners",
         },
+        {
+          title: "Statistiken",
+          url: "/statistiken",
+        },
       ],
     },
   ],

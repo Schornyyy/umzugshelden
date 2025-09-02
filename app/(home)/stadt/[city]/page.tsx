@@ -56,7 +56,7 @@ export async function generateMetadata({
         )}`,
       },
     };
-  } 
+  }
 
   return {
     title: `${trimmedCity}: ${topN} Gartenbauer im Vergleich (0 € Aufwand, 5 Angebote)`,
