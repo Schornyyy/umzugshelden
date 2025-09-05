@@ -1,24 +1,33 @@
-import type { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
+import { cities, getGalbauServices } from '@/statics/Lists';
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const sitemapCount = 24 // Anzahl der dynamisch generierten Sitemaps
-  const urls = [
-    "blog",
-    "companycity",
-    "companycityservice",
-    "companies",
-    "page"
-  ]
+  // Existing branch/service/city mega sitemap chunks
+  const branchServiceCityChunkCount = 24; // keep existing assumption
 
-  const dynamicSitemaps = Array.from({ length: sitemapCount }, (_, i) => ({
+  // New service subpage (angebot, preise, beauftragen, firma-finden) chunks
+  const SUBPAGES = ['angebot','preise','beauftragen','firma-finden'];
+  const totalServiceSubUrls = cities.length * getGalbauServices().length * SUBPAGES.length;
+  const SERVICE_SUB_CHUNK_SIZE = 45000;
+  const serviceSubChunkCount = Math.ceil(totalServiceSubUrls / SERVICE_SUB_CHUNK_SIZE);
+
+  const named = [ 'blog','companycity','companycityservice','companies','page' ];
+
+  const branchServiceCityDynamic = Array.from({ length: branchServiceCityChunkCount }, (_, i) => ({
     url: `https://www.landschaftshelden.io/sitemaps/sitemap/${i}.xml`,
     lastModified: new Date(),
-  }))
+  }));
 
-  const namedSitemaps = urls.map((name) => ({
-    url: `https://www.landschaftshelden.io/sitemaps/${name}/sitemap.xml`,
+  const serviceSubDynamic = Array.from({ length: serviceSubChunkCount }, (_, i) => ({
+    url: `https://www.landschaftshelden.io/sitemaps/cityservicesubpages/${i}.xml`,
     lastModified: new Date(),
-  }))
+  }));
 
-  return [...dynamicSitemaps, ...namedSitemaps]
+  const namedList = named.map(n => ({
+    url: `https://www.landschaftshelden.io/sitemaps/${n}/sitemap.xml`,
+    lastModified: new Date(),
+  }));
+
+  return [...branchServiceCityDynamic, ...serviceSubDynamic, ...namedList];
 }
+
