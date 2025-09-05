@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import ContractMultiStepForm from "@/components/ContractMultiStepForm";
 
 export default function AuftragErstellenPage() {
@@ -16,7 +16,14 @@ export default function AuftragErstellenPage() {
             kostenlos & unverbindlich.
           </p>
         </header>
-        <ContractMultiStepForm variant='full' showHeader={true} />
+        <Suspense
+          fallback={
+            <div className='text-center py-10'>
+              <span className='text-gray-400'>Formular wird geladen…</span>
+            </div>
+          }>
+          <ContractMultiStepForm variant='full' showHeader={true} />
+        </Suspense>
       </div>
     </div>
   );
