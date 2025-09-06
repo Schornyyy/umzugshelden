@@ -86,8 +86,8 @@ const ServiceSearchBar: React.FC<ServiceSearchBarProps> = ({
   };
 
   return (
-    <div className={cn("flex w-full max-w-4xl gap-2", className)}>
-      <div className='flex-1 relative'>
+    <div className={cn("flex w-full max-w-4xl gap-2 flex-wrap md:flex-nowrap", className)}>
+      <div className='flex-1 min-w-0 relative'>
         {inputMode === "select" ? (
           <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
@@ -161,14 +161,14 @@ const ServiceSearchBar: React.FC<ServiceSearchBarProps> = ({
         <Button
           variant='outline'
           onClick={handleClearService}
-          className='h-12 px-4'>
+          className='h-12 px-4 w-full md:w-auto'>
           Zurücksetzen
         </Button>
       )}
 
       <Button
         onClick={handleSearch}
-        className='h-12 px-6 bg-primary hover:bg-primary/90'
+        className='h-12 px-6 bg-primary hover:bg-primary/90 w-full md:w-auto'
         disabled={!searchQuery.trim()}>
         <Search className='h-4 w-4 mr-2' />
         Suchen

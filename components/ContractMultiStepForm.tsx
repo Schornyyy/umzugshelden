@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,26 +78,35 @@ export default function ContractMultiStepForm({
     contact: { email: "", phone: 0, firstName: "", lastName: "" },
   });
 
-  const services = getAllServices();
-  const contractSizes = getAllContractSize();
-  const gardenLocations = getAllGardenLocations();
-  const projectBegins = getAllProjectBegins();
+  // Stabilize option lists to prevent dependency churn
+  const services = useMemo(() => getAllServices(), []);
+  const contractSizes = useMemo(() => getAllContractSize(), []);
+  const gardenLocations = useMemo(() => getAllGardenLocations(), []);
+  const projectBegins = useMemo(() => getAllProjectBegins(), []);
 
-  // Pre-Fill Logic
+  // Pre-Fill Logic (run once on mount; set only if different)
+  const initializedRef = useRef(false);
   useEffect(() => {
-    const serviceParam = prefilledService || searchParams.get("service");
-    if (serviceParam && services.includes(serviceParam as Service)) {
-      setFormData((prev) => ({ ...prev, type: serviceParam as Service }));
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+    let target: Service | undefined;
+    const direct = prefilledService || searchParams.get("service");
+    if (direct && services.includes(direct as Service)) {
+      target = direct as Service;
     } else {
       const searchParam = searchParams.get("search");
       if (searchParam) {
         const m = services.find((s) =>
           s.toLowerCase().includes(searchParam.toLowerCase())
         );
-        if (m) setFormData((prev) => ({ ...prev, type: m }));
+        if (m) target = m as Service;
       }
     }
-  }, [searchParams, prefilledService, services]);
+    if (target && formData.type !== target) {
+      setFormData((prev) => ({ ...prev, type: target as Service }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateFormData = (field: keyof Contract, value: unknown) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
