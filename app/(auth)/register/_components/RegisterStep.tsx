@@ -10,8 +10,9 @@ import {
   createCompanyInDatabase,
   deleteCompanyFromDatabase,
   findCompanyByEmail,
+  findCompanyByOwnerId,
 } from "@/actions/companyActions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { addUserToBrevoList } from "@/actions/userActions";
 import { createAccountInDatabase } from "@/actions/AccountActions";
 import { v4 as uuid } from "uuid";
@@ -41,6 +42,9 @@ const RegisterStep = () => {
     resolver: zodResolver(schema),
   });
   const navigate = useRouter();
+  const searchParams = useSearchParams();
+  const firstContract = searchParams.get("firstContract");
+  const prefillEmail = searchParams.get("prefillEmail");
 
   const { updateStep, data, updateData } = useRegisterData();
   const [loading, setLoading] = useState<boolean>(false);
@@ -90,7 +94,8 @@ const RegisterStep = () => {
       const d: CompanyType = {
         ...data!,
         email: submitData.email,
-        public: true,
+        // Bei Auto-Leads (firstContract vorhanden) ist das Profil initial privat
+        public: firstContract ? false : true,
         type: "company",
         ownerid: randomUUID,
       };
@@ -103,10 +108,23 @@ const RegisterStep = () => {
 
       const foundComp = await findCompanyByEmail(submitData.email);
       if (foundComp) {
+        // Falls ein importierter Auto-Datensatz existiert, übernehme sinnvolle Defaults
+        if (foundComp.automatic) {
+          d.automatic = true;
+          d.city = d.city || foundComp.city;
+          d.zip = d.zip || foundComp.zip;
+          d.latitude = d.latitude || foundComp.latitude;
+          d.longitude = d.longitude || foundComp.longitude;
+          d.services =
+            d.services && d.services.length > 0
+              ? d.services
+              : foundComp.services;
+        }
         await deleteCompanyFromDatabase(foundComp.id!);
       }
 
       await createCompanyInDatabase(d).then(async () => {
+        // Firebase auth registriert und loggt direkt ein
         await createUserWithEmailAndPassword(
           auth,
           submitData.email,
@@ -115,7 +133,14 @@ const RegisterStep = () => {
         sendEmail(data!.companyName!, submitData.email);
         setLoading(false);
         addUserToBrevoList(d.email, 4, d.companyName!);
-        navigate.push("/login");
+
+        // Nach erfolgreicher Registrierung: direkt zur Firmenübersicht (Contracts)
+        const created = await findCompanyByOwnerId(randomUUID);
+        if (created?.id) {
+          navigate.push(`/company/${created.id}/contracts`);
+        } else {
+          navigate.push("/login");
+        }
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,6 +182,7 @@ const RegisterStep = () => {
           <input
             type='email'
             id='email'
+            defaultValue={prefillEmail ?? ""}
             {...register("email")}
             className='border p-2 rounded'
           />

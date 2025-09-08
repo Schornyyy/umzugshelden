@@ -163,7 +163,7 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
 
     // Erstelle Replacements für das Template
-  const trackingBase = process.env.NEXT_PUBLIC_URL || '';
+  const trackingBase = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || '';
   // Standard: Login / Dashboard Link
   const baseTarget = `${trackingBase}/login`;
   const trackedLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(baseTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
@@ -191,8 +191,9 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
     if (company.automatic) {
       templatePath = 'AutoProfileInviteEmail.html';
       subject = `🚀 Gratis erster Auftrag für Sie – ${contract.type}${contract.zip ? ' (' + contract.zip + ')' : ''}`;
-      const registrationTarget = `${trackingBase}/register?firstContract=${encodeURIComponent(String(contractId))}`;
-      const trackedRegistrationLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(registrationTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+      // Neuer Landing-Link für automatische Unternehmen mit Lead-Vorschau
+      const landingTarget = `${trackingBase}/fuer-unternehmen/auftrag/${encodeURIComponent(String(contractId))}${company.email ? `?companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+      const trackedRegistrationLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(landingTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
       replacementsExtended['trackedRegistrationLink'] = trackedRegistrationLink;
     }
 

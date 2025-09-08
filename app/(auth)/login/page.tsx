@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -38,6 +39,10 @@ const Login: React.FC = () => {
   } = useForm<LoginFormInputs>({
     resolver: zodResolver(loginSchema),
   });
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const next = searchParams.get("next");
+  const prefillEmail = searchParams.get("prefillEmail") || undefined;
 
   const createAccount = async (email: string) => {
     const account: Account = {
@@ -84,7 +89,16 @@ const Login: React.FC = () => {
                   }
                 });
               } else {
-                navigateUser(res.type, res.id!);
+                // Falls eine Next-URL gesetzt wurde, hat diese Priorität
+                if (next) {
+                  if (next === "/company/contracts") {
+                    router.push(`/company/${res.id}/contracts`);
+                  } else {
+                    router.push(next);
+                  }
+                } else {
+                  navigateUser(res.type, res.id!);
+                }
               }
             });
           }
@@ -108,6 +122,7 @@ const Login: React.FC = () => {
           <label className='block text-gray-700 mb-1'>E-Mail</label>
           <input
             type='email'
+            defaultValue={prefillEmail}
             {...register("email")}
             className={`w-full px-3 py-2 border rounded ${
               errors.email ? "border-red-500" : "border-gray-300"

@@ -6,7 +6,7 @@ import { sendCustomEmail } from "@/actions/emailActions"; // Importiere deine se
 // Hilfsfunktion für POST-Methode
 export async function POST(req: Request) {
   try {
-    const { to, subject, replacements, templatePath } = await req.json();
+  const { to, subject, replacements, templatePath, tracking } = await req.json();
 
     if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
       throw new Error('Ungültige oder fehlende E-Mail-Adresse.');
@@ -17,6 +17,7 @@ export async function POST(req: Request) {
       subject,
       replacements,
       templatePath,
+      tracking,
     });
 
     if (result.success) {

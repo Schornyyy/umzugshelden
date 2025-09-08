@@ -1,4 +1,5 @@
 import React from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,6 +30,8 @@ const CompanyRegister: React.FC = () => {
   } = useForm<CompanyFormData>({
     resolver: zodResolver(companySchema),
   });
+  const searchParams = useSearchParams();
+  const prefillEmail = searchParams.get("prefillEmail") || undefined;
 
   const { updateStep, data, updateData } = useRegisterData();
 
@@ -117,6 +120,7 @@ const CompanyRegister: React.FC = () => {
             <label className='block font-medium'>Unternehmens-E-Mail</label>
             <input
               type='email'
+              defaultValue={prefillEmail}
               {...register("companyEmail")}
               className='w-full p-2 border rounded'
             />

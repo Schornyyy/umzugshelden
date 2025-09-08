@@ -55,15 +55,37 @@ export async function sendCustomEmail({
     // Platzhalter ersetzen
     let emailContentHtml = replaceTemplatePlaceholders(htmlTemplate, replacements);
 
-    // Tracking-Pixel für Öffnungen anhängen
+    // Tracking-Pixel für Öffnungen anhängen + Links für Klick-Tracking umschreiben
     if (tracking?.contractId) {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
-      const pixelUrl = `${baseUrl}/api/email/track/open?contractId=${encodeURIComponent(tracking.contractId)}${tracking.companyEmail ? `&companyEmail=${encodeURIComponent(tracking.companyEmail)}` : ''}`;
-      // Vor </body> einfügen, sonst ans Ende
-      if (emailContentHtml.includes('</body>')) {
-        emailContentHtml = emailContentHtml.replace('</body>', `<img src="${pixelUrl}" alt="" width="1" height="1" style="display:none;" /></body>`);
-      } else {
-        emailContentHtml += `<img src="${pixelUrl}" alt="" width="1" height="1" style="display:none;" />`;
+      const baseUrl = (
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '')
+      ).replace(/\/$/, '');
+
+      if (baseUrl) {
+        const urlParams = `contractId=${encodeURIComponent(tracking.contractId)}${tracking.companyEmail ? `&companyEmail=${encodeURIComponent(tracking.companyEmail)}` : ''}`;
+        const pixelUrl = `${baseUrl}/api/email/track/open?${urlParams}`;
+        // Vor </body> einfügen, sonst ans Ende
+        if (emailContentHtml.includes('</body>')) {
+          emailContentHtml = emailContentHtml.replace('</body>', `<img src="${pixelUrl}" alt="" width="1" height="1" style="display:none;" /></body>`);
+        } else {
+          emailContentHtml += `<img src="${pixelUrl}" alt="" width="1" height="1" style="display:none;" />`;
+        }
+
+        // Klick-Tracking: hrefs auf Tracking-Redirect umlenken (nur http/https)
+        emailContentHtml = emailContentHtml.replace(/href=\"(.*?)\"/gi, (match, p1) => {
+          const href = p1 as string;
+          // nicht tracken: mailto:, tel:, #, bereits track-Link
+          if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:') || href.includes('/api/email/track/click')) {
+            return match;
+          }
+          if (!/^https?:\/\//i.test(href)) {
+            return match; // relative Links unverändert lassen (optional könnte man absolutieren)
+          }
+          const tracked = `${baseUrl}/api/email/track/click?${urlParams}&target=${encodeURIComponent(href)}`;
+          return `href="${tracked}"`;
+        });
       }
     }
 

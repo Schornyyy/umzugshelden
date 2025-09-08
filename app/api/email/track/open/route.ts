@@ -27,10 +27,10 @@ export async function GET(req: NextRequest) {
       const statsRef = doc(database, 'contracts', contractId, 'metrics', 'stats');
       const statsSnap = await getDoc(statsRef);
       if (!statsSnap.exists()) {
-        await setDoc(statsRef, { views: 0, purchaseAttempts: 0, emailClicks: 0, notifiedCount: 0 }, { merge: true });
+        await setDoc(statsRef, { views: 0, purchaseAttempts: 0, emailClicks: 0, emailOpens: 0, notifiedCount: 0 }, { merge: true });
       }
-      // We might want a separate opens counter; reuse emailClicks or add later.
-      await updateDoc(statsRef, { emailClicks: increment(0) });
+      // Increment dedicated opens counter
+      await updateDoc(statsRef, { emailOpens: increment(1) });
     }
 
     return new NextResponse(GIF_BUFFER, {
