@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { CookieIcon } from "lucide-react";
 import AnalyticsCookies from "./cookies/AnalyticsCookie";
 import ClarityCookie from "./cookies/ClarityCookie";
+import GoogleAnalyticsCookie from "./cookies/GoogleAnalyticsCookie";
 
 const CookieSettings: React.FC = () => {
   const resetConsent = () => {
@@ -17,6 +18,7 @@ const CookieSettings: React.FC = () => {
     <>
       <AnalyticsCookies />
   <ClarityCookie />
+  <GoogleAnalyticsCookie />
       <motion.div
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
