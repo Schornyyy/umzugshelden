@@ -7,6 +7,7 @@ import { CookieIcon } from "lucide-react";
 import AnalyticsCookies from "./cookies/AnalyticsCookie";
 import ClarityCookie from "./cookies/ClarityCookie";
 import GoogleAnalyticsCookie from "./cookies/GoogleAnalyticsCookie";
+import { Suspense } from "react";
 
 const CookieSettings: React.FC = () => {
   const resetConsent = () => {
@@ -17,8 +18,10 @@ const CookieSettings: React.FC = () => {
   return (
     <>
       <AnalyticsCookies />
-  <ClarityCookie />
-  <GoogleAnalyticsCookie />
+      <ClarityCookie />
+      <Suspense fallback={null}>
+        <GoogleAnalyticsCookie />
+      </Suspense>
       <motion.div
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
