@@ -33,6 +33,11 @@ const CookieBanner: React.FC = () => {
       expires: 365,
     });
     setShowBanner(false);
+    try {
+      window.dispatchEvent(
+        new CustomEvent("cookieConsentUpdated", { detail: { ...consent } })
+      );
+    } catch {}
   };
 
   const handleToggle = (category: keyof CookieConsent) => {
