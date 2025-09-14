@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { PartnerType } from "@/types/PartnerType";
 import { PartnerEvent } from "@/types/PartnerEvent";
+import { z } from "zod";
 
 export interface PartnerProfile {
   ownerid: string; // Account ID
@@ -31,6 +32,17 @@ export interface PartnerProfile {
 }
 
 const PARTNERS_COLLECTION = "partners";
+
+function omitUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Partial<T> = {};
+  (Object.keys(obj) as Array<keyof T>).forEach((k) => {
+    const v = obj[k];
+    if (v !== undefined) {
+      out[k] = v as T[keyof T];
+    }
+  });
+  return out;
+}
 
 export async function createPartnerProfile(profile: PartnerProfile): Promise<boolean> {
   const col = collection(database, PARTNERS_COLLECTION);
@@ -56,7 +68,7 @@ export async function getPartnerById(id: string): Promise<(PartnerProfile & { id
 
 export async function updatePartnerProfile(id: string, patch: Partial<PartnerProfile>): Promise<boolean> {
   const ref = doc(database, PARTNERS_COLLECTION, id);
-  await updateDoc(ref, { ...patch, updatedAt: Date.now() });
+  await updateDoc(ref, omitUndefined({ ...patch, updatedAt: Date.now() }));
   return true;
 }
 
@@ -97,7 +109,7 @@ export async function updatePartnerFromForm(partnerId: string, formData: FormDat
     active: formData.get("active") !== null,
   };
   const ref = doc(database, PARTNERS_COLLECTION, partnerId);
-  await updateDoc(ref, { ...patch, updatedAt: Date.now() });
+  await updateDoc(ref, omitUndefined({ ...patch, updatedAt: Date.now() }));
 }
 
 // Admin catalog management
@@ -113,22 +125,76 @@ export async function listPartners(): Promise<PartnerType[]> {
 export async function createPartner(data: Omit<PartnerType, "id">): Promise<string> {
   const col = collection(database, PARTNERS_COLLECTION);
   const now = Date.now();
-  const docRef = await addDoc(col, {
+  const payload = omitUndefined({
     ...data,
     type: "catalog",
     clicks: data.clicks ?? 0,
     createdAt: now,
     updatedAt: now,
   });
+  const docRef = await addDoc(col, payload);
   return docRef.id;
 }
 
 export async function updatePartner(id: string, patch: Partial<PartnerType>): Promise<void> {
   const ref = doc(database, PARTNERS_COLLECTION, id);
-  await updateDoc(ref, { ...patch, updatedAt: Date.now(), type: "catalog" });
+  await updateDoc(ref, omitUndefined({ ...patch, updatedAt: Date.now(), type: "catalog" }));
 }
 
 export async function removePartner(id: string): Promise<void> {
   const ref = doc(database, PARTNERS_COLLECTION, id);
   await deleteDoc(ref);
+}
+
+// Unified validated save (create or update)
+const partnerInputSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Name ist erforderlich").transform((s) => s.trim()),
+  logo: z.string().min(1, "Logo ist erforderlich").transform((s) => s.trim()),
+  benefit: z.string().min(1, "Vorteil ist erforderlich").transform((s) => s.trim()),
+  link: z
+    .string()
+    .optional()
+    .transform((s) => (s ? s.trim() : undefined))
+    .refine((s) => !s || /^https?:\/\//i.test(s), {
+      message: "Link muss mit http(s) beginnen",
+    }),
+  category: z.string().optional().transform((s) => (s ? s.trim() : undefined)),
+  active: z.boolean().optional().default(true),
+  priority: z
+    .number()
+    .int()
+    .min(0)
+    .max(100000)
+    .optional()
+    .default(100),
+  description: z.string().optional(),
+  tags: z.array(z.string()).optional().default([]),
+});
+
+export type SavePartnerInput = z.input<typeof partnerInputSchema>;
+
+export async function savePartner(input: SavePartnerInput): Promise<{ id: string; created: boolean }>{
+  const parsed = partnerInputSchema.parse(input);
+  const base: Omit<PartnerType, "id"> = {
+    name: parsed.name,
+    logo: parsed.logo,
+    benefit: parsed.benefit,
+    link: parsed.link,
+    category: parsed.category,
+    active: parsed.active ?? true,
+    priority: parsed.priority ?? 100,
+    description: parsed.description,
+    tags: parsed.tags ?? [],
+    clicks: undefined,
+    createdAt: undefined,
+    updatedAt: undefined,
+  };
+
+  if (parsed.id) {
+    await updatePartner(parsed.id, base);
+    return { id: parsed.id, created: false };
+  }
+  const id = await createPartner(base);
+  return { id, created: true };
 }

@@ -2,10 +2,9 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import {
-  createPartner,
   listPartners,
   removePartner,
-  updatePartner,
+  savePartner,
 } from "@/actions/partnerActions";
 import { PartnerType } from "@/types/PartnerType";
 
@@ -49,27 +48,21 @@ export default function AdminPartnersPage() {
     setError(null);
     setSuccess(null);
     try {
-      if (!form.name || !form.benefit || !form.logo) {
-        setError("Name, Logo & Vorteil sind Pflicht");
-        return;
-      }
-      if (editingId) {
-        await updatePartner(editingId, form as PartnerType);
-        setSuccess("Partner aktualisiert");
-      } else {
-        await createPartner({
-          name: form.name!,
-          logo: form.logo!,
-          benefit: form.benefit!,
-          link: form.link,
-          category: form.category,
-          active: form.active ?? true,
-          priority: form.priority ?? 100,
-          description: form.description,
-          tags: form.tags || [],
-        });
-        setSuccess("Partner erstellt");
-      }
+      const payload = {
+        ...(editingId ? { id: editingId } : {}),
+        name: form.name || "",
+        logo: form.logo || "",
+        benefit: form.benefit || "",
+        link: form.link,
+        category: form.category,
+        active: form.active ?? true,
+        priority: form.priority ?? 100,
+        description: form.description,
+        tags: form.tags || [],
+      };
+
+      const result = await savePartner(payload);
+      setSuccess(result.created ? "Partner erstellt" : "Partner aktualisiert");
       setForm(emptyForm);
       setEditingId(null);
       await load();
@@ -268,7 +261,7 @@ export default function AdminPartnersPage() {
                     Bearbeiten
                   </button>
                   <a
-                    href={`./partners/${p.id}`}
+                    href={`./${p.id}`}
                     className='text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700'>
                     Dashboard
                   </a>
@@ -279,7 +272,7 @@ export default function AdminPartnersPage() {
                   </button>
                   {p.link && (
                     <a
-                      href={p.link}
+                      href={`/api/partner-click/${p.id}`}
                       target='_blank'
                       rel='noopener noreferrer'
                       className='text-xs px-3 py-1 rounded bg-green-600 text-white hover:bg-green-700'>

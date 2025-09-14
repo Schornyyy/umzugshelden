@@ -7,13 +7,19 @@ import { CookieIcon } from "lucide-react";
 import AnalyticsCookies from "./cookies/AnalyticsCookie";
 import ClarityCookie from "./cookies/ClarityCookie";
 import GoogleAnalyticsCookie from "./cookies/GoogleAnalyticsCookie";
-import { Suspense } from "react";
+import { Suspense, useEffect } from "react";
+import Clarity from "@microsoft/clarity";
 
 const CookieSettings: React.FC = () => {
   const resetConsent = () => {
     Cookies.remove("cookieConsentLandschaftshelden");
     window.location.reload();
   };
+
+  const CLARITY_ID = process.env.NEXT_PUBLIC_CLARITY_ID || "";
+  useEffect(() => {
+    Clarity.init(CLARITY_ID);
+  }, [CLARITY_ID]);
 
   return (
     <>
