@@ -3,4 +3,4 @@ export interface User {
     role: UserRole,
 }
 
-export type UserRole = "admin" | "privatPerson" | "company";
+export type UserRole = "admin" | "privatPerson" | "company" | "partner";

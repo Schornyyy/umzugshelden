@@ -56,6 +56,9 @@ const ChooseStep = () => {
           onClick={() => handleChoosenStep(1)}>
           Unternehmen
         </div>
+          <a href='/register/partner' className='p-4 border rounded hover:bg-gray-50 block'>
+            Partner registrieren
+          </a>
       </div>
       <div className='flex flex-row items-end justify-end'>
         <button

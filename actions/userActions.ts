@@ -125,6 +125,8 @@ export async function navigateUser(type: UserRole, companyid: string) {
       redirect(`/company/${companyid}`);
     case "admin":
       redirect(`/admin/${companyid}`);
+    case "partner":
+      redirect(`/partner/${companyid}`);
   
     default:
       redirect(`/user/${companyid}`);

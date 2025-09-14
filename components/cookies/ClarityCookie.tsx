@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Cookies from "js-cookie";
+import Clarity from "@microsoft/clarity";
 
 const CLARITY_ID = process.env.NEXT_PUBLIC_CLARITY_ID;
 
@@ -41,7 +42,8 @@ const ClarityCookie = () => {
       if (initialized.current) return;
       initialized.current = true;
       injectClarityScript(CLARITY_ID);
-  } catch {
+      Clarity.init(CLARITY_ID);
+    } catch {
       // no-op
     }
   };

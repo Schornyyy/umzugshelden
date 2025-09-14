@@ -66,41 +66,45 @@ const LoginInner: React.FC = () => {
               account = await createAccount(email);
             }
 
-            await findCompanyByOwnerId(account.id).then(async (res) => {
-              console.log("Company found:", res);
-              if (!res) {
-                await findCompanyByEmail(email).then((company) => {
-                  console.log("Company by email found:", company);
-                  if (company) {
-                    if (
-                      company.type === "company" ||
-                      company.type == undefined
-                    ) {
-                      updateCompanyInDatabase({
-                        ...company,
-                        ownerid: account.id,
-                      });
+            if (account.role === "company") {
+              await findCompanyByOwnerId(account.id).then(async (res) => {
+                console.log("Company found:", res);
+                if (!res) {
+                  await findCompanyByEmail(email).then((company) => {
+                    console.log("Company by email found:", company);
+                    if (company) {
+                      if (
+                        company.type === "company" ||
+                        company.type == undefined
+                      ) {
+                        updateCompanyInDatabase({
+                          ...company,
+                          ownerid: account.id,
+                        });
+                      }
+                      navigateUser(company.type, company.id!);
                     }
-                    navigateUser(company.type, company.id!);
-                  }
 
-                  if (company?.type === "admin") {
-                    navigateUser("admin", company.id!);
-                  }
-                });
-              } else {
-                // Falls eine Next-URL gesetzt wurde, hat diese Priorität
-                if (next) {
-                  if (next === "/company/contracts") {
-                    router.push(`/company/${res.id}/contracts`);
-                  } else {
-                    router.push(next);
-                  }
+                    if (company?.type === "admin") {
+                      navigateUser("admin", company.id!);
+                    }
+                  });
                 } else {
-                  navigateUser(res.type, res.id!);
+                  // Falls eine Next-URL gesetzt wurde, hat diese Priorität
+                  if (next) {
+                    if (next === "/company/contracts") {
+                      router.push(`/company/${res.id}/contracts`);
+                    } else {
+                      router.push(next);
+                    }
+                  } else {
+                    navigateUser(res.type, res.id!);
+                  }
                 }
-              }
-            });
+              });
+            } else if (account.role === "partner") {
+              navigateUser("partner", account.id);
+            }
           }
         }
       );

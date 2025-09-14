@@ -77,7 +77,7 @@ const GoogleAnalyticsCookie = () => {
     // Send SPA page_view when GA is active
     if (!initialized.current || !GA_ID) return;
     const url = `${window.location.pathname}${window.location.search}`;
-  // @ts-expect-error - gtag injected globally at runtime
+    // @ts-expect-error - gtag injected globally at runtime
     window.gtag?.("event", "page_view", {
       page_path: url,
       page_location: window.location.href,
