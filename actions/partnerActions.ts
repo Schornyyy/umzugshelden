@@ -17,12 +17,14 @@ import {
 } from "firebase/firestore";
 import { PartnerType } from "@/types/PartnerType";
 import { PartnerEvent } from "@/types/PartnerEvent";
+import { cacheManager, CACHE_KEYS, CACHE_OPTIONS } from "@/lib/cache";
 import { z } from "zod";
 
 export interface PartnerProfile {
   ownerid: string; // Account ID
   email: string;
   contactPerson: string;
+  logo?: string;
   website?: string;
   phone?: string;
   images?: string[];
@@ -95,6 +97,52 @@ export async function listPartnerEvents(
   const q = query(eventsCol, orderBy("createdAt", "desc"), fsLimit(take));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PartnerEvent, "id">) }));
+}
+
+// Stats fields on catalog partner docs (kept optional for back-compat):
+// websiteClicks, emailClicks, phoneClicks, views
+
+export type PartnerStats = {
+  websiteClicks?: number;
+  emailClicks?: number;
+  phoneClicks?: number;
+  views?: number;
+};
+
+export async function incrementPartnerStat(
+  partnerId: string,
+  kind: keyof PartnerStats
+): Promise<void> {
+  const ref = doc(database, PARTNERS_COLLECTION, partnerId);
+  await updateDoc(ref, { [kind]: increment(1), updatedAt: Date.now() });
+}
+
+export async function addPartnerEvent(
+  partnerId: string,
+  event: Omit<PartnerEvent, "id">
+): Promise<void> {
+  const eventsCol = collection(database, PARTNERS_COLLECTION, partnerId, "events");
+  await addDoc(eventsCol, event);
+}
+
+export async function listPartnerStats(partnerId: string): Promise<PartnerStats> {
+  const fetcher = async () => {
+    const ref = doc(database, PARTNERS_COLLECTION, partnerId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return {} as PartnerStats;
+    const d = snap.data() as PartnerType & PartnerStats;
+    return {
+      websiteClicks: d.websiteClicks || 0,
+      emailClicks: d.emailClicks || 0,
+      phoneClicks: d.phoneClicks || 0,
+      views: d.views || 0,
+    } as PartnerStats;
+  };
+  return cacheManager.getOrFetch(
+    CACHE_KEYS.PARTNER_STATS(partnerId),
+    fetcher,
+    CACHE_OPTIONS.PARTNER_STATS
+  );
 }
 
 export async function updatePartnerFromForm(partnerId: string, formData: FormData): Promise<void> {
@@ -197,4 +245,106 @@ export async function savePartner(input: SavePartnerInput): Promise<{ id: string
   }
   const id = await createPartner(base);
   return { id, created: true };
+}
+
+// Migration: Create catalog docs from existing partner profiles (type: 'partner')
+export async function migratePartnerProfilesToCatalog(): Promise<{
+  created: number;
+  skipped: number;
+  errors: number;
+}> {
+  const colRef = collection(database, PARTNERS_COLLECTION);
+  // Get all partner profiles
+  const profilesSnap = await getDocs(query(colRef, where("type", "==", "partner")));
+
+  let created = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const profileDoc of profilesSnap.docs) {
+    try {
+      const profile = profileDoc.data() as PartnerProfile & { id?: string };
+
+      // Check if a catalog doc already exists linked to this profile via profileId
+      const existingCatalog = await getDocs(
+        query(colRef, where("type", "==", "catalog"), where("profileId", "==", profileDoc.id))
+      );
+      if (!existingCatalog.empty) {
+        skipped++;
+        continue;
+      }
+
+      // Derive minimal catalog fields
+      const name = (profile as { name?: string }).name || profile.contactPerson || profile.email?.split("@")[0] || "Partner";
+      // Prefer explicit profile.logo, then first image
+      const logo = (profile as { logo?: string }).logo || (Array.isArray(profile.images) ? profile.images[0] : "") || "";
+      const benefit = "Noch kein Vorteil hinterlegt.";
+      const link = profile.website || undefined;
+      const description = Array.isArray(profile.texts) && profile.texts[0] ? profile.texts[0] : undefined;
+
+      const now = Date.now();
+      // Create the catalog doc directly to include profileId for deduplication
+      await addDoc(colRef, omitUndefined({
+        type: "catalog",
+        profileId: profileDoc.id,
+        ownerid: profile.ownerid,
+        name,
+        logo,
+        benefit,
+        link,
+        category: undefined,
+        active: true,
+        priority: 100,
+        description,
+        tags: [],
+        clicks: 0,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      created++;
+    } catch {
+      errors++;
+    }
+  }
+
+  return { created, skipped, errors };
+}
+
+// Fetch a partner profile by document id
+export async function getPartnerProfile(profileId: string): Promise<(PartnerProfile & { id: string }) | null> {
+  const ref = doc(database, PARTNERS_COLLECTION, profileId);
+  const s = await getDoc(ref);
+  if (!s.exists()) return null;
+  return { id: s.id, ...(s.data() as PartnerProfile) };
+}
+
+// Ensure a catalog partner has a linked profile; create one if missing and return profileId
+export async function ensureProfileForCatalogPartner(partnerId: string): Promise<string> {
+  const catRef = doc(database, PARTNERS_COLLECTION, partnerId);
+  const s = await getDoc(catRef);
+  if (!s.exists()) throw new Error("Partner nicht gefunden");
+  const data = s.data() as Record<string, unknown>;
+  if (data.type !== "catalog") return partnerId; // already a profile doc
+  const existingProfileId = (data.profileId as string | undefined) || undefined;
+  if (existingProfileId) {
+    return existingProfileId;
+  }
+  // Create minimal profile
+  const now = Date.now();
+  const col = collection(database, PARTNERS_COLLECTION);
+  const profileDoc = await addDoc(col, omitUndefined({
+    type: "partner",
+    ownerid: (data.ownerid as string | undefined) || undefined,
+    email: (data.email as string | undefined) || "",
+    contactPerson: (data.contactPerson as string | undefined) || "",
+    logo: (data.logo as string | undefined) || undefined,
+    website: (data.website as string | undefined) || undefined,
+    phone: (data.phone as string | undefined) || undefined,
+    images: [],
+    texts: ["", "", ""],
+    createdAt: now,
+    updatedAt: now,
+  }));
+  await updateDoc(catRef, { profileId: profileDoc.id, updatedAt: Date.now() });
+  return profileDoc.id;
 }

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPartner, incrementPartnerClick } from '@/actions/partnerActions';
-import { database } from '@/config/firebase';
-import { addDoc, collection } from 'firebase/firestore';
+import { getPartner, incrementPartnerClick, addPartnerEvent, incrementPartnerStat } from '@/actions/partnerActions';
 
 export async function GET(
   _req: Request,
@@ -17,10 +15,9 @@ export async function GET(
       return NextResponse.json({ error: 'not found' }, { status: 404 });
     }
     if (partner.link) {
-      await incrementPartnerClick(partnerId);
-      // Event protokollieren
-      const eventsCol = collection(database, 'partners', partnerId, 'events');
-      await addDoc(eventsCol, { type: 'click', createdAt: Date.now() });
+      await incrementPartnerClick(partnerId); // legacy counter
+      await incrementPartnerStat(partnerId, 'websiteClicks');
+      await addPartnerEvent(partnerId, { type: 'website_click', createdAt: Date.now(), target: partner.link });
       return NextResponse.redirect(partner.link, { status: 307 });
     }
     return NextResponse.json({ ok: true });

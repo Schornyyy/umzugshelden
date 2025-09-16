@@ -71,6 +71,11 @@ const AdminContractsPage = () => {
     total: number;
     errors: number;
   }>(null);
+  // New: Inline test button state
+  const [testing, setTesting] = useState(false);
+  const [testCount, setTestCount] = useState<number | null>(null);
+  // New: Toggle for notify center resolution (use stored coords or ZIP)
+  const [preferStoredNotify, setPreferStoredNotify] = useState<boolean>(true);
 
   // Alle verfügbaren Services für Filter
   const services = getAllServices();
@@ -263,7 +268,10 @@ const AdminContractsPage = () => {
       const res = await fetch("/api/notify-companies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contractId: selectedContract.id }),
+        body: JSON.stringify({
+          contractId: selectedContract.id,
+          preferStored: preferStoredNotify,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -665,6 +673,35 @@ const AdminContractsPage = () => {
                     }}>
                     Dashboard öffnen
                   </Button>
+                  {/* New: Test button (no email) */}
+                  <Button
+                    variant='secondary'
+                    className='w-full'
+                    disabled={testing}
+                    onClick={async () => {
+                      if (!selectedContract) return;
+                      try {
+                        setTesting(true);
+                        setTestCount(null);
+                        const res = await fetch(
+                          `/api/companies-in-radius?contractId=${encodeURIComponent(
+                            selectedContract.id
+                          )}&radiusKm=50&preferStored=0`,
+                          { cache: "no-store" }
+                        );
+                        const data = await res.json();
+                        console.log("Companies within 50km (test):", data);
+                        if (data?.success) setTestCount(data.count ?? 0);
+                      } catch (e) {
+                        console.error("Test failed", e);
+                      } finally {
+                        setTesting(false);
+                      }
+                    }}>
+                    {testing
+                      ? "Teste Umkreis…"
+                      : "Test: Firmen im 50km-Umkreis (nur Console)"}
+                  </Button>
                   <Button
                     variant='destructive'
                     className='w-full'
@@ -685,12 +722,31 @@ const AdminContractsPage = () => {
 
                 {/* New: Notify and Metrics Panel */}
                 <div className='mt-4'>
+                  {/* Notify options */}
+                  <div className='flex items-center justify-between mb-2'>
+                    <label className='text-sm text-gray-700'>
+                      Gespeicherte Koordinaten bevorzugen
+                    </label>
+                    <input
+                      type='checkbox'
+                      checked={preferStoredNotify}
+                      onChange={(e) => setPreferStoredNotify(e.target.checked)}
+                      className='h-4 w-4'
+                      aria-label='Gespeicherte Contract-Koordinaten verwenden'
+                    />
+                  </div>
                   <Button
                     onClick={notifyCompanies}
                     className='w-full'
                     disabled={notifying}>
                     Alle Firmen benachrichtigen
                   </Button>
+                  {typeof testCount === "number" && (
+                    <div className='mt-2 text-sm text-gray-700'>
+                      Test-Ergebnis: {testCount} Firmen im 50km-Umkreis (siehe
+                      Konsole)
+                    </div>
+                  )}
 
                   {notifyResult && (
                     <div className='mt-2 text-sm text-gray-700'>

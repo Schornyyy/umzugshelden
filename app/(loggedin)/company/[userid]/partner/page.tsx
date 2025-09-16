@@ -2,6 +2,7 @@ import React from "react";
 import Image from "next/image";
 import { listPartners } from "@/actions/partnerActions";
 import { PartnerType } from "@/types/PartnerType";
+import { PartnerViewTracker } from "@/components/PartnerViewTracker";
 
 export const metadata = {
   title: "Partnerportal | Landschaftshelden",
@@ -58,6 +59,7 @@ const PartnerPortalPage = async () => {
             <div
               key={p.id}
               className='group rounded-xl border bg-white p-5 shadow-sm hover:shadow-md transition flex flex-col'>
+              <PartnerViewTracker partnerId={p.id} />
               <div className='flex items-center gap-4 mb-4'>
                 <div className='h-14 w-14 rounded-lg bg-slate-50 flex items-center justify-center ring-1 ring-slate-200 overflow-hidden'>
                   {p.logo && (

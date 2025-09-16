@@ -1,9 +1,10 @@
 import { findCompanyById } from "@/actions/companyActions";
 import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+import React, { Suspense } from "react";
 import CompanyInfos from "./_components/CompanyInfos";
 import CompanyContractForm from "./_components/CompanyContactForm";
+import ContractMultiStepForm from "@/components/ContractMultiStepForm";
 
 // Generate metadata for SEO
 export async function generateMetadata({
@@ -287,8 +288,22 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
           <CompanyInfos companyData={companyData} />
         </div>
 
+        <Suspense
+          fallback={
+            <div className='text-center py-10'>
+              <span className='text-gray-400'>Formular wird geladen…</span>
+            </div>
+          }>
+          <div className='flex flex-col gap-4'>
+            <p className='text-center font-bold text-xl'>
+              Jetzt kostenlose Anfrage stellen!
+            </p>
+            <ContractMultiStepForm variant='full' showHeader={false} />
+          </div>
+        </Suspense>
+
         {/* Value Proposition Section */}
-        <div className='bg-green-50 border border-green-200 rounded-xl p-8 mb-16'>
+        <div className='bg-green-50 border border-green-200 rounded-xl p-8 my-16'>
           <div className='text-center mb-8'>
             <h2 className='text-2xl md:text-3xl font-bold mb-4'>
               Warum {companyData.companyName} wählen?
@@ -472,7 +487,7 @@ const Page = async ({ params }: { params: Promise<{ companyid: string }> }) => {
                 src='/images/JobSmith_CTA_Card.png'
                 width={400}
                 height={400}
-                className='object-cover rounded-lg shadow-lg'
+                className='object-cover'
               />
             </div>
           </div>

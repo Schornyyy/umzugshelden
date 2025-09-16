@@ -976,17 +976,66 @@ async function sendVerificationEmail(email: string, token: string, contractId: s
 // Benachrichtige passende Unternehmen über neuen Contract
 async function notifyMatchingCompanies(contractId: string): Promise<void> {
   try {
+    // Sanity check: Contract existiert
     const contract = await getContractById(contractId);
     if (!contract) return;
 
-    // Hier würde die Logik zur Benachrichtigung passender Unternehmen stehen
-    console.log(`Benachrichtige Unternehmen über neuen Contract: ${contractId}`);
-    console.log(`Service: ${contract.type}, PLZ: ${contract.zip}`);
-    
-    // TODO: Implementiere Unternehmens-Benachrichtigung
-    // const matchingCompanies = await findMatchingCompanies(contract.zip, contract.type);
-    // await notifyCompanies(matchingCompanies, contract);
-    
+    // Verwende bestehende API-Route, die bereits Radius-Filterung,
+    // Templating, Tracking und Fehlerbehandlung implementiert.
+    const baseUrl = (
+      process.env.NEXT_PUBLIC_BASE_URL ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.NEXT_PUBLIC_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
+      'http://localhost:3000'
+    ).replace(/\/$/, '');
+
+    const endpoint = `${baseUrl}/api/notify-companies`;
+
+    // Verarbeite in Batches, um Laufzeit zu begrenzen. Wir starten einen ersten Batch synchron
+    // und fahren bei Bedarf in kleinen Runden fort, um Timeouts zu vermeiden.
+    const LIMIT = 500; // max. Unternehmen pro Batch (die Route limitiert intern parallel)
+    let cursor: number | null = 0;
+    let safetyCounter = 0;
+
+    do {
+      const res: Response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contractId, cursor, limit: LIMIT })
+      });
+
+      if (!res.ok) {
+        console.error(`Notify-API antwortete mit Status ${res.status}`);
+        break; // Abbrechen, um verify nicht komplett zu blockieren
+      }
+
+      let data: {
+        partial?: boolean;
+        nextCursor?: number | null;
+        stats?: unknown;
+      } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+      console.log('Notify-API Batch-Result:', {
+        partial: data?.partial,
+        nextCursor: data?.nextCursor,
+        stats: data?.stats
+      });
+
+      cursor = data?.partial ? (data?.nextCursor ?? null) : null;
+      safetyCounter++;
+      // Begrenze die Anzahl synchroner Runden, um lange Verifikationszeiten zu vermeiden
+    } while (cursor !== null && safetyCounter < 3);
+
+    // Falls noch Einträge übrig sind, protokollieren wir das – eine spätere
+    // Weiterverarbeitung kann manuell oder durch einen Cron/Job erfolgen.
+    if (cursor !== null) {
+      console.log(`Weitere Notify-Batches verbleiben (nextCursor=${cursor}).`);
+    }
   } catch (error) {
     console.error("Fehler beim Benachrichtigen der Unternehmen:", error);
   }

@@ -5,6 +5,7 @@ import {
   listPartners,
   removePartner,
   savePartner,
+  migratePartnerProfilesToCatalog,
 } from "@/actions/partnerActions";
 import { PartnerType } from "@/types/PartnerType";
 
@@ -42,6 +43,20 @@ export default function AdminPartnersPage() {
   useEffect(() => {
     load();
   }, []);
+
+  const migrate = async () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await migratePartnerProfilesToCatalog();
+      setSuccess(
+        `Migration abgeschlossen: ${res.created} erstellt, ${res.skipped} übersprungen, ${res.errors} Fehler.`
+      );
+      await load();
+    } catch {
+      setError("Migration fehlgeschlagen");
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,11 +219,18 @@ export default function AdminPartnersPage() {
         <div className='lg:col-span-2'>
           <div className='flex items-center justify-between mb-4'>
             <h2 className='font-semibold text-lg'>Partner Liste</h2>
-            <button
-              onClick={load}
-              className='text-xs px-3 py-1 rounded border bg-white hover:bg-slate-50'>
-              Neu laden
-            </button>
+            <div className='flex gap-2'>
+              <button
+                onClick={load}
+                className='text-xs px-3 py-1 rounded border bg-white hover:bg-slate-50'>
+                Neu laden
+              </button>
+              <button
+                onClick={migrate}
+                className='text-xs px-3 py-1 rounded border bg-white hover:bg-slate-50'>
+                Profile migrieren
+              </button>
+            </div>
           </div>
           {loading && <p className='text-sm text-slate-500'>Lade...</p>}
           {!loading && partners.length === 0 && (
@@ -216,7 +238,7 @@ export default function AdminPartnersPage() {
               Noch keine Partner hinterlegt.
             </p>
           )}
-          <div className='grid md:grid-cols-2 xl:grid-cols-3 gap-5'>
+          <div className='grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5'>
             {partners.map((p) => (
               <div
                 key={p.id}
@@ -236,6 +258,20 @@ export default function AdminPartnersPage() {
                     <p className='text-[10px] uppercase tracking-wide text-slate-400 font-medium'>
                       {p.category || "–"}
                     </p>
+                    {p.contactPerson && (
+                      <p className='text-[11px] text-slate-500 truncate'>
+                        Ansprechpartner: {p.contactPerson}
+                      </p>
+                    )}
+                    {p.website && (
+                      <a
+                        href={p.website}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='text-[11px] text-blue-600 hover:underline truncate block'>
+                        {p.website}
+                      </a>
+                    )}
                   </div>
                   <span
                     className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
@@ -261,7 +297,7 @@ export default function AdminPartnersPage() {
                     Bearbeiten
                   </button>
                   <a
-                    href={`./${p.id}`}
+                    href={`./partners/${p.id}`}
                     className='text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700'>
                     Dashboard
                   </a>

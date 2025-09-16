@@ -24,6 +24,7 @@ interface PartnerPageData {
   website?: string;
   phone?: string;
   email: string;
+  logo?: string;
   images?: string[];
   texts?: string[];
 }
@@ -45,6 +46,7 @@ export default function PartnerSeitePage() {
         id: partner.id,
         email: partner.email,
         contactPerson: partner.contactPerson,
+        logo: (partner as unknown as { logo?: string }).logo,
         website: partner.website,
         phone: partner.phone,
         images: (partner as unknown as { images?: string[] }).images || [],
@@ -83,12 +85,20 @@ export default function PartnerSeitePage() {
         },
         async () => {
           const url = await getDownloadURL(task.snapshot.ref);
+          let nextImages: string[] = [];
           setData((d) => {
             if (!d) return d;
             const images = d.images ? [...d.images] : [];
             images[index] = url;
+            nextImages = images;
             return { ...d, images };
           });
+          // Persist immediately so it survives reloads
+          try {
+            await updatePartnerProfile(data.id, { images: nextImages });
+          } catch (e) {
+            console.error("Persist images failed", e);
+          }
           setUploading((u) => Object.assign([], u, { [index]: false }));
           setProgress((p) => Object.assign([], p, { [index]: 100 }));
         }
@@ -108,12 +118,65 @@ export default function PartnerSeitePage() {
         await deleteObject(ref(storage, path));
       }
     } catch {}
+    let nextImages: string[] = [];
     setData((d) => {
       if (!d) return d;
       const images = [...(d.images || [])];
       images[index] = "";
+      nextImages = images;
       return { ...d, images };
     });
+    try {
+      await updatePartnerProfile(data!.id, { images: nextImages });
+    } catch (e) {
+      console.error("Persist images after delete failed", e);
+    }
+  };
+
+  const handleUploadLogo = async (file: File) => {
+    if (!data) return;
+    try {
+      const pathSafeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storageRef = ref(
+        storage,
+        `uploads/partners/${data.id}/logo-${Date.now()}-${pathSafeName}`
+      );
+      const task = uploadBytesResumable(storageRef, file);
+      task.on(
+        "state_changed",
+        undefined,
+        () => {},
+        async () => {
+          const url = await getDownloadURL(task.snapshot.ref);
+          setData((d) => (d ? { ...d, logo: url } : d));
+          try {
+            await updatePartnerProfile(data.id, { logo: url });
+          } catch (e) {
+            console.error("Persist logo failed", e);
+          }
+        }
+      );
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!data?.logo) return;
+    try {
+      const url = data.logo;
+      const match = url.match(/o\/([^?]+)\?/);
+      if (match) {
+        const path = decodeURIComponent(match[1]);
+        await deleteObject(ref(storage, path));
+      }
+    } catch {}
+    setData((d) => (d ? { ...d, logo: "" } : d));
+    try {
+      await updatePartnerProfile(data.id, { logo: "" });
+    } catch (e) {
+      console.error("Persist logo after delete failed", e);
+    }
   };
 
   const save = async () => {
@@ -125,6 +188,7 @@ export default function PartnerSeitePage() {
         website: data.website,
         phone: data.phone,
         email: data.email,
+        logo: data.logo,
         images: data.images || [],
         texts: data.texts || ["", "", ""],
       });
@@ -172,6 +236,44 @@ export default function PartnerSeitePage() {
             <CardTitle>Kontakt</CardTitle>
           </CardHeader>
           <CardContent className='space-y-3'>
+            <div>
+              <label className='block text-sm font-medium mb-1'>Logo</label>
+              <div className='flex items-center gap-4'>
+                <div className='h-16 w-16 rounded bg-slate-100 ring-1 ring-slate-200 overflow-hidden flex items-center justify-center'>
+                  {data.logo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={data.logo}
+                      alt='Logo'
+                      className='object-cover h-full w-full'
+                    />
+                  ) : (
+                    <span className='text-xs text-slate-400'>Kein Logo</span>
+                  )}
+                </div>
+                <div className='flex items-center gap-2'>
+                  <label className='text-xs px-3 py-1 rounded border bg-white hover:bg-slate-50 cursor-pointer'>
+                    Datei wählen
+                    <input
+                      type='file'
+                      accept='image/*'
+                      className='hidden'
+                      onChange={(e) =>
+                        e.target.files && handleUploadLogo(e.target.files[0])
+                      }
+                    />
+                  </label>
+                  {data.logo && (
+                    <Button
+                      variant='destructive'
+                      size='sm'
+                      onClick={handleDeleteLogo}>
+                      Entfernen
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
             <div>
               <label className='block text-sm font-medium mb-1'>
                 Website URL
@@ -228,14 +330,14 @@ export default function PartnerSeitePage() {
             <CardTitle>Medien</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className='max-w-2xl'>
+            <div className='w-full'>
               <p className='text-xs text-gray-500 mb-3'>
                 Empfohlen: 1200x800px, max. 2MB
               </p>
               <div className='flex flex-col gap-3'>
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className='border rounded p-2 bg-white'>
-                    <div className='mb-2 font-medium flex items-center justify-between'>
+                  <div key={i} className='border rounded p-2 bg-white w-full'>
+                    <div className='mb-2 font-medium flex flex-row items-center justify-between'>
                       <span>Bild {i + 1}</span>
                       <div className='flex gap-2'>
                         <Button
@@ -254,64 +356,66 @@ export default function PartnerSeitePage() {
                         </Button>
                       </div>
                     </div>
-                    {data.images?.[i] ? (
-                      <div className='space-y-2'>
-                        <div className='relative w-full aspect-[3/2] mx-auto'>
-                          <Image
-                            src={data.images[i]}
-                            fill
-                            alt={`Bild ${i + 1}`}
-                            className='object-cover'
+                    <div className='flex flex-row gap-6'>
+                      {data.images?.[i] ? (
+                        <div className='space-y-2'>
+                          <div className='relative w-32 h-32 mx-auto'>
+                            <Image
+                              src={data.images[i]}
+                              fill
+                              alt={`Bild ${i + 1}`}
+                              className='object-cover'
+                            />
+                          </div>
+                          <div className='flex gap-2'>
+                            <Button
+                              variant='destructive'
+                              size='sm'
+                              onClick={() => handleDeleteImage(i)}>
+                              Löschen
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className='flex items-center justify-center w-96 h-128 mx-auto border-2 border-dashed cursor-pointer text-gray-500'>
+                          <span>Datei auswählen</span>
+                          <input
+                            type='file'
+                            accept='image/*'
+                            className='hidden'
+                            onChange={(e) =>
+                              e.target.files &&
+                              handleFileChange(i, e.target.files[0])
+                            }
                           />
+                        </label>
+                      )}
+                      {uploading[i] && (
+                        <div className='text-xs text-gray-500 mt-1'>
+                          Upload… {progress[i]}%
                         </div>
-                        <div className='flex gap-2'>
-                          <Button
-                            variant='destructive'
-                            size='sm'
-                            onClick={() => handleDeleteImage(i)}>
-                            Löschen
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <label className='flex items-center justify-center w-full aspect-[3/2] mx-auto border-2 border-dashed cursor-pointer text-gray-500'>
-                        <span>Datei auswählen</span>
-                        <input
-                          type='file'
-                          accept='image/*'
-                          className='hidden'
-                          onChange={(e) =>
-                            e.target.files &&
-                            handleFileChange(i, e.target.files[0])
-                          }
-                        />
-                      </label>
-                    )}
-                    {uploading[i] && (
-                      <div className='text-xs text-gray-500 mt-1'>
-                        Upload… {progress[i]}%
-                      </div>
-                    )}
+                      )}
 
-                    {/* Zugehöriger Textblock */}
-                    <div className='mt-3'>
-                      <div className='text-xs font-medium text-gray-700 mb-1'>
-                        Text {i + 1}
+                      {/* Zugehöriger Textblock */}
+                      <div className='mt-3'>
+                        <div className='text-xs font-medium text-gray-700 mb-1'>
+                          Text {i + 1}
+                        </div>
+                        <RichTextEditor
+                          defaultValue={data.texts?.[i] || ""}
+                          field={{
+                            onChange: (val: string) =>
+                              setData((d) => {
+                                if (!d) return d;
+                                const texts = d.texts
+                                  ? [...d.texts]
+                                  : ["", "", ""];
+                                texts[i] = val;
+                                return { ...d, texts };
+                              }),
+                          }}
+                        />
                       </div>
-                      <RichTextEditor
-                        defaultValue={data.texts?.[i] || ""}
-                        field={{
-                          onChange: (val: string) =>
-                            setData((d) => {
-                              if (!d) return d;
-                              const texts = d.texts
-                                ? [...d.texts]
-                                : ["", "", ""];
-                              texts[i] = val;
-                              return { ...d, texts };
-                            }),
-                        }}
-                      />
                     </div>
                   </div>
                 ))}

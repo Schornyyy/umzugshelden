@@ -2,6 +2,8 @@
 // Sendet E-Mails an alle Unternehmen im 50km Umkreis eines neuen Auftrags
 
 import { NextRequest, NextResponse } from 'next/server';
+
+export const dynamic = 'force-dynamic';
 import { findContractById } from '@/actions/contractActions';
 import { fetchCoordinates } from '@/actions/userActions';
 import { sendCustomEmail } from '@/actions/emailActions';
@@ -219,7 +221,7 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
 export async function POST(request: NextRequest) {
   try {
-  const { contractId, cursor = 0, limit = 40 } = await request.json();
+  const { contractId, cursor = 0, limit = 500, preferStored = true } = await request.json();
 
     if (!contractId) {
       return NextResponse.json({
@@ -239,19 +241,54 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Bestimme Koordinaten des Contracts (wie in CompanySearchPage -> vorhandene Lat/Lng bevorzugen)
+    // Robuste Koordinaten-Auflösung mit Optional: preferStored
     const contractZip = contract.zip?.toString() || '';
 
-    if (!contractZip) {
-      return NextResponse.json({ success: false, error: 'PLZ des Contracts nicht verfügbar' }, { status: 400 });
+    // Hilfsfunktion: Auflösung nach PLZ (Nominatim → Open-Meteo → legacy fetchCoordinates)
+    async function resolveByZip(zip: string): Promise<{ center: Coordinates | null; source: string }> {
+      // Try Nominatim (postal + country)
+      try {
+        const nominatimUrl = `https://nominatim.openstreetmap.org/search?postalcode=${encodeURIComponent(zip)}&country=DE&format=json&limit=1`;
+        const res = await fetch(nominatimUrl, { headers: { 'User-Agent': 'landschaftshelden.io/1.0 (support@landschaftshelden.io)' } });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0 && data[0]?.lat && data[0]?.lon) {
+            return { center: { latitude: parseFloat(data[0].lat), longitude: parseFloat(data[0].lon) }, source: 'nominatim:postal' };
+          }
+        }
+      } catch {}
+
+      // Try Open-Meteo
+      try {
+        const meteoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(zip)}&count=1&language=de&format=json`;
+        const res = await fetch(meteoUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.results?.length) {
+            const m = data.results[0];
+            return { center: { latitude: m.latitude, longitude: m.longitude }, source: 'open-meteo:postal' };
+          }
+        }
+      } catch {}
+
+      // Legacy
+      try {
+        const coords = await fetchCoordinates('Deutschland', zip);
+        if (coords) return { center: coords as Coordinates, source: 'legacy:fetchCoordinates' };
+      } catch {}
+
+      return { center: null, source: 'failed' };
     }
 
-    // Falls der Contract bereits Koordinaten besitzt, nutze diese; sonst per ZIP (und optional Stadt) holen
-    // CompanySearchPage ruft fetchCoordinates(city, zip) auf. Ein Contract speichert aktuell keine Stadt,
-    // daher fallback auf 'Deutschland' wie bestehender Code – kann später erweitert werden, wenn city verfügbar ist.
-    const contractCoords = (contract.latitude && contract.longitude)
-      ? { latitude: contract.latitude, longitude: contract.longitude }
-      : await fetchCoordinates('Deutschland', contractZip); // TODO: city hinzufügen sobald im Contract vorhanden
+    let contractCoords: Coordinates | null = null;
+    let centerSource = 'stored';
+    if (preferStored && contract.latitude && contract.longitude) {
+      contractCoords = { latitude: contract.latitude, longitude: contract.longitude };
+    } else if (contractZip) {
+      const resolved = await resolveByZip(contractZip);
+      contractCoords = resolved.center;
+      centerSource = resolved.source;
+    }
 
     if (!contractCoords) {
       console.error('Koordinaten für Contract konnten nicht ermittelt werden');
@@ -371,6 +408,9 @@ export async function POST(request: NextRequest) {
       total: companiesToNotify.length,
       processed: startIndex + slice.length,
       batchSize: slice.length,
+      center: contractCoords,
+      centerSource,
+      preferStored,
       stats: {
         total: companiesToNotify.length,
         notified: successful,

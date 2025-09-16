@@ -1,4 +1,4 @@
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jobsmith.de';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://landschaftshelden.io';
 
 module.exports = {
   siteUrl,
@@ -6,16 +6,35 @@ module.exports = {
   exclude: [], // Falls es Seiten gibt, die ausgeschlossen werden sollen
   changefreq: 'daily',
   priority: 0.7,
-  additionalPaths: async (config) => {
-    // Dynamische Routen hinzufügen
-    const res = await fetch(`http://localhost:3000/api/companies`); // API-Route oder Datenquelle
-    const companies = await res.json();
+  additionalPaths: async () => {
+    // Dynamische Routen hinzufügen, aber build-resilient (kein localhost zur Build-Zeit)
+    const apiBase = process.env.SITEMAP_API_URL || siteUrl;
+    if (!apiBase || !/^https?:\/\//i.test(apiBase)) {
+      return [];
+    }
 
-    return companies.map((company) => ({
-      loc: `/unternehmen/${company.id}`, // Dynamische URL
-      lastmod: new Date().toISOString(), // Letzte Änderung (optional)
-      changefreq: 'weekly', // Optional, falls von der Standard-Konfiguration abweichend
-      priority: 0.8, // Optional, falls von der Standard-Konfiguration abweichend
-    }));
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`${apiBase.replace(/\/$/, '')}/api/companies`, {
+        signal: controller.signal,
+        // Avoid caching stale data if a CDN sits in front
+        headers: { 'cache-control': 'no-cache' },
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return [];
+      const companies = await res.json();
+      if (!Array.isArray(companies)) return [];
+
+      return companies.map((company) => ({
+        loc: `/unternehmen/${company.id}`,
+        lastmod: new Date().toISOString(),
+        changefreq: 'weekly',
+        priority: 0.8,
+      }));
+    } catch {
+      // Keine harten Fehler bei Post-Build Sitemap
+      return [];
+    }
   },
 };

@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/rules-of-hooks */
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useState } from "react";
 import { fetchCoordinates } from "@/actions/userActions";
 import {
   collection,
@@ -10,6 +9,8 @@ import {
   startAfter,
   limit,
   where,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from "firebase/firestore";
 import { database } from "@/config/firebase";
 import { CompanyType } from "@/types/RegisterTypye";
@@ -32,21 +33,17 @@ function CompanySearchPage() {
   const [loading, setLoading] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [lastDoc, setLastDoc] = useState<any>(null);
+  const [hasMoreServer, setHasMoreServer] = useState(true);
+  const [loadedCompanies, setLoadedCompanies] = useState<CompanyType[]>([]);
+  const [activeCenter, setActiveCenter] = useState<Coordinates | null>(null);
+  const [activeRadiusKm, setActiveRadiusKm] = useState<number>(10);
+  const [activeService, setActiveService] = useState<string | undefined>(
+    undefined
+  );
 
   const searchParams = useSearchParams();
 
-  const RESULTS_PER_PAGE = 24;
-
-  useEffect(() => {
-    const cityParam = searchParams?.get("city") || "";
-    const zipParam = searchParams?.get("plz") || "";
-    const serviceParam = searchParams?.get("service") || "";
-    const radiusParam = searchParams?.get("km") || "10";
-
-    if (cityParam && zipParam && serviceParam) {
-      handleSearch(cityParam, zipParam, Number(radiusParam), serviceParam);
-    }
-  }, [searchParams]);
+  const RESULTS_PER_PAGE = 12;
 
   const calculateDistance = (
     point1: { latitude: number; longitude: number },
@@ -68,76 +65,39 @@ function CompanySearchPage() {
     return R * c; // Distanz in Metern
   };
 
-  const handleSearch = async (
-    city: string,
-    zip: string,
-    radius: number,
-    service?: string
-  ) => {
-    try {
-      setLoading(true);
+  // Fetch a single batch of up to 200 docs using a provided cursor (no state side-effects)
+  const fetchCompaniesBatch = useCallback(
+    async (
+      cursor: QueryDocumentSnapshot<DocumentData> | null,
+      service?: string
+    ): Promise<{
+      docs: QueryDocumentSnapshot<DocumentData>[];
+      lastDoc: QueryDocumentSnapshot<DocumentData> | null;
+      hasMore: boolean;
+    }> => {
+      const ref = collection(database, "users");
+      let baseQuery = query(ref, limit(200));
 
-      const centerCoordinates = await fetchCoordinates(city, zip);
-      const querySnapshot = await fetchCompaniesFromFirestore(
-        undefined,
-        service
-      );
+      if (service) {
+        baseQuery = query(
+          baseQuery,
+          where("services", "array-contains", service)
+        );
+      }
 
-      const companies: CompanyType[] = querySnapshot.map((doc) => ({
-        ...doc.data(),
-        id: doc.id,
-      })) as CompanyType[];
+      const q = cursor ? query(baseQuery, startAfter(cursor)) : baseQuery;
+      const snapshot = await getDocs(q);
+      if (snapshot.empty) {
+        return { docs: [], lastDoc: cursor, hasMore: false };
+      }
+      const newLast = snapshot.docs[snapshot.docs.length - 1] ?? cursor;
+      const hasMore = snapshot.docs.length === 200; // if we hit the limit, assume more available
+      return { docs: snapshot.docs, lastDoc: newLast, hasMore };
+    },
+    []
+  );
 
-      if (companies.length === 0) return;
-
-      const filteredCompanies = filterCompaniesByRadius(
-        companies,
-        centerCoordinates!,
-        radius
-      );
-      const sortedCompanies = filteredCompanies.sort(
-        (a, b) =>
-          calculateDistance(
-            { latitude: a.latitude!, longitude: a.longitude! },
-            centerCoordinates!
-          ) -
-          calculateDistance(
-            { latitude: b.latitude!, longitude: b.longitude! },
-            centerCoordinates!
-          )
-      );
-
-      setResults(sortedCompanies);
-      updateDisplayedResults(sortedCompanies, 1);
-      setLoading(false);
-    } catch (error) {
-      console.error("Fehler bei der Suche:", error);
-      setLoading(false);
-    }
-  };
-
-  const fetchCompaniesFromFirestore = async (
-    next = false,
-    service?: string
-  ) => {
-    const ref = collection(database, "users");
-    let baseQuery = query(ref, limit(500));
-
-    if (service) {
-      baseQuery = query(
-        baseQuery,
-        where("services", "array-contains", service)
-      );
-    }
-
-    const q =
-      next && lastDoc ? query(baseQuery, startAfter(lastDoc)) : baseQuery;
-    const querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty)
-      setLastDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
-    return querySnapshot.docs;
-  };
-
+  // Distance helpers
   const haversineDistance = (
     point1: Coordinates,
     point2: Coordinates
@@ -158,29 +118,184 @@ function CompanySearchPage() {
     return R * c; // Distanz in Metern
   };
 
-  const isPointWithinRadius = (
-    point: Coordinates,
-    center: Coordinates,
-    radius: number
-  ): boolean => {
-    const distance = haversineDistance(point, center);
-    return distance <= radius;
-  };
+  const isPointWithinRadius = useCallback(
+    (point: Coordinates, center: Coordinates, radius: number): boolean => {
+      const distance = haversineDistance(point, center);
+      return distance <= radius;
+    },
+    []
+  );
 
-  const filterCompaniesByRadius = (
-    companies: CompanyType[],
-    centerCoordinates: { latitude: number; longitude: number },
-    radius: number
-  ) => {
-    return companies.filter((company) => {
-      if (!company.latitude || !company.longitude) return false;
-      return isPointWithinRadius(
-        { latitude: company.latitude, longitude: company.longitude },
-        centerCoordinates,
-        radius * 1000
+  const sortByDistance = useCallback(
+    (companies: CompanyType[], center: Coordinates) => {
+      return companies.sort(
+        (a, b) =>
+          calculateDistance(
+            { latitude: a.latitude!, longitude: a.longitude! },
+            center
+          ) -
+          calculateDistance(
+            { latitude: b.latitude!, longitude: b.longitude! },
+            center
+          )
       );
-    });
-  };
+    },
+    []
+  );
+
+  const filterCompaniesByRadius = useCallback(
+    (
+      companies: CompanyType[],
+      centerCoordinates: { latitude: number; longitude: number },
+      radiusKm: number
+    ) => {
+      return companies.filter((company) => {
+        if (!company.latitude || !company.longitude) return false;
+        return isPointWithinRadius(
+          { latitude: company.latitude, longitude: company.longitude },
+          centerCoordinates,
+          radiusKm * 1000
+        );
+      });
+    },
+    [isPointWithinRadius]
+  );
+
+  // Ensure we have at least "minCount" filtered & sorted results.
+  const ensureResultsCount = useCallback(
+    async (
+      minCount: number,
+      center: Coordinates,
+      radiusKm: number,
+      service?: string
+    ): Promise<CompanyType[]> => {
+      // First pass: use already loaded companies (our local "cache")
+      // Create a local working set and id index to avoid duplicates
+      const localLoaded: CompanyType[] = [...loadedCompanies];
+      const idSet = new Set(localLoaded.map((c) => c.id));
+
+      let currentFiltered = sortByDistance(
+        filterCompaniesByRadius(localLoaded, center, radiusKm),
+        center
+      );
+
+      // If we already have enough, update state and exit
+      if (currentFiltered.length >= minCount || !hasMoreServer) {
+        const trimmed = currentFiltered.slice(
+          0,
+          Math.max(minCount, currentFiltered.length)
+        );
+        return trimmed;
+      }
+
+      // Otherwise, fetch in 200-sized batches until we reach minCount or no more server data
+      // Safety loop limit to avoid infinite loops
+      let safety = 30; // up to 30*200 = 6000 docs per search session
+      let localCursor: QueryDocumentSnapshot<DocumentData> | null = lastDoc;
+      let localHasMore: boolean = hasMoreServer;
+      while (
+        currentFiltered.length < minCount &&
+        localHasMore &&
+        safety-- > 0
+      ) {
+        const {
+          docs,
+          lastDoc: newCursor,
+          hasMore,
+        } = await fetchCompaniesBatch(localCursor, service);
+        if (!docs || docs.length === 0) {
+          localHasMore = false;
+          break;
+        }
+
+        // Merge deduped
+        for (const d of docs) {
+          const data = d.data();
+          const comp = { ...(data as CompanyType), id: d.id } as CompanyType;
+          if (!idSet.has(comp.id!)) {
+            idSet.add(comp.id!);
+            localLoaded.push(comp);
+          }
+        }
+
+        // Recompute filtered list
+        currentFiltered = sortByDistance(
+          filterCompaniesByRadius(localLoaded, center, radiusKm),
+          center
+        );
+
+        // advance cursor
+        localCursor = newCursor;
+        localHasMore = hasMore;
+      }
+
+      // Persist local state once
+      setLoadedCompanies(localLoaded);
+      setLastDoc(localCursor);
+      setHasMoreServer(localHasMore);
+
+      const finalList = currentFiltered;
+      return finalList;
+    },
+    [
+      loadedCompanies,
+      hasMoreServer,
+      lastDoc,
+      fetchCompaniesBatch,
+      filterCompaniesByRadius,
+      sortByDistance,
+    ]
+  );
+
+  const handleSearch = useCallback(
+    async (city: string, zip: string, radius: number, service?: string) => {
+      try {
+        setLoading(true);
+        // Reset search session state
+        setResults([]);
+        setDisplayedResults([]);
+        setCurrentPage(1);
+        setLastDoc(null);
+        setHasMoreServer(true);
+        setLoadedCompanies([]);
+        setActiveService(service);
+        setActiveRadiusKm(radius);
+
+        const centerCoordinates = await fetchCoordinates(city, zip);
+        if (!centerCoordinates) {
+          setLoading(false);
+          return;
+        }
+        setActiveCenter(centerCoordinates);
+
+        // Ensure we have at least one page (12) of results by scanning already loaded companies
+        const list = await ensureResultsCount(
+          RESULTS_PER_PAGE,
+          centerCoordinates,
+          radius,
+          service
+        );
+        setResults(list);
+        updateDisplayedResults(list, 1);
+        setLoading(false);
+      } catch (error) {
+        console.error("Fehler bei der Suche:", error);
+        setLoading(false);
+      }
+    },
+    [ensureResultsCount]
+  );
+
+  useEffect(() => {
+    const cityParam = searchParams?.get("city") || "";
+    const zipParam = searchParams?.get("plz") || "";
+    const serviceParam = searchParams?.get("service") || "";
+    const radiusParam = searchParams?.get("km") || "10";
+
+    if (cityParam && zipParam && serviceParam) {
+      handleSearch(cityParam, zipParam, Number(radiusParam), serviceParam);
+    }
+  }, [searchParams, handleSearch]);
 
   const updateDisplayedResults = (companies: CompanyType[], page: number) => {
     const startIndex = (page - 1) * RESULTS_PER_PAGE;
@@ -189,9 +304,25 @@ function CompanySearchPage() {
     setCurrentPage(page);
   };
 
-  const handleNextPage = () => {
+  const handleNextPage = async () => {
     const nextPage = currentPage + 1;
-    updateDisplayedResults(results, nextPage);
+    const neededCount = nextPage * RESULTS_PER_PAGE;
+    let source = results;
+    if (results.length < neededCount && hasMoreServer && activeCenter) {
+      setLoading(true);
+      const list = await ensureResultsCount(
+        neededCount,
+        activeCenter,
+        activeRadiusKm,
+        activeService
+      );
+      if (list.length > results.length) {
+        setResults(list);
+        source = list;
+      }
+      setLoading(false);
+    }
+    updateDisplayedResults(source, nextPage);
   };
 
   const handlePrevPage = () => {
@@ -223,7 +354,9 @@ function CompanySearchPage() {
           currentPage={currentPage}
           onNextPage={handleNextPage}
           onPrevPage={handlePrevPage}
-          hasMoreResults={currentPage * RESULTS_PER_PAGE < results.length}
+          hasMoreResults={
+            hasMoreServer || currentPage * RESULTS_PER_PAGE < results.length
+          }
         />
       </div>
       <div className='py-12 bg-green-100'>

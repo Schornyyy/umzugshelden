@@ -53,27 +53,31 @@ const CompanyInfos = ({ companyData }: { companyData: CompanyType }) => {
     <div className='flex flex-col lg:flex-row gap-16'>
       {/* Company Image Carousel */}
       <div className='relative mx-auto lg:mx-0'>
-        <Carousel className='w-80 h-80 sm:w-96 sm:h-96 max-md:mb-24'>
-          <CarouselContent>
-            {companyData.images?.map((image, index) => (
-              <CarouselItem key={index}>
-                <Image
-                  alt={companyData.companyName!}
-                  src={image}
-                  height={512}
-                  width={512}
-                  className='object-cover w-full h-full'
-                />
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          {companyData.images && companyData.images.length > 1 && (
-            <>
-              <CarouselPrevious />
-              <CarouselNext />
-            </>
-          )}
-        </Carousel>
+        {companyData.automatic ? (
+          <div></div>
+        ) : (
+          <Carousel className='w-80 h-80 sm:w-96 sm:h-96 max-md:mb-24'>
+            <CarouselContent>
+              {companyData.images?.map((image, index) => (
+                <CarouselItem key={index}>
+                  <Image
+                    alt={companyData.companyName!}
+                    src={image}
+                    height={512}
+                    width={512}
+                    className='object-cover w-full h-full'
+                  />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            {companyData.images && companyData.images.length > 1 && (
+              <>
+                <CarouselPrevious />
+                <CarouselNext />
+              </>
+            )}
+          </Carousel>
+        )}
       </div>
       <div className='flex flex-col gap-8 w-full lg:w-2/3'>
         {/* Company Name*/}

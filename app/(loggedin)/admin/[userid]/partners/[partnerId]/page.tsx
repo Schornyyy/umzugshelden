@@ -2,9 +2,13 @@ import {
   getPartner,
   listPartnerEvents,
   updatePartnerFromForm,
+  ensureProfileForCatalogPartner,
+  getPartnerProfile,
 } from "@/actions/partnerActions";
 import { PartnerEvent } from "@/types/PartnerEvent";
 import Image from "next/image";
+import { PartnerProfileEditor } from "@/components/PartnerProfileEditor";
+import { PartnerQuickActions } from "@/components/PartnerQuickActions";
 
 export const metadata = { title: "Partner Dashboard" };
 
@@ -20,6 +24,10 @@ export default async function PartnerDashboardPage({
   }
   const events: PartnerEvent[] = await listPartnerEvents(partnerId, 25);
 
+  // Ensure there is a profile doc connected to this partner and load it
+  const profileId = await ensureProfileForCatalogPartner(partnerId);
+  const profile = await getPartnerProfile(profileId);
+
   const daysActive = Math.max(
     1,
     Math.round((Date.now() - (partner.createdAt || Date.now())) / 86400000)
@@ -33,6 +41,7 @@ export default async function PartnerDashboardPage({
 
   return (
     <div className='p-6 max-w-5xl mx-auto space-y-10'>
+      {/* Header */}
       <div className='flex items-start gap-6'>
         {partner.logo && (
           <Image
@@ -55,6 +64,28 @@ export default async function PartnerDashboardPage({
               <div className='text-lg font-semibold'>{partner.clicks ?? 0}</div>
             </div>
             <div className='p-3 rounded-lg border bg-white'>
+              <div className='text-xs text-slate-500'>Website-Klicks</div>
+              <div className='text-lg font-semibold'>
+                {partner.websiteClicks ?? 0}
+              </div>
+            </div>
+            <div className='p-3 rounded-lg border bg-white'>
+              <div className='text-xs text-slate-500'>E-Mail-Klicks</div>
+              <div className='text-lg font-semibold'>
+                {partner.emailClicks ?? 0}
+              </div>
+            </div>
+            <div className='p-3 rounded-lg border bg-white'>
+              <div className='text-xs text-slate-500'>Telefon-Klicks</div>
+              <div className='text-lg font-semibold'>
+                {partner.phoneClicks ?? 0}
+              </div>
+            </div>
+            <div className='p-3 rounded-lg border bg-white'>
+              <div className='text-xs text-slate-500'>Seitenaufrufe</div>
+              <div className='text-lg font-semibold'>{partner.views ?? 0}</div>
+            </div>
+            <div className='p-3 rounded-lg border bg-white'>
               <div className='text-xs text-slate-500'>Ø Klicks/Tag</div>
               <div className='text-lg font-semibold'>
                 {avgPerDay.toFixed(2)}
@@ -65,17 +96,32 @@ export default async function PartnerDashboardPage({
               <div className='text-lg font-semibold'>{daysActive}</div>
             </div>
           </div>
+          {/* Quick Actions */}
+          <div className='mt-4'>
+            <PartnerQuickActions
+              partnerId={partner.id}
+              website={partner.link}
+              email={profile?.email}
+              phone={profile?.phone}
+            />
+          </div>
         </div>
-        {partner.link && (
-          <a
-            href={partner.link}
-            target='_blank'
-            className='text-sm px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700'>
-            Partner Link
-          </a>
-        )}
+        {/* Right column left empty for balance */}
       </div>
-      <div className='grid md:grid-cols-2 gap-10 items-start'>
+      {/* Content sections */}
+      <nav className='sticky top-0 z-10 bg-white/60 backdrop-blur supports-[backdrop-filter]:bg-white/40 border rounded-lg p-2 flex flex-wrap gap-2 text-xs'>
+        <a href='#catalog' className='px-2 py-1 rounded hover:bg-slate-100'>
+          Katalogdaten
+        </a>
+        <a href='#events' className='px-2 py-1 rounded hover:bg-slate-100'>
+          Ereignisse
+        </a>
+        <a href='#profile' className='px-2 py-1 rounded hover:bg-slate-100'>
+          Partnerseite
+        </a>
+      </nav>
+
+      <div id='catalog' className='grid md:grid-cols-2 gap-10 items-start'>
         <form
           action={action}
           className='space-y-4 bg-white p-6 rounded-xl border shadow-sm'>
@@ -159,7 +205,7 @@ export default async function PartnerDashboardPage({
             Speichern
           </button>
         </form>
-        <div>
+        <div id='events'>
           <h2 className='font-semibold text-lg mb-4'>Letzte Ereignisse</h2>
           {!events.length && (
             <p className='text-sm text-slate-500'>Keine Ereignisse.</p>
@@ -170,7 +216,15 @@ export default async function PartnerDashboardPage({
                 key={ev.id}
                 className='text-xs flex items-center justify-between bg-white border rounded px-3 py-2'>
                 <span className='font-medium'>
-                  {ev.type === "click" ? "Link Klick" : ev.type}
+                  {ev.type === "website_click"
+                    ? "Website Klick"
+                    : ev.type === "email_click"
+                    ? "E-Mail Klick"
+                    : ev.type === "phone_click"
+                    ? "Telefon Klick"
+                    : ev.type === "view"
+                    ? "Seitenaufruf"
+                    : ev.type}
                 </span>
                 <span className='text-slate-500'>
                   {new Date(ev.createdAt).toLocaleString("de-DE")}
@@ -180,6 +234,39 @@ export default async function PartnerDashboardPage({
           </ul>
         </div>
       </div>
+
+      {/* Full Partnerseite Editor (Logo, Bilder, Texte, Kontakt) */}
+      {profile ? (
+        <div id='profile' className='bg-white p-6 rounded-xl border shadow-sm'>
+          <h2 className='font-semibold text-lg mb-4'>
+            Partnerseite bearbeiten
+          </h2>
+          <PartnerProfileEditor
+            profile={{
+              id: profile.id,
+              contactPerson: profile.contactPerson || "",
+              email: profile.email || "",
+              website: profile.website,
+              phone: profile.phone,
+              logo: (profile as unknown as { logo?: string }).logo,
+              images: (profile as unknown as { images?: string[] }).images || [
+                "",
+                "",
+                "",
+              ],
+              texts: (profile as unknown as { texts?: string[] }).texts || [
+                "",
+                "",
+                "",
+              ],
+            }}
+          />
+        </div>
+      ) : (
+        <div className='text-sm text-slate-500'>
+          Profil konnte nicht geladen werden.
+        </div>
+      )}
     </div>
   );
 }
