@@ -166,14 +166,14 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
 
     // Erstelle Replacements für das Template
   const trackingBase = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || '';
-  // Standard: Login / Dashboard Link
-  const baseTarget = `${trackingBase}/login`;
-  const trackedLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(baseTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+  // Ziel: Öffentliche Auftragsseite für Unternehmen mit Tracking
+  const pageTarget = `${trackingBase}/fuer-unternehmen/auftrag/${encodeURIComponent(String(contractId))}` + (company.email ? `?companyEmail=${encodeURIComponent(company.email)}` : '');
+  const trackedPageLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(pageTarget)}` + (company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : '');
 
     const replacements = {
-      // Link in die App (kann später auf eine spezifische Contract-Detailseite geändert werden)
-      contractLink: `${process.env.NEXT_PUBLIC_URL}/fuer-unternehmen`,
-      trackedContractLink: trackedLink,
+  // Link direkt zur öffentlichen Auftragsseite (mit Tracking)
+  contractLink: pageTarget,
+  trackedContractLink: trackedPageLink,
       contractTypeLabel: String(contract.type),
       zip: String(contract.zip ?? ''),
       gardenSize: String(contract.gardenSize ?? ''),
@@ -194,8 +194,8 @@ async function sendEmailNotification(company: CompanyType, contract: Contract, c
       templatePath = 'AutoProfileInviteEmail.html';
       subject = `🚀 Gratis erster Auftrag für Sie – ${contract.type}${contract.zip ? ' (' + contract.zip + ')' : ''}`;
       // Neuer Landing-Link für automatische Unternehmen mit Lead-Vorschau
-      const landingTarget = `${trackingBase}/fuer-unternehmen/auftrag/${encodeURIComponent(String(contractId))}${company.email ? `?companyEmail=${encodeURIComponent(company.email)}` : ''}`;
-      const trackedRegistrationLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(landingTarget)}${company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : ''}`;
+      const landingTarget = pageTarget;
+      const trackedRegistrationLink = `${trackingBase}/api/email/track/click?contractId=${encodeURIComponent(String(contractId))}&target=${encodeURIComponent(landingTarget)}` + (company.email ? `&companyEmail=${encodeURIComponent(company.email)}` : '');
       replacementsExtended['trackedRegistrationLink'] = trackedRegistrationLink;
     }
 
