@@ -21,11 +21,8 @@ import { signOut } from "firebase/auth";
 import { redirectUser } from "@/actions/userActions";
 import { useParams } from "next/navigation";
 const nav = [
-  { title: "Übersicht", url: "" },
-  { title: "Kampagnen", url: "campaigns" },
-  { title: "Leads", url: "leads" },
-  { title: "Einstellungen", url: "/partner/settings" },
   { title: "Partnerseite", url: "/partner/partnerseite" },
+  { title: "Statistiken", url: "/partner/stats" },
 ];
 
 export function PartnerSidebar({

@@ -68,6 +68,16 @@ export async function getPartnerById(id: string): Promise<(PartnerProfile & { id
   return { id: s.id, ...(s.data() as PartnerProfile) };
 }
 
+// Find the catalog partner doc by owner account ID
+export async function findCatalogPartnerByOwnerId(ownerid: string): Promise<(PartnerType & { id: string }) | null> {
+  const colRef = collection(database, PARTNERS_COLLECTION);
+  const qRef = query(colRef, where("type", "==", "catalog"), where("ownerid", "==", ownerid));
+  const snap = await getDocs(qRef);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...(d.data() as Omit<PartnerType, "id">) };
+}
+
 export async function updatePartnerProfile(id: string, patch: Partial<PartnerProfile>): Promise<boolean> {
   const ref = doc(database, PARTNERS_COLLECTION, id);
   await updateDoc(ref, omitUndefined({ ...patch, updatedAt: Date.now() }));
