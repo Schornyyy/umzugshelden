@@ -42,6 +42,8 @@ function CompanySearchPage() {
   );
 
   const searchParams = useSearchParams();
+  const searchParamsString = React.useMemo(() => searchParams?.toString() || "", [searchParams]);
+  const handleSearchRef = React.useRef<(city: string, zip: string, radius: number, service?: string) => void>(() => {});
 
   const RESULTS_PER_PAGE = 12;
 
@@ -286,16 +288,23 @@ function CompanySearchPage() {
     [ensureResultsCount]
   );
 
+  // Keep ref in sync with the latest handleSearch implementation
   useEffect(() => {
-    const cityParam = searchParams?.get("city") || "";
-    const zipParam = searchParams?.get("plz") || "";
-    const serviceParam = searchParams?.get("service") || "";
-    const radiusParam = searchParams?.get("km") || "10";
+    handleSearchRef.current = handleSearch as (city: string, zip: string, radius: number, service?: string) => void;
+  }, [handleSearch]);
+
+  // Trigger search from URL parameters without creating dependency loops
+  useEffect(() => {
+    const sp = new URLSearchParams(searchParamsString);
+    const cityParam = sp.get("city") || "";
+    const zipParam = sp.get("plz") || "";
+    const serviceParam = sp.get("service") || "";
+    const radiusParam = sp.get("km") || "10";
 
     if (cityParam && zipParam && serviceParam) {
-      handleSearch(cityParam, zipParam, Number(radiusParam), serviceParam);
+      handleSearchRef.current(cityParam, zipParam, Number(radiusParam), serviceParam);
     }
-  }, [searchParams, handleSearch]);
+  }, [searchParamsString]);
 
   const updateDisplayedResults = (companies: CompanyType[], page: number) => {
     const startIndex = (page - 1) * RESULTS_PER_PAGE;

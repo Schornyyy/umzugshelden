@@ -4,7 +4,9 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import {
-  findPartnerByOwnerId,
+  findCatalogPartnerByOwnerId,
+  ensureProfileForCatalogPartner,
+  getPartnerProfile,
   updatePartnerProfile,
 } from "@/actions/partnerActions";
 import {
@@ -39,18 +41,21 @@ export default function PartnerSeitePage() {
 
   useEffect(() => {
     (async () => {
-      // Route param is the owner account ID; fetch partner by ownerid
-      const partner = await findPartnerByOwnerId(params.userid);
-      if (!partner) return router.push("/login");
+      // Route param is the owner account ID; resolve to catalog doc, then to profile doc
+      const catalog = await findCatalogPartnerByOwnerId(params.userid);
+      if (!catalog) return router.push("/login");
+      const profileId = await ensureProfileForCatalogPartner(catalog.id);
+      const profile = await getPartnerProfile(profileId);
+      if (!profile) return router.push("/login");
       setData({
-        id: partner.id,
-        email: partner.email,
-        contactPerson: partner.contactPerson,
-        logo: (partner as unknown as { logo?: string }).logo,
-        website: partner.website,
-        phone: partner.phone,
-        images: (partner as unknown as { images?: string[] }).images || [],
-        texts: (partner as unknown as { texts?: string[] }).texts || [
+        id: profile.id,
+        email: profile.email,
+        contactPerson: profile.contactPerson,
+        logo: (profile as unknown as { logo?: string }).logo,
+        website: profile.website,
+        phone: profile.phone,
+        images: (profile as unknown as { images?: string[] }).images || [],
+        texts: (profile as unknown as { texts?: string[] }).texts || [
           "",
           "",
           "",

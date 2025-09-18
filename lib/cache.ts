@@ -217,6 +217,8 @@ export const CACHE_KEYS = {
   COMPANY_EVENTS: (companyId: string) => `company-events:${companyId}`,
   // Partner Stats
   PARTNER_STATS: (partnerId: string) => `partner-stats:${partnerId}`,
+  // Partner Lists
+  PARTNERS_ALL: 'partners:all:catalog',
 } as const;
 
 // Cache-Optionen für verschiedene Datentypen
@@ -267,6 +269,12 @@ export const CACHE_OPTIONS = {
   PARTNER_STATS: {
     ttl: 24 * 60 * 60 * 1000,
     refreshInterval: 24 * 60 * 60 * 1000
+  },
+
+  // Partner List: 6 Stunden Cache (ändern sich selten)
+  PARTNERS: {
+    ttl: 6 * 60 * 60 * 1000, // 6 Stunden
+    refreshInterval: 6 * 60 * 60 * 1000
   }
 } as const;
 

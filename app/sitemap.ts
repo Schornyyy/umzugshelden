@@ -11,7 +11,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const SERVICE_SUB_CHUNK_SIZE = 45000;
   const serviceSubChunkCount = Math.ceil(totalServiceSubUrls / SERVICE_SUB_CHUNK_SIZE);
 
-  const named = [ 'blog','companycity','companycityservice','companies','page' ];
+  const named = [ 'blog','companycity','companycityservice','companies','page','partners' ];
 
   const branchServiceCityDynamic = Array.from({ length: branchServiceCityChunkCount }, (_, i) => ({
     url: `https://www.landschaftshelden.io/sitemaps/sitemap/${i}.xml`,

@@ -1,6 +1,7 @@
 "use server";
 
 import { database } from "@/config/firebase";
+import { revalidatePath } from "next/cache";
 import {
   addDoc,
   collection,
@@ -81,6 +82,16 @@ export async function findCatalogPartnerByOwnerId(ownerid: string): Promise<(Par
 export async function updatePartnerProfile(id: string, patch: Partial<PartnerProfile>): Promise<boolean> {
   const ref = doc(database, PARTNERS_COLLECTION, id);
   await updateDoc(ref, omitUndefined({ ...patch, updatedAt: Date.now() }));
+  // After profile updates, revalidate related public pages if linked to a catalog partner
+  try {
+    const catalog = await findCatalogByProfileId(id);
+    if (catalog?.category) {
+      revalidatePath(`/partners/${catalog.category}/${catalog.id}`);
+      revalidatePath(`/partners/${catalog.category}`);
+      revalidatePath(`/partner`);
+      revalidatePath(`/sitemaps/partners/sitemap.xml`);
+    }
+  } catch {}
   return true;
 }
 
@@ -168,16 +179,45 @@ export async function updatePartnerFromForm(partnerId: string, formData: FormDat
   };
   const ref = doc(database, PARTNERS_COLLECTION, partnerId);
   await updateDoc(ref, omitUndefined({ ...patch, updatedAt: Date.now() }));
+  // Revalidate public pages for this partner
+  try {
+    const updated = await getPartner(partnerId);
+    if (updated?.category) {
+      revalidatePath(`/partners/${updated.category}/${partnerId}`);
+      revalidatePath(`/partners/${updated.category}`);
+      revalidatePath(`/partner`);
+      revalidatePath(`/sitemaps/partners/sitemap.xml`);
+    }
+  } catch {}
 }
 
 // Admin catalog management
 
 export async function listPartners(): Promise<PartnerType[]> {
-  const col = collection(database, PARTNERS_COLLECTION);
-  // Prefer type=catalog to distinguish from profile docs
-  const q = query(col, where("type", "==", "catalog"), orderBy("priority", "asc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PartnerType, "id">) }));
+  const key = CACHE_KEYS.PARTNERS_ALL;
+  const fetcher = async () => {
+    const col = collection(database, PARTNERS_COLLECTION);
+    // Prefer type=catalog to distinguish from profile docs
+    const q = query(col, where("type", "==", "catalog"), orderBy("priority", "asc"));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<PartnerType, "id">) }));
+  };
+  return cacheManager.getOrFetch(key, fetcher, CACHE_OPTIONS.PARTNERS);
+}
+
+export async function listPartnersByCategory(category: string): Promise<PartnerType[]> {
+  const all = await listPartners();
+  return all.filter((p) => (p.category || "–") === category);
+}
+
+// Find catalog partner by linked profileId
+export async function findCatalogByProfileId(profileId: string): Promise<(PartnerType & { id: string }) | null> {
+  const colRef = collection(database, PARTNERS_COLLECTION);
+  const qRef = query(colRef, where("type", "==", "catalog"), where("profileId", "==", profileId), fsLimit(1));
+  const snap = await getDocs(qRef);
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...(d.data() as Omit<PartnerType, "id">) };
 }
 
 export async function createPartner(data: Omit<PartnerType, "id">): Promise<string> {
