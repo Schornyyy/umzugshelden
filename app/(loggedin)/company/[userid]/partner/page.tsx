@@ -62,10 +62,10 @@ const PartnerPortalPage = async () => {
               <PartnerViewTracker partnerId={p.id} />
               <div className='flex items-center gap-4 mb-4'>
                 <div className='h-14 w-14 rounded-lg bg-slate-50 flex items-center justify-center ring-1 ring-slate-200 overflow-hidden'>
-                  {p.logo && (
+                  {p.infos?.logoPath && (
                     <Image
-                      src={p.logo}
-                      alt={p.name}
+                      src={p.infos.logoPath}
+                      alt={p.company?.name || 'Logo'}
                       width={56}
                       height={56}
                       className='object-contain'
@@ -74,7 +74,7 @@ const PartnerPortalPage = async () => {
                 </div>
                 <div>
                   <h3 className='font-semibold text-slate-800 text-sm md:text-base'>
-                    {p.name}
+                    {p.company?.name}
                   </h3>
                   {p.category && (
                     <p className='text-[11px] uppercase tracking-wide text-slate-400 font-medium'>
@@ -84,9 +84,9 @@ const PartnerPortalPage = async () => {
                 </div>
               </div>
               <p className='text-xs text-slate-600 leading-relaxed flex-1 whitespace-pre-wrap'>
-                {p.benefit}
+                {p.companyBenefits}
               </p>
-              {p.link && (
+              {p.infos?.website && (
                 <a
                   href={`/api/partner-click/${p.id}`}
                   target='_blank'
