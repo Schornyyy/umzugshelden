@@ -12,6 +12,7 @@ import {
   getDocs,
   query,
   updateDoc,
+  setDoc,
   doc,
   getDoc,
   orderBy,
@@ -88,7 +89,8 @@ export async function createPartner(input: CreatePartnerInput): Promise<string> 
   };
   if (parsed.id) {
     const ref = doc(database, PARTNERS_COLLECTION, parsed.id);
-    await updateDoc(ref, payload); // upsert style
+    // Use setDoc with merge to allow upsert semantics without type casting issues
+    await setDoc(ref, payload, { merge: true });
     invalidatePartnerListCaches();
     revalidatePartnersRoutes(parsed.category);
     return parsed.id;
@@ -122,7 +124,8 @@ export async function updatePartner(id: string, patch: UpdatePartnerInput): Prom
     priority: patch.priority ?? existing.priority,
     updatedAt: Date.now(),
   } as Omit<PartnerType, "id">;
-  await updateDoc(ref, merged as Record<string, unknown>);
+  // Use setDoc with merge to write nested objects safely (avoids updateDoc generic index signature constraints)
+  await setDoc(ref, merged, { merge: true });
   invalidatePartnerListCaches();
   revalidatePartnersRoutes(merged.category);
   return true;
