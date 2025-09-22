@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getPartner, incrementPartnerClick, addPartnerEvent, incrementPartnerStat } from '@/actions/partnerActions';
+import { getPartner, recordPartnerInteraction } from '@/actions/partnerActions';
 
 export async function GET(
   _req: Request,
@@ -14,13 +14,13 @@ export async function GET(
     if (!partner) {
       return NextResponse.json({ error: 'not found' }, { status: 404 });
     }
-    if (partner.link) {
-      await incrementPartnerClick(partnerId); // legacy counter
-      await incrementPartnerStat(partnerId, 'websiteClicks');
-      await addPartnerEvent(partnerId, { type: 'website_click', createdAt: Date.now(), target: partner.link });
-      return NextResponse.redirect(partner.link, { status: 307 });
+    const target = partner.infos?.website;
+    if (target) {
+      // Single unified interaction recorder (handles aggregate + event)
+      await recordPartnerInteraction(partnerId, 'website', { target });
+      return NextResponse.redirect(target, { status: 307 });
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, noRedirect: true });
   } catch {
     return NextResponse.json({ error: 'server error' }, { status: 500 });
   }
