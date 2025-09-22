@@ -1,22 +1,46 @@
+
 export interface PartnerType {
-  id: string;
-  name: string;
-  logo: string; // URL oder Pfad
-  benefit: string;
-  contactPerson?: string;
-  website?: string;
-  link?: string;
+  id: string
+  contact: {
+    person: string;
+    email: string;
+    phone: string;
+  };
+  company: {
+    name: string;
+    street?: string;
+    zip?: string;
+    city?: string;
+  };
+  infos: {
+    website: string,
+    logoPath?: string
+  };
+  siteInfos?: PartnerSiteInfo[],
+  companyBenefits: string;
+  shortDescription?: string;
   category?: string;
+  createdAt: number;
+  updatedAt: number;
   active: boolean;
   priority?: number; // für Sortierung
-  createdAt?: number;
-  updatedAt?: number;
-  tags?: string[];
-  description?: string;
-  clicks?: number; // Anzahl Link-Klicks
-  // Neue Statistik-Felder
+  // Metriken (aggregierte Zähler)
+  clicks?: number; // Gesamt (falls historisch genutzt)
   websiteClicks?: number;
   emailClicks?: number;
   phoneClicks?: number;
   views?: number;
+}
+
+
+export interface PartnerSiteInfo {
+  headline: string,
+  text: string,
+  image?: string
+}
+
+export interface PartnerStats {
+  type: "website" | "email" | "phone" | "view";
+  count: number;
+  updatedAt: number; // Unix ms
 }

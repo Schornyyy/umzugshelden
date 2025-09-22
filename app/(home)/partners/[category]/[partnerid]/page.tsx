@@ -1,19 +1,14 @@
 import { Metadata } from "next";
 import Image from "next/image";
-import Script from "next/script";
-import RichText from "./_components/RichText";
-import {
-  findCatalogByProfileId,
-  getPartnerProfile,
-  ensureProfileForCatalogPartner,
-  getPartner,
-} from "@/actions/partnerActions";
+import { getPartner } from "@/actions/partnerActions";
+import { RichTextRender } from "@/components/RichTextRender";
+import { PartnerInteractionTracker } from "@/components/PartnerInteractionTracker";
+import Link from "next/link";
+import Headings from "@/components/Headings";
+import { Separator } from "@/components/ui/separator";
+import { MailIcon, PhoneIcon, UserCircleIcon } from "lucide-react";
 
 export const revalidate = 3600; // 1h cache
-
-function safeText(s?: string) {
-  return (s || "").trim();
-}
 
 export async function generateMetadata({
   params,
@@ -21,37 +16,20 @@ export async function generateMetadata({
   params: Promise<{ category: string; partnerid: string }>;
 }): Promise<Metadata> {
   const { category, partnerid } = await params;
-  // Resolve partnerid that may be a profileId or a catalogId
-  let profile = await getPartnerProfile(partnerid);
-  let catalog = profile ? await findCatalogByProfileId(profile.id) : null;
-  if (!profile) {
-    try {
-      const profileId = await ensureProfileForCatalogPartner(partnerid);
-      profile = await getPartnerProfile(profileId);
-      if (!catalog) {
-        catalog = await findCatalogByProfileId(profileId);
-      }
-      if (!catalog) {
-        // Fallback: use the catalog doc directly if available
-        catalog = await getPartner(partnerid);
-      }
-    } catch {
-      // ignore and continue with whatever we have
-    }
+  const partner = await getPartner(partnerid);
+  if (!partner) {
+    return { title: "Partner nicht gefunden" };
   }
-
-  const name = catalog?.name || profile?.contactPerson || "Partner";
-  const description =
-    catalog?.description ||
-    safeText(profile?.texts?.[0]) ||
-    "Partnerprofil im Garten- und Landschaftsbau.";
-  const title = `${name} – ${category.replace(
+  const catName = (partner.category || category || "Partner").replace(
     /-/g,
     " "
-  )} | Landschaftshelden.io`;
-
-  const ogImage = profile?.logo || profile?.images?.[0] || catalog?.logo;
-
+  );
+  const title = `${partner.company.name} – ${catName} | Landschaftshelden.io`;
+  const description =
+    partner.shortDescription ||
+    partner.companyBenefits ||
+    `Partnerprofil ${partner.company.name}`;
+  const ogImage = partner.infos.logoPath;
   return {
     title,
     description,
@@ -59,7 +37,6 @@ export async function generateMetadata({
       title,
       description,
       type: "article",
-      url: `https://landschaftshelden.io/partners/${category}/${partnerid}`,
       images: ogImage ? [{ url: ogImage }] : undefined,
     },
     twitter: {
@@ -81,132 +58,185 @@ export default async function PartnerDetailPage({
   params: Promise<{ category: string; partnerid: string }>;
 }) {
   const { category, partnerid } = await params;
-  // Resolve partnerid that may be a profileId or a catalogId
-  let profile = await getPartnerProfile(partnerid);
-  let catalog = profile ? await findCatalogByProfileId(profile.id) : null;
-  if (!profile) {
-    try {
-      const profileId = await ensureProfileForCatalogPartner(partnerid);
-      profile = await getPartnerProfile(profileId);
-      if (!catalog) {
-        catalog = await findCatalogByProfileId(profileId);
-      }
-      if (!catalog) {
-        catalog = await getPartner(partnerid);
-      }
-    } catch {
-      // ignore
-    }
-  }
-
-  if (!profile) {
+  const partner = await getPartner(partnerid);
+  if (!partner) {
     return (
       <main className='px-4 py-10 max-w-5xl mx-auto'>
         <h1 className='text-2xl font-bold mb-2'>Partner nicht gefunden</h1>
-        <p className='text-slate-600'>
-          Das angeforderte Partnerprofil existiert nicht.
-        </p>
+        <p className='text-slate-600'>Das Partnerprofil existiert nicht.</p>
       </main>
     );
   }
-
-  const catName = (catalog?.category || category || "Partner").replace(
+  const catName = (partner.category || category || "Partner").replace(
     /-/g,
     " "
   );
-  const title = catalog?.name || profile.contactPerson || "Partner";
-  const heroImage = profile.logo || profile.images?.[0] || undefined;
-
-  const blocks = [
-    { image: profile.images?.[0], text: safeText(profile.texts?.[0]) },
-    { image: profile.images?.[1], text: safeText(profile.texts?.[1]) },
-    { image: profile.images?.[2], text: safeText(profile.texts?.[2]) },
-  ].filter((b) => b.image || b.text);
+  // siteInfos array
+  const siteInfos = (partner.siteInfos || []).filter(
+    (b) => b.headline || b.text || b.image
+  );
+  // stats intentionally not displayed publicly; only interaction tracking occurs.
 
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: title,
+    name: partner.company.name,
     url: `https://landschaftshelden.io/partners/${category}/${partnerid}`,
-    image: heroImage || undefined,
-    email: profile.email || undefined,
-    telephone: profile.phone || undefined,
-    sameAs: catalog?.link ? [catalog.link] : undefined,
+    image: partner.infos.logoPath || undefined,
+    email: partner.contact.email || undefined,
+    telephone: partner.contact.phone || undefined,
+    address:
+      partner.company.city || partner.company.street
+        ? {
+            "@type": "PostalAddress",
+            streetAddress: partner.company.street || undefined,
+            postalCode: partner.company.zip || undefined,
+            addressLocality: partner.company.city || undefined,
+            addressCountry: "DE",
+          }
+        : undefined,
+    sameAs: partner.infos.website ? [partner.infos.website] : undefined,
     description:
-      catalog?.description || safeText(profile.texts?.[0]) || undefined,
-  } as Record<string, unknown>;
+      partner.shortDescription || partner.companyBenefits || undefined,
+  };
 
   return (
-    <main className='px-4 py-10 md:py-14 max-w-5xl mx-auto'>
-      <header className='mb-8'>
-        <h1 className='text-3xl md:text-4xl font-extrabold tracking-tight'>
-          {title}
-        </h1>
-        <p className='mt-2 text-slate-600'>{catName}</p>
-      </header>
+    <main
+      className='px-4 py-8 md:py-12 max-md:px-6 md:max-w-7xl mx-auto'
+      role='main'>
+      <PartnerInteractionTracker partnerId={partner.id} />
+      {/* Breadcrumb */}
+      <nav
+        aria-label='Breadcrumb'
+        className='mb-6 text-xs text-slate-500 flex flex-wrap gap-1'>
+        <Link
+          href='/partners'
+          className='hover:text-slate-700 transition-colors'>
+          Partner
+        </Link>
+        <span>/</span>
+        <Link
+          href={`/partners/${category}`}
+          className='hover:text-slate-700 transition-colors'>
+          {catName}
+        </Link>
+        <span>/</span>
+        <span aria-current='page' className='text-slate-700 font-medium'>
+          {partner.company.name}
+        </span>
+      </nav>
 
-      {heroImage && (
-        <div className='mb-8'>
-          <Image
-            src={heroImage}
-            alt={title}
-            width={1200}
-            height={630}
-            className='w-full h-auto rounded-xl border object-cover'
-          />
+      <header className='grid grid-cols-2 grid-rows-1 gap-6 max-w-7xl mb-12'>
+        <div className='flex items-center justify-center'>
+          {partner.infos.logoPath ? (
+            <Image
+              src={partner.infos.logoPath}
+              alt={partner.company.name}
+              width={200}
+              height={200}
+              loading='eager'
+              className='w-44 h-44 object-contain rounded-xl border bg-white p-3 shadow-sm'
+            />
+          ) : (
+            <div className='w-44 h-44 flex items-center justify-center rounded-xl border bg-slate-100 text-slate-400 text-xs'>
+              Kein Logo
+            </div>
+          )}
         </div>
-      )}
+        <div className='flex flex-col gap-3'>
+          <p className='self-start text-xs font-medium rounded-full bg-green-50 text-green-700 px-3 py-1 border border-green-200 hover:bg-green-100 transition-colors'>
+            {catName}
+          </p>
+          <Headings level={1}>{partner.company.name}</Headings>
+          <p>{partner.shortDescription}</p>
+        </div>
+      </header>
+      <div className='flex flex-row gap-12 max-w-7xl mb-12'>
+        {/** Kontaktinformationen */}
+        <div className='flex flex-col gap-4'>
+          <div className='flex flex-col'>
+            <Headings level={3}>Kontakt</Headings>
+            <Separator />
+          </div>
+          <p className='flex flex-row gap-2'>
+            {" "}
+            <UserCircleIcon className='h-6 w-6 text-green-500' />{" "}
+            {partner.contact.person}
+          </p>
+          <Link
+            href={`mailto:${partner.contact.email}`}
+            className='flex flex-row gap-2 text-green-500 hover:text-green-400'>
+            <MailIcon className='h-6 w-6 text-green-500' />
+            {partner.contact.email}
+          </Link>
+          <p className='flex flex-row gap-2'>
+            <PhoneIcon className='h-6 w-6 text-green-500' />
+            {partner.contact.phone}
+          </p>
+        </div>
+        {/** Firmeninformationen */}
+        <div className='flex flex-col gap-4'>
+          <div className='flex flex-col'>
+            <Headings level={3}>Firma</Headings>
+            <Separator />
+          </div>
+          <p className='flex flex-row gap-2'>{partner.company.name}</p>
+          <p className='flex flex-row gap-2'>
+            {partner.company.zip}, {partner.company.city}
+          </p>
+          <p className='flex flex-row gap-2'>{partner.company.street}</p>
+        </div>
+      </div>
 
-      <section className='space-y-10'>
-        {blocks.map((b, idx) => (
-          <div
-            key={idx}
-            className={`grid md:grid-cols-2 gap-6 items-center ${
-              idx % 2 === 1 ? "md:[&>div:first-child]:order-2" : ""
-            }`}>
-            <div>
-              {b.image ? (
+      {siteInfos.length > 0 && (
+        <section className='space-y-20' aria-label='Unternehmensinformationen'>
+          {siteInfos.map((block, idx) => {
+            const imageEl = block.image ? (
+              <figure className='m-0'>
                 <Image
-                  src={b.image}
-                  alt={`${title} Bild ${idx + 1}`}
+                  src={block.image}
+                  alt={block.headline || partner.company.name}
                   width={900}
                   height={600}
-                  className='w-full h-auto rounded-xl border object-cover'
+                  loading='lazy'
+                  className='w-full h-auto rounded-xl border object-cover shadow-sm'
                 />
-              ) : (
-                <div className='w-full aspect-[3/2] rounded-xl border bg-slate-100' />
-              )}
-            </div>
-            <div>
-              {b.text ? (
-                <div className='prose prose-slate max-w-none'>
-                  <RichText content={b.text} />
-                </div>
-              ) : (
-                <div className='text-slate-500 text-sm'>
-                  Keine Beschreibung vorhanden.
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </section>
-
-      {catalog?.link && (
-        <div className='mt-12'>
-          <a
-            href={`/api/partner-click/${catalog.id}`}
-            target='_blank'
-            rel='noopener noreferrer'
-            className='inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2'>
-            Zum Partner
-          </a>
-        </div>
+                {block.headline && (
+                  <figcaption className='sr-only'>{block.headline}</figcaption>
+                )}
+              </figure>
+            ) : (
+              <div className='w-full aspect-[3/2] rounded-xl border bg-slate-100' />
+            );
+            const textEl = (
+              <div className='space-y-4'>
+                {block.headline && (
+                  <h2 className='text-xl font-semibold text-slate-800'>
+                    {block.headline}
+                  </h2>
+                )}
+                {block.text ? (
+                  <RichTextRender value={block.text} />
+                ) : (
+                  <p className='text-sm text-slate-500'>Keine Beschreibung.</p>
+                )}
+              </div>
+            );
+            const swap = idx % 2 === 1; // alternate
+            return (
+              <div
+                key={idx}
+                className='grid md:grid-cols-2 gap-10 items-center'>
+                {swap ? textEl : imageEl}
+                {swap ? imageEl : textEl}
+              </div>
+            );
+          })}
+        </section>
       )}
-
-      <Script id='partner-organization' type='application/ld+json'>
+      <script type='application/ld+json' suppressHydrationWarning>
         {JSON.stringify(orgJsonLd)}
-      </Script>
+      </script>
     </main>
   );
 }

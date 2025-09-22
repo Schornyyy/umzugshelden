@@ -42,8 +42,13 @@ function CompanySearchPage() {
   );
 
   const searchParams = useSearchParams();
-  const searchParamsString = React.useMemo(() => searchParams?.toString() || "", [searchParams]);
-  const handleSearchRef = React.useRef<(city: string, zip: string, radius: number, service?: string) => void>(() => {});
+  const searchParamsString = React.useMemo(
+    () => searchParams?.toString() || "",
+    [searchParams]
+  );
+  const handleSearchRef = React.useRef<
+    (city: string, zip: string, radius: number, service?: string) => void
+  >(() => {});
 
   const RESULTS_PER_PAGE = 12;
 
@@ -290,7 +295,12 @@ function CompanySearchPage() {
 
   // Keep ref in sync with the latest handleSearch implementation
   useEffect(() => {
-    handleSearchRef.current = handleSearch as (city: string, zip: string, radius: number, service?: string) => void;
+    handleSearchRef.current = handleSearch as (
+      city: string,
+      zip: string,
+      radius: number,
+      service?: string
+    ) => void;
   }, [handleSearch]);
 
   // Trigger search from URL parameters without creating dependency loops
@@ -302,7 +312,12 @@ function CompanySearchPage() {
     const radiusParam = sp.get("km") || "10";
 
     if (cityParam && zipParam && serviceParam) {
-      handleSearchRef.current(cityParam, zipParam, Number(radiusParam), serviceParam);
+      handleSearchRef.current(
+        cityParam,
+        zipParam,
+        Number(radiusParam),
+        serviceParam
+      );
     }
   }, [searchParamsString]);
 

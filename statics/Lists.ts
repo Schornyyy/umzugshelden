@@ -74,7 +74,8 @@ export function getGalbauBranches(): string[] {
 
 
 
-export const cities = [
+// Original Rohliste (Duplikate möglich) – interne Konstante
+const rawCities = [
   // Großstädte und Städte (bestehende Liste)
   'Aach', 'Abensberg', 'Absberg', 'Bad Bramstedt', 'Bad Neuenahr-Ahrweiler',
   'Bad Soden am Taunus', 'Baesweiler', 'Baunatal', 'Bergen', 'Berlin',
@@ -376,4 +377,7 @@ export const cities = [
   'Zörbig', 'Zorneding', 'Zschopau', 'Zülpich', 'Zweibrücken', 'Zweiflingen', 'Zwenkau',
   'Zwiesel', 'Zwingenberg', 'Zwickau'
 ];
+
+// Export: eindeutige Städte (Reihenfolge der ersten Vorkommen bleibt erhalten)
+export const cities: string[] = Array.from(new Set(rawCities));
 

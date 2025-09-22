@@ -219,6 +219,10 @@ export const CACHE_KEYS = {
   PARTNER_STATS: (partnerId: string) => `partner-stats:${partnerId}`,
   // Partner Lists
   PARTNERS_ALL: 'partners:all:catalog',
+  // City Pages
+  CITY_PAGE_BY_ID: (id: string) => `citypage:id:${id}`,
+  CITY_PAGE_BY_CITY: (city: string) => `citypage:city:${city.toLowerCase()}`,
+  CITY_PAGES_LIST: 'citypages:all',
 } as const;
 
 // Cache-Optionen für verschiedene Datentypen
@@ -275,6 +279,11 @@ export const CACHE_OPTIONS = {
   PARTNERS: {
     ttl: 6 * 60 * 60 * 1000, // 6 Stunden
     refreshInterval: 6 * 60 * 60 * 1000
+  },
+  // City Pages: 12 Stunden Cache (häufig gelesen, selten geändert)
+  CITY_PAGES: {
+    ttl: 12 * 60 * 60 * 1000,
+    refreshInterval: 12 * 60 * 60 * 1000
   }
 } as const;
 

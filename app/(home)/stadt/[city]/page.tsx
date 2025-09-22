@@ -9,6 +9,11 @@ import {
 import { getAllCompanysFromDatabaseByCity } from "@/actions/companyActions";
 import { getGalbauServices } from "@/statics/Lists";
 import { getCityContent, buildFAQSchema } from "@/lib/cityContent";
+import {
+  getCityPage,
+  getCityPageByCity,
+} from "@/actions/cityActions/customerCityAction";
+import { deslugify } from "@/utils/slugify";
 import SearchBarResults from "../../unternehmen-finden/_components/SearchbarResults";
 
 export async function generateMetadata({
@@ -85,22 +90,45 @@ export async function generateMetadata({
 
 const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
   const { city } = await params;
-  // Display-/DB-Version decodieren falls Param encodiert übergeben wurde
-  let raw = city.trim();
+  // Route param entspricht jetzt einem Slug (deterministischer Doc-ID). Deslugify für Display/DB city Name.
+  const slug = city.trim();
+  let cityDisplay = deslugify(slug);
+  // Falls Sonderfälle (doppelt encodet) auftreten, versuchen decodeURIComponent – wirkt nur wenn keine Umlaute durch deslugify ersetzt wurden
   try {
-    raw = decodeURIComponent(raw);
+    cityDisplay = decodeURIComponent(cityDisplay);
   } catch {
     /* ignore */
   }
-  const trimmedCity = raw;
-  const cityDisplay = trimmedCity; // could format further if needed
+  const trimmedCity = cityDisplay.trim();
 
   try {
     const allCompanys = await getAllCompanysFromDatabaseByCity(trimmedCity);
     // Begrenze auf maximal 5 Unternehmen für bessere Conversion
     const companys = allCompanys.slice(0, 5);
 
-    const { headline, faq, costLow, costHigh } = getCityContent(cityDisplay);
+    // CityPage via slug (Doc-ID = slug) laden; Fallback: legacy per city Feld
+    let cityPage = await getCityPage(slug);
+    if (!cityPage) {
+      // Versuch über city Feld (alte Struktur, vor slug Migration)
+      cityPage = await getCityPageByCity(cityDisplay);
+    }
+    const {
+      headline,
+      faq: staticFaq,
+      costLow,
+      costHigh,
+    } = getCityContent(cityDisplay);
+    // FAQ Zusammenführung: erst DB FAQ (falls vorhanden), dann statische Ergänzungen ohne doppelte Fragen
+    let faq = staticFaq;
+    if (cityPage?.faq && cityPage.faq.length > 0) {
+      const existingQuestions = new Set(
+        cityPage.faq.map((f) => f.question.trim().toLowerCase())
+      );
+      const additional = staticFaq.filter(
+        (f) => !existingQuestions.has(f.question.trim().toLowerCase())
+      );
+      faq = [...cityPage.faq, ...additional];
+    }
 
     if (allCompanys.length === 0) {
       return (
@@ -179,16 +207,21 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
             <h2 className='text-2xl font-semibold mb-6 text-center'>
               Häufige Fragen zu Garten- & Landschaftsbau in {cityDisplay}
             </h2>
-            <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
-              {faq.map((item, i) => (
-                <AccordionItem key={i} value={`item-${i}`}>
-                  <AccordionTrigger>{item.question}</AccordionTrigger>
-                  <AccordionContent>
-                    <p>{item.answer}</p>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
-            </Accordion>
+            {faq.length > 0 && (
+              <Accordion
+                type='single'
+                collapsible
+                className='max-w-4xl mx-auto'>
+                {faq.map((item, i) => (
+                  <AccordionItem key={i} value={`item-${i}`}>
+                    <AccordionTrigger>{item.question}</AccordionTrigger>
+                    <AccordionContent>
+                      <p>{item.answer}</p>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
             <script
               type='application/ld+json'
               dangerouslySetInnerHTML={{
@@ -355,22 +388,26 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
           <h2 className='text-2xl font-semibold mb-6 text-center'>
             Häufige Fragen zu Garten- & Landschaftsbau in {cityDisplay}
           </h2>
-          <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
-            {faq.map((item, i) => (
-              <AccordionItem key={i} value={`it-${i}`}>
-                <AccordionTrigger>{item.question}</AccordionTrigger>
-                <AccordionContent>
-                  <p>{item.answer}</p>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-          <script
-            type='application/ld+json'
-            dangerouslySetInnerHTML={{
-              __html: JSON.stringify(buildFAQSchema(faq)),
-            }}
-          />
+          {faq.length > 0 && (
+            <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
+              {faq.map((item, i) => (
+                <AccordionItem key={i} value={`it-${i}`}>
+                  <AccordionTrigger>{item.question}</AccordionTrigger>
+                  <AccordionContent>
+                    <p>{item.answer}</p>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
+          {faq.length > 0 && (
+            <script
+              type='application/ld+json'
+              dangerouslySetInnerHTML={{
+                __html: JSON.stringify(buildFAQSchema(faq)),
+              }}
+            />
+          )}
         </div>
 
         {/* Final CTA */}

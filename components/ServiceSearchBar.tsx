@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Service, getAllServices } from "@/types/ServiceType";
-import { Search, ChevronDown, Check } from "lucide-react";
+import { Search, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ServiceSearchBarProps {
@@ -74,19 +74,12 @@ const ServiceSearchBar: React.FC<ServiceSearchBarProps> = ({
     }
   };
 
-  const toggleInputMode = () => {
-    if (inputMode === "select") {
-      setInputMode("search");
-      setSelectedService(null);
-      setSearchQuery("");
-    } else {
-      setInputMode("select");
-      setSearchQuery("");
-    }
-  };
-
   return (
-    <div className={cn("flex w-full max-w-4xl gap-2 flex-wrap md:flex-nowrap", className)}>
+    <div
+      className={cn(
+        "flex w-full max-w-4xl gap-2 flex-wrap md:flex-nowrap",
+        className
+      )}>
       <div className='flex-1 min-w-0 relative'>
         {inputMode === "select" ? (
           <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -98,7 +91,6 @@ const ServiceSearchBar: React.FC<ServiceSearchBarProps> = ({
                 className='w-full justify-between h-12 text-left font-normal'
                 onClick={() => setIsOpen(!isOpen)}>
                 {selectedService || "Dienstleistung auswählen..."}
-                <ChevronDown className='ml-2 h-4 w-4 shrink-0 opacity-50' />
               </Button>
             </PopoverTrigger>
             <PopoverContent className='w-full p-0' align='start'>
@@ -144,17 +136,7 @@ const ServiceSearchBar: React.FC<ServiceSearchBarProps> = ({
           />
         )}
 
-        <Button
-          variant='ghost'
-          size='sm'
-          className='absolute right-2 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0'
-          onClick={toggleInputMode}>
-          {inputMode === "select" ? (
-            <Search className='h-4 w-4' />
-          ) : (
-            <ChevronDown className='h-4 w-4' />
-          )}
-        </Button>
+        <Search className='h-4 w-4 absolute right-5 top-1/2 transform -translate-y-1/2 p-0' />
       </div>
 
       {selectedService && inputMode === "select" && (

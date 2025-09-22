@@ -3,7 +3,7 @@
 	"schema": {
 		"schemaVersion": 2,
 		"sequences": {
-			"com.tldraw.store": 4,
+			"com.tldraw.store": 5,
 			"com.tldraw.asset": 1,
 			"com.tldraw.camera": 1,
 			"com.tldraw.document": 2,
@@ -122,9 +122,9 @@
 		{
 			"id": "pointer:pointer",
 			"typeName": "pointer",
-			"x": 564.6239278935226,
-			"y": 1873.6375318710357,
-			"lastActivityTimestamp": 1757256348936,
+			"x": 2088.9466478531835,
+			"y": 1960.161727450043,
+			"lastActivityTimestamp": 1758450761440,
 			"meta": {}
 		},
 		{
@@ -352,6 +352,69 @@
 			"typeName": "shape"
 		},
 		{
+			"x": 1224.7547669057465,
+			"y": 1928.1096831895393,
+			"rotation": 0,
+			"isLocked": false,
+			"opacity": 1,
+			"meta": {},
+			"id": "shape:0NRYbsw-j9pyFvq0lhit7",
+			"type": "text",
+			"props": {
+				"color": "black",
+				"size": "m",
+				"w": 312.5,
+				"font": "draw",
+				"textAlign": "start",
+				"autoSize": true,
+				"scale": 1,
+				"richText": {
+					"type": "doc",
+					"content": [
+						{
+							"type": "paragraph",
+							"attrs": {
+								"dir": "auto"
+							},
+							"content": [
+								{
+									"type": "text",
+									"text": "/fuer-unternehernemhen"
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"attrs": {
+								"dir": "auto"
+							},
+							"content": [
+								{
+									"type": "text",
+									"text": "\t/stadt/"
+								}
+							]
+						},
+						{
+							"type": "paragraph",
+							"attrs": {
+								"dir": "auto"
+							},
+							"content": [
+								{
+									"type": "text",
+									"text": "\t\t/zaunbau"
+								}
+							]
+						}
+					]
+				}
+			},
+			"parentId": "page:page",
+			"index": "aZVXmfWV",
+			"typeName": "shape"
+		},
+		{
 			"x": 677.8673039278873,
 			"y": 1632.0354838908975,
 			"rotation": 0,
@@ -392,9 +455,9 @@
 			"typeName": "shape"
 		},
 		{
-			"x": 911.5520686895621,
-			"y": -459.32440219677966,
-			"z": 0.46877879169,
+			"x": 101.92512372304131,
+			"y": 74.78551514789837,
+			"z": 0.3783881880971861,
 			"meta": {},
 			"id": "camera:page:page",
 			"typeName": "camera"
@@ -584,10 +647,10 @@
 			"typeName": "shape"
 		},
 		{
-			"editingShapeId": null,
+			"editingShapeId": "shape:0NRYbsw-j9pyFvq0lhit7",
 			"croppingShapeId": null,
 			"selectedShapeIds": [
-				"shape:IDMqFE2FafRRTaGA2CVV9"
+				"shape:0NRYbsw-j9pyFvq0lhit7"
 			],
 			"hoveredShapeId": null,
 			"erasingShapeIds": [],
@@ -1281,9 +1344,7 @@
 		{
 			"followingUserId": null,
 			"opacityForNextShape": 1,
-			"stylesForNextShape": {
-				"tldraw:geo": "rectangle"
-			},
+			"stylesForNextShape": {},
 			"brush": null,
 			"scribbles": [],
 			"cursor": {
@@ -1297,8 +1358,8 @@
 			"screenBounds": {
 				"x": 0,
 				"y": 0,
-				"w": 1778,
-				"h": 1046
+				"w": 945,
+				"h": 1040
 			},
 			"insets": [
 				false,

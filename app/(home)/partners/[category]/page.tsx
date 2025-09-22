@@ -20,17 +20,67 @@ function categoryDisplayFromSlug(slug: string): string {
   return titleCase(name);
 }
 
-function toItemListJsonLd(partners: PartnerType[], categoryName: string) {
-  const itemListElement = partners.map((p, idx) => ({
-    "@type": "ListItem",
-    position: idx + 1,
-    url:
-      p.link ||
-      `https://landschaftshelden.io/partners/${slugify(
-        categoryName
-      )}#${encodeURIComponent(p.id)}`,
-    name: p.name,
-  }));
+type LegacyPartner = {
+  id: string;
+  name?: string;
+  logo?: string;
+  link?: string;
+  benefit?: string;
+  description?: string;
+  category?: string;
+  active?: boolean;
+  priority?: number;
+};
+type NewPartner = PartnerType;
+interface NormalizedPartner {
+  id: string;
+  name: string;
+  logo?: string;
+  website?: string;
+  benefit: string;
+  category?: string;
+  active?: boolean;
+  priority?: number;
+}
+function normalize(p: LegacyPartner | NewPartner): NormalizedPartner {
+  const name =
+    (p as NewPartner).company?.name || (p as LegacyPartner).name || "Partner";
+  const logo = (p as NewPartner).infos?.logoPath || (p as LegacyPartner).logo;
+  const website = (p as NewPartner).infos?.website || (p as LegacyPartner).link;
+  const benefit =
+    (p as NewPartner).companyBenefits ||
+    (p as LegacyPartner).benefit ||
+    (p as LegacyPartner).description ||
+    "";
+  return {
+    id: p.id,
+    name,
+    logo,
+    website,
+    benefit,
+    category: p.category,
+    active: p.active,
+    priority: p.priority ?? 100,
+  };
+}
+
+function toItemListJsonLd(
+  partners: Array<LegacyPartner | NewPartner>,
+  categoryName: string
+) {
+  const itemListElement = partners.map((raw, idx) => {
+    const p = normalize(raw);
+    return {
+      "@type": "ListItem",
+      position: idx + 1,
+      url:
+        p.website ||
+        `https://landschaftshelden.io/partners/${slugify(
+          categoryName
+        )}#${encodeURIComponent(p.id)}`,
+      name: p.name,
+    };
+  });
   return {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -90,7 +140,8 @@ export default async function PartnersCategoryPage({
   const { category } = await params;
   const display = categoryDisplayFromSlug(category);
 
-  const partners = await listPartnersByCategory(category);
+  const raw = await listPartnersByCategory(category);
+  const partners = raw.map(normalize);
 
   const jsonLd = toItemListJsonLd(partners, display);
   const faqs = [
@@ -164,7 +215,7 @@ export default async function PartnersCategoryPage({
                 </div>
                 <p className='text-sm text-slate-700 flex-1'>{p.benefit}</p>
                 <div className='mt-4'>
-                  {p.link ? (
+                  {p.website ? (
                     <Link
                       href={`/partners/${p.category}/${p.id}`}
                       className='inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-2'>

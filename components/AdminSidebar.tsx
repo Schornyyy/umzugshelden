@@ -45,6 +45,10 @@ const data = {
           url: "/partners",
         },
         {
+          title: "Städte",
+          url: "/citys",
+        },
+        {
           title: "Statistiken",
           url: "/statistiken",
         },

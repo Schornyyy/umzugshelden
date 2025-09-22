@@ -106,6 +106,7 @@ const Footer = () => {
               </Link>
             </div>
           </div>
+          {/* Städte Section */}
           <div className='flex flex-col gap-2'>
             <h6 className='font-bold text-xl text-white mb-4'>Städte</h6>
             <div className='w-12 h-[2px] bg-green-100 mb-4 mx-auto md:mx-0'></div>
@@ -122,6 +123,22 @@ const Footer = () => {
                 Weitere Städte
               </Link>
             </div>
+          </div>
+
+          {/* Partner Section */}
+          <div className='flex flex-col gap-2'>
+            <h6 className='font-bold text-xl text-white mb-4'>Partner</h6>
+            <div className='w-12 h-[2px] bg-green-100 mb-4 mx-auto md:mx-0'></div>
+            <Link
+              href={"/partners"}
+              className='text-white hover:text-green-400'>
+              Alle Partner
+            </Link>
+            <Link
+              href={"/register/partner"}
+              className='text-white hover:text-green-400'>
+              Jetzt Partner werden
+            </Link>
           </div>
         </div>
       </div>

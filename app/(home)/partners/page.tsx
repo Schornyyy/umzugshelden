@@ -53,15 +53,65 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://landschaftshelden.io/partner" },
 };
 
-function toItemListJsonLd(partners: PartnerType[]) {
-  const itemListElement = partners.map((p, idx) => ({
-    "@type": "ListItem",
-    position: idx + 1,
-    url:
-      p.link ||
-      `https://landschaftshelden.io/partner#${encodeURIComponent(p.id)}`,
-    name: p.name,
-  }));
+// Support both legacy flat and new nested partner structure
+type LegacyPartner = {
+  id: string;
+  name?: string;
+  logo?: string;
+  link?: string;
+  benefit?: string;
+  description?: string;
+  category?: string;
+  active?: boolean;
+  priority?: number;
+};
+type NewPartner = PartnerType; // already imported
+
+interface NormalizedPartner {
+  id: string;
+  name: string;
+  logo?: string;
+  website?: string;
+  benefit: string;
+  category?: string;
+  active?: boolean;
+  priority?: number;
+}
+
+function normalize(p: LegacyPartner | NewPartner): NormalizedPartner {
+  const name =
+    (p as NewPartner).company?.name || (p as LegacyPartner).name || "Partner";
+  const logo = (p as NewPartner).infos?.logoPath || (p as LegacyPartner).logo;
+  const website = (p as NewPartner).infos?.website || (p as LegacyPartner).link;
+  const benefit =
+    (p as NewPartner).companyBenefits ||
+    (p as LegacyPartner).benefit ||
+    (p as LegacyPartner).description ||
+    "";
+  return {
+    id: p.id,
+    name,
+    logo,
+    website,
+    benefit,
+    category: p.category,
+    active: p.active,
+    priority: p.priority ?? 100,
+  };
+}
+
+function toItemListJsonLd(partners: Array<LegacyPartner | NewPartner>) {
+  const itemListElement = partners.map((raw, idx) => {
+    const p = normalize(raw);
+    return {
+      "@type": "ListItem",
+      position: idx + 1,
+      url:
+        p.website ||
+        `https://landschaftshelden.io/partner#${encodeURIComponent(p.id)}`,
+      name: p.name,
+    };
+  });
   return {
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -72,7 +122,8 @@ function toItemListJsonLd(partners: PartnerType[]) {
 
 export default async function PartnersLandingPage() {
   const all = await listPartners();
-  const partners = all
+  const normalized = all.map(normalize);
+  const partners = normalized
     .filter((p) => p.active !== true)
     .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100));
   const categories: string[] = partners
@@ -128,9 +179,9 @@ export default async function PartnersLandingPage() {
               </div>
               <p className='text-sm text-slate-700 flex-1'>{p.benefit}</p>
               <div className='mt-4'>
-                {p.link ? (
+                {p.website ? (
                   <a
-                    href={`/api/partner-click/${p.id}`}
+                    href={`/partners/${p.category || "allgemein"}/${p.id}`}
                     className='inline-flex items-center justify-center rounded-md bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-3 py-2'
                     rel='noopener noreferrer'
                     target='_blank'

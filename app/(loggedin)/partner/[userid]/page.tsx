@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { findPartnerByOwnerId } from "@/actions/partnerActions";
+import { getPartner } from "@/actions/partnerActions";
 
 export default function PartnerDashboard() {
   const params = useParams<{ userid: string }>();
@@ -10,7 +10,7 @@ export default function PartnerDashboard() {
 
   useEffect(() => {
     (async () => {
-      const partner = await findPartnerByOwnerId(params.userid);
+      const partner = await getPartner(params.userid);
       if (!partner) return router.push("/login");
     })();
   }, [params.userid, router]);
