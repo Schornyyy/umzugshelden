@@ -346,7 +346,7 @@ export async function updatePartnerProfile(id: string, patch: Partial<PartnerPro
   if (patch.texts) extra.texts = patch.texts;
   await updatePartner(id, upd);
   if (Object.keys(extra).length) {
-    await updateDoc(ref, extra);
+    await setDoc(ref, extra, { merge: true });
   }
   revalidatePartnersRoutes(p.category);
   return true;
