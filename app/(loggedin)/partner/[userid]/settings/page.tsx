@@ -3,10 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import {
-  findPartnerByOwnerId,
-  updatePartnerProfile,
-} from "@/actions/partnerActions";
+import { getPartnerProfile, updatePartnerProfile } from "@/actions/partnerActions";
 import {
   ref,
   uploadBytesResumable,
@@ -35,8 +32,8 @@ export default function PartnerSettingsPage() {
 
   useEffect(() => {
     (async () => {
-      // Route param is the owner account ID; fetch partner by ownerid
-      const partner = await findPartnerByOwnerId(params.userid);
+  // Route param entspricht direkt der Partner-ID im neuen Schema
+  const partner = await getPartnerProfile(params.userid);
       if (!partner) return router.push("/login");
       setData({
         id: partner.id,
