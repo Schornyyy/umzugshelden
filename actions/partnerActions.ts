@@ -193,6 +193,35 @@ export async function recordPartnerInteraction(partnerId: string, type: PartnerS
   }
 }
 
+// =====================
+// Legacy Compatibility Helpers (used by older routes)
+// =====================
+export async function incrementPartnerClick(partnerId: string) {
+  // Map to website interaction
+  await recordPartnerInteraction(partnerId, "website");
+}
+
+export async function incrementPartnerStat(partnerId: string, field: 'websiteClicks' | 'emailClicks' | 'phoneClicks' | 'views') {
+  const mapping: Record<string, PartnerStatsEventEntry['type']> = {
+    websiteClicks: 'website',
+    emailClicks: 'email',
+    phoneClicks: 'phone',
+    views: 'view'
+  };
+  const type = mapping[field];
+  if (type) await recordPartnerInteraction(partnerId, type);
+}
+
+export async function addPartnerEvent(partnerId: string, evt: { type: 'website_click' | 'email_click' | 'phone_click' | 'view'; createdAt?: number; target?: string }) {
+  // Accept already normalized legacy event type naming
+  let mapped: PartnerStatsEventEntry['type'];
+  if (evt.type === 'website_click') mapped = 'website';
+  else if (evt.type === 'email_click') mapped = 'email';
+  else if (evt.type === 'phone_click') mapped = 'phone';
+  else mapped = 'view';
+  await recordPartnerInteraction(partnerId, mapped, evt.target ? { target: evt.target } : undefined);
+}
+
 export interface WindowedPartnerStatsResult {
   from: number;
   to: number;
