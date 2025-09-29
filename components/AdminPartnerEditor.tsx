@@ -388,7 +388,6 @@ export function AdminPartnerEditor({ partnerId }: { partnerId: string }) {
                 </span>
                 <RichTextEditor
                   field={{
-                    value: block.text,
                     onChange: (val: string) =>
                       setState((s) => ({
                         ...s,

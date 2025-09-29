@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://landschaftshelden.io
+
+# Sitemaps
+Sitemap: https://landschaftshelden.io/sitemap.xml
