@@ -616,7 +616,6 @@ export default function PartnerSettingsPage() {
                   </span>
                   <RichTextEditor
                     field={{
-                      value: block.text,
                       onChange: (val: string) =>
                         setState((s) => {
                           markEditingSiteInfos();
