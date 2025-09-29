@@ -153,10 +153,18 @@ export async function updateBlogSubcategory(id: string, patch: z.infer<typeof up
   const snap = await getDoc(ref);
   if (!snap.exists()) return false;
   const current = snap.data() as { mainCategory: AdminBlogMainCategory; slug: string };
-  const update: Record<string, unknown> = { updatedAt: Date.now() };
+  // Build a typed, Firestore-friendly update object
+  const update: {
+    name?: string;
+    thumbnailUrl?: string | null;
+    updatedAt: number;
+  } = { updatedAt: Date.now() };
   if (parsed.name) update.name = parsed.name;
-  if (parsed.thumbnailUrl !== undefined) update.thumbnailUrl = parsed.thumbnailUrl || null;
+  if (parsed.thumbnailUrl !== undefined) {
+    update.thumbnailUrl = parsed.thumbnailUrl ? parsed.thumbnailUrl : null;
+  }
   const { updateDoc } = await import("firebase/firestore");
+  // Firestore accepts partial doc data; our object matches stored fields.
   await updateDoc(ref, update);
   invalidateCaches(current.mainCategory);
   revalidateBlogRoutes(current.slug);
