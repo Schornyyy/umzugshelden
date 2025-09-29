@@ -13,6 +13,8 @@ import {
   getCityPage,
   getCityPageByCity,
 } from "@/actions/cityActions/customerCityAction";
+import type { CityPageSection } from "@/types/city/CityPageSection";
+import { ReactNode } from "react";
 import { deslugify } from "@/utils/slugify";
 import SearchBarResults from "../../unternehmen-finden/_components/SearchbarResults";
 
@@ -130,20 +132,49 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
       faq = [...cityPage.faq, ...additional];
     }
 
+    // Lightweight Draft.js raw renderer (no draft-js import on server)
+    function renderDraft(raw?: string): ReactNode {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        const blocks = Array.isArray(parsed.blocks) ? parsed.blocks : [];
+        type RawBlock = { text?: string };
+        return blocks.map((b: RawBlock, i: number) => {
+          const text: string = b && typeof b.text === "string" ? b.text : "";
+          if (!text.trim()) return <p key={i} />;
+          return <p key={i}>{text}</p>;
+        });
+      } catch {
+        return <p>{raw}</p>;
+      }
+    }
+
+    // Optional overrides from CityPage (title/description). Keep old fallback if not provided.
+    const dynamicTitle = cityPage?.title?.trim() || headline;
+    const dynamicDescription = cityPage?.description?.trim();
+
     if (allCompanys.length === 0) {
       return (
         <div className='container mx-auto py-24 px-4'>
           {/* SEO Hero Section */}
           <div className='text-center mb-12'>
-            <h1 className='text-4xl md:text-5xl font-bold mb-6'>{headline}</h1>
-            <p className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto'>
-              Suchen Sie professionelle Garten- und Landschaftsbauer in{" "}
-              {cityDisplay}? Holen Sie jetzt mehrere Angebote ein – viele
-              Projekte liegen typischerweise zwischen{" "}
-              {costLow.toLocaleString("de-DE")} € und{" "}
-              {costHigh.toLocaleString("de-DE")} € abhängig von Umfang &
-              Material.
-            </p>
+            <h1 className='text-4xl md:text-5xl font-bold mb-6'>
+              {dynamicTitle}
+            </h1>
+            {dynamicDescription ? (
+              <div className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto space-y-4'>
+                {renderDraft(dynamicDescription)}
+              </div>
+            ) : (
+              <p className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto'>
+                Suchen Sie professionelle Garten- und Landschaftsbauer in{" "}
+                {cityDisplay}? Holen Sie jetzt mehrere Angebote ein – viele
+                Projekte liegen typischerweise zwischen{" "}
+                {costLow.toLocaleString("de-DE")} € und{" "}
+                {costHigh.toLocaleString("de-DE")} € abhängig von Umfang &
+                Material.
+              </p>
+            )}
 
             {/* Call-to-Action Button */}
             <div className='flex justify-center'>
@@ -237,18 +268,26 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
       <div className='max-w-7xl mx-auto py-12 px-4'>
         {/* SEO-optimized Hero Section */}
         <div className='text-center mb-12'>
-          <h1 className='text-4xl md:text-5xl font-bold mb-4'>{headline}</h1>
+          <h1 className='text-4xl md:text-5xl font-bold mb-4'>
+            {dynamicTitle}
+          </h1>
           <p className='text-sm text-gray-500 mb-2'>
             {companys.length} aktive Betriebe gefunden – jetzt vergleichen
           </p>
-          <p className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto'>
-            Vergleichen Sie jetzt qualifizierte{" "}
-            <strong>Garten- & Landschaftsbauer in {cityDisplay}</strong>.
-            Typische Projektbereiche starten bei ca.{" "}
-            {costLow.toLocaleString("de-DE")} € – umfangreichere Umgestaltungen
-            erreichen {costHigh.toLocaleString("de-DE")} € oder mehr. Mehrere
-            Angebote schaffen Preisklarheit.
-          </p>
+          {dynamicDescription ? (
+            <div className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto space-y-4'>
+              {renderDraft(dynamicDescription)}
+            </div>
+          ) : (
+            <p className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto'>
+              Vergleichen Sie jetzt qualifizierte{" "}
+              <strong>Garten- & Landschaftsbauer in {cityDisplay}</strong>.
+              Typische Projektbereiche starten bei ca.{" "}
+              {costLow.toLocaleString("de-DE")} € – umfangreichere
+              Umgestaltungen erreichen {costHigh.toLocaleString("de-DE")} € oder
+              mehr. Mehrere Angebote schaffen Preisklarheit.
+            </p>
+          )}
           {/* Micro CTA early in content for higher conversion */}
           <div className='mb-6'>
             <Link
@@ -358,6 +397,54 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
               </li>
             </ul>
           </div>
+
+          {/* Dynamic CityPage Sections injected below Vorteile box */}
+          {cityPage?.sections && cityPage.sections.length > 0 && (
+            <div className='space-y-20 my-16'>
+              {cityPage.sections.map((sec: CityPageSection, idx: number) => {
+                const hasImage = !!sec.image;
+                const imageLeft = idx % 2 === 0; // 0 -> left, 1 -> right, etc.
+                return (
+                  <section key={idx} className='max-w-6xl mx-auto'>
+                    <div className='grid grid-cols-1 md:grid-cols-8 gap-8 items-center'>
+                      {hasImage && (
+                        <div
+                          className={`md:col-span-4 ${imageLeft ? 'md:order-none' : 'md:order-last'}`}> 
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={sec.image!}
+                            alt={sec.titel || 'Section Bild'}
+                            className='w-full aspect-video object-cover rounded-xl border shadow-sm'
+                            loading='lazy'
+                          />
+                        </div>
+                      )}
+                      <div
+                        className={`space-y-4 ${hasImage ? 'md:col-span-4' : 'md:col-span-8'} ${imageLeft ? '' : 'md:order-first'}`}> 
+                        {sec.titel && (
+                          <h3 className='text-2xl font-semibold tracking-tight'>
+                            {sec.titel}
+                          </h3>
+                        )}
+                        <div className='prose max-w-none text-gray-700 leading-relaxed'>
+                          {renderDraft(sec.text)}
+                        </div>
+                        {sec.link && (
+                          <div>
+                            <Link
+                              href={sec.link}
+                              className='inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-medium text-sm'>
+                              Mehr erfahren <span aria-hidden='true'>→</span>
+                            </Link>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
 
           <h3>Beliebte Garten- und Landschaftsbau-Services in {cityDisplay}</h3>
           <p>

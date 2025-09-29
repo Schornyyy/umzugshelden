@@ -17,6 +17,7 @@ import { revalidatePath } from "next/cache";
 import { cacheManager, CACHE_KEYS, CACHE_OPTIONS } from "@/lib/cache";
 import { CityPage } from "@/types/city/CityPage";
 import { CityFAQ } from "@/types/city/CityFAQType";
+import { CityPageSection } from "@/types/city/CityPageSection";
 import { z } from "zod";
 
 // Collection name
@@ -27,9 +28,19 @@ const faqSchema = z.object({
   question: z.string().min(1),
   answer: z.string().min(1),
 });
+const sectionSchema = z.object({
+  titel: z.string().min(1),
+  image: z.string().url().optional(),
+  text: z.string().min(1),
+  link: z.string().url().optional(),
+});
+
 const cityPageSchema = z.object({
   city: z.string().min(1, "city required"),
   faq: z.array(faqSchema).default([]),
+  sections: z.array(sectionSchema).max(3).optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
 });
 
 export type CreateCityPageInput = z.input<typeof cityPageSchema> & {
@@ -59,7 +70,20 @@ function invalidateCityCaches(id?: string, city?: string) {
 function revalidateCityRoutes(city?: string) {
   try {
     revalidatePath("/stadt"); // listing page if exists
-    if (city) revalidatePath(`/stadt/${city}`);
+    if (city) {
+      // Revalidate by raw city name (legacy) and by slug (new deterministic ID)
+      revalidatePath(`/stadt/${city}`);
+      // If city contains spaces/Umlaute the public route actually uses a slug (deslugified previously on read)
+      // We trigger also the encoded variant to be safe.
+      try {
+        const encoded = encodeURIComponent(city.trim());
+        if (encoded && encoded !== city) {
+          revalidatePath(`/stadt/${encoded}`);
+        }
+      } catch {
+        /* noop */
+      }
+    }
     revalidatePath("/sitemaps/cities/sitemap.xml");
   } catch {
     /* noop */
@@ -73,6 +97,9 @@ export async function createCityPage(
   const parsed = cityPageSchema.parse({
     city: input.city,
     faq: input.faq || [],
+    sections: input.sections || [],
+    title: input.title,
+    description: input.description,
   });
   const colRef = collection(database, CITY_PAGES_COLLECTION);
   if (input.id) {
@@ -108,7 +135,9 @@ export async function getCityPage(id: string): Promise<CityPage | null> {
   );
 }
 
-export async function getCityPageByCity(city: string): Promise<CityPage | null> {
+export async function getCityPageByCity(
+  city: string
+): Promise<CityPage | null> {
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGE_BY_CITY(city),
     async () => {
@@ -148,11 +177,22 @@ export async function updateCityPage(
     id: existing.id,
     city: patch.city ?? existing.city,
     faq: patch.faq ? patch.faq.map((f) => faqSchema.parse(f)) : existing.faq,
+    sections: patch.sections
+      ? patch.sections.map((s) => sectionSchema.parse(s))
+      : existing.sections,
+    title: patch.title ?? existing.title,
+    description: patch.description ?? existing.description,
   };
   const ref = doc(database, CITY_PAGES_COLLECTION, id);
   await updateDoc(
     ref,
-    sanitize({ city: merged.city, faq: merged.faq as CityFAQ[] })
+    sanitize({
+      city: merged.city,
+      faq: merged.faq as CityFAQ[],
+      sections: merged.sections as CityPageSection[] | undefined,
+      title: merged.title,
+      description: merged.description,
+    })
   );
   invalidateCityCaches(id, merged.city);
   revalidateCityRoutes(merged.city);

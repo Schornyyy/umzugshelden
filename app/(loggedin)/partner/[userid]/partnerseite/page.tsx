@@ -1,5 +1,11 @@
 "use client";
-import React, { useEffect, useState, useCallback, useRef, useLayoutEffect } from "react";
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  useLayoutEffect,
+} from "react";
 
 declare global {
   interface Window {
@@ -102,7 +108,14 @@ interface StableInputProps {
   placeholder?: string;
   id?: string;
 }
-const StableInput: React.FC<StableInputProps> = ({ value, onChange, type = "text", className, placeholder, id }) => {
+const StableInput: React.FC<StableInputProps> = ({
+  value,
+  onChange,
+  type = "text",
+  className,
+  placeholder,
+  id,
+}) => {
   const ref = useRef<HTMLInputElement | null>(null);
   const focusedRef = useRef(false);
   const lastPropRef = useRef(value);
@@ -122,11 +135,11 @@ const StableInput: React.FC<StableInputProps> = ({ value, onChange, type = "text
       className={className}
       defaultValue={value}
       placeholder={placeholder}
-      onFocus={(e) => { 
-        focusedRef.current = true; 
+      onFocus={(e) => {
+        focusedRef.current = true;
         caretRef.current = e.currentTarget.selectionStart ?? null;
-        window.__lastFocusedInputId = id; 
-        window.__lastFocusedCaret = caretRef.current; 
+        window.__lastFocusedInputId = id;
+        window.__lastFocusedCaret = caretRef.current;
       }}
       onBlur={(e) => {
         focusedRef.current = false;
@@ -137,7 +150,10 @@ const StableInput: React.FC<StableInputProps> = ({ value, onChange, type = "text
       onChange={(e) => {
         const v = e.target.value;
         lastPropRef.current = v;
-        try { caretRef.current = e.currentTarget.selectionStart ?? null; window.__lastFocusedCaret = caretRef.current; } catch {}
+        try {
+          caretRef.current = e.currentTarget.selectionStart ?? null;
+          window.__lastFocusedCaret = caretRef.current;
+        } catch {}
         onChange(v);
       }}
     />
@@ -149,9 +165,9 @@ const FormInput: React.FC<StableInputProps> = (props) => {
   const mountRef = useRef(0);
   useEffect(() => {
     mountRef.current += 1;
-    console.debug('[FormInput mount]', props.id, 'count', mountRef.current);
+    console.debug("[FormInput mount]", props.id, "count", mountRef.current);
     return () => {
-      console.debug('[FormInput unmount]', props.id);
+      console.debug("[FormInput unmount]", props.id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -165,7 +181,13 @@ interface StableTextAreaProps {
   placeholder?: string;
   rows?: number;
 }
-const StableTextArea: React.FC<StableTextAreaProps> = ({ value, onChange, className, placeholder, rows }) => {
+const StableTextArea: React.FC<StableTextAreaProps> = ({
+  value,
+  onChange,
+  className,
+  placeholder,
+  rows,
+}) => {
   const ref = useRef<HTMLTextAreaElement | null>(null);
   const focusedRef = useRef(false);
   const lastPropRef = useRef(value);
@@ -182,7 +204,9 @@ const StableTextArea: React.FC<StableTextAreaProps> = ({ value, onChange, classN
       defaultValue={value}
       rows={rows}
       placeholder={placeholder}
-      onFocus={() => { focusedRef.current = true; }}
+      onFocus={() => {
+        focusedRef.current = true;
+      }}
       onBlur={(e) => {
         focusedRef.current = false;
         const v = e.currentTarget.value;
@@ -213,7 +237,7 @@ export default function PartnerSettingsPage() {
   // const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const loadedRef = useRef(false);
-  const pendingPartnerRef = useRef<PartnerType & { id: string } | null>(null);
+  const pendingPartnerRef = useRef<(PartnerType & { id: string }) | null>(null);
   useLayoutEffect(() => {
     if (!editingRef.current) return; // only restore while actively editing
     const lastId = window.__lastFocusedInputId;
@@ -230,7 +254,13 @@ export default function PartnerSettingsPage() {
   const load = useCallback(async () => {
     // Verhindere unbeabsichtigtes Überschreiben während Speicherung oder erneutem Mount.
     if (!userId) return;
-    console.debug('[Partnerseite] load start (loadedRef=', loadedRef.current, 'editingRef=', editingRef.current, ')');
+    console.debug(
+      "[Partnerseite] load start (loadedRef=",
+      loadedRef.current,
+      "editingRef=",
+      editingRef.current,
+      ")"
+    );
     setState((s) => ({ ...s, loading: !loadedRef.current, error: undefined }));
     try {
       const p = await getPartner(userId);
@@ -243,7 +273,9 @@ export default function PartnerSettingsPage() {
         return;
       }
       if (editingRef.current) {
-        console.debug('[Partnerseite] abort load apply because user is editing');
+        console.debug(
+          "[Partnerseite] abort load apply because user is editing"
+        );
         loadedRef.current = true;
         setState((s) => ({ ...s, loading: false }));
         return;
@@ -270,7 +302,8 @@ export default function PartnerSettingsPage() {
           )
             .slice(0, MAX_SITE_INFOS)
             .map((si: { headline?: string; text?: string; image?: string }) => {
-              const key = (si.headline || "") + "::" + (si.text || "").slice(0, 20);
+              const key =
+                (si.headline || "") + "::" + (si.text || "").slice(0, 20);
               const stableId = existingByHeadline.get(key) || genId();
               return {
                 id: stableId,
@@ -279,7 +312,7 @@ export default function PartnerSettingsPage() {
                 image: si.image,
               };
             });
-          console.debug('[Partnerseite] hydration apply');
+          console.debug("[Partnerseite] hydration apply");
           return {
             ...s,
             loading: false,
@@ -332,7 +365,7 @@ export default function PartnerSettingsPage() {
           };
         });
       });
-      console.debug('[Partnerseite] load scheduled hydration');
+      console.debug("[Partnerseite] load scheduled hydration");
     } catch {
       setState((s) => ({ ...s, loading: false, error: "Fehler beim Laden" }));
     }
@@ -362,7 +395,7 @@ export default function PartnerSettingsPage() {
 
   function markEditingSiteInfos() {
     if (!editingRef.current) {
-      console.debug('[Partnerseite] editing started (siteInfos)');
+      console.debug("[Partnerseite] editing started (siteInfos)");
       editingRef.current = true;
     }
   }

@@ -33,10 +33,6 @@ const data = {
           url: "/",
         },
         {
-          title: "Importieren",
-          url: "/imports",
-        },
-        {
           title: "Aufträge",
           url: "/contracts",
         },
@@ -49,8 +45,16 @@ const data = {
           url: "/citys",
         },
         {
+          title: "Blogs",
+          url: "/blog",
+        },
+        {
           title: "Statistiken",
           url: "/statistiken",
+        },
+        {
+          title: "Importieren",
+          url: "/imports",
         },
       ],
     },

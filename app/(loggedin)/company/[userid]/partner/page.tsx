@@ -65,7 +65,7 @@ const PartnerPortalPage = async () => {
                   {p.infos?.logoPath && (
                     <Image
                       src={p.infos.logoPath}
-                      alt={p.company?.name || 'Logo'}
+                      alt={p.company?.name || "Logo"}
                       width={56}
                       height={56}
                       className='object-contain'

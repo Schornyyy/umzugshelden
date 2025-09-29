@@ -13,7 +13,7 @@ export const RichTextEditor = ({
   field,
   defaultValue,
 }: {
-  field: any;
+  field: { onChange: (v: string) => void };
   defaultValue: string;
 }) => {
   // Initialisiere den Editor-State mit dem defaultValue (falls vorhanden)
@@ -129,4 +129,15 @@ export const RichTextEditor = ({
       </div>
     </div>
   );
+};
+
+// Lightweight adapter for simpler usage (value/onChange)
+export const SimpleRichTextEditor = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+}) => {
+  return <RichTextEditor field={{ onChange }} defaultValue={value} />;
 };

@@ -24,7 +24,6 @@ import {
 import { database } from "@/config/firebase";
 import { Contract } from "@/types/Contract";
 import { getAllServices } from "@/types/ServiceType";
-
 interface ExtendedContract extends Contract {
   id: string;
   createdAt: Date;
@@ -354,6 +353,54 @@ const AdminContractsPage = () => {
     if (!ts) return "";
     const d = new Date(ts.seconds * 1000 + Math.floor(ts.nanoseconds / 1e6));
     return d.toLocaleString("de-DE");
+  };
+
+  // TODO: Import or define TransactionalEmailAPI before using it
+  // import { TransactionalEmailAPI } from "@/path/to/TransactionalEmailAPI";
+
+  const sendTestEmail = async () => {
+    const to = prompt("Test-Empfänger E-Mail eingeben:", "");
+    if (!to) return;
+    const template = prompt(
+      "Template Name (leer für Standard) z.B. ContractNotificationEmail",
+      ""
+    );
+    const vars: Record<string, string> = {};
+    if (template) {
+      // Simple key=value;key2=value2 input
+      const rawVars = prompt(
+        "Template Variablen (Format key=value;key2=value2)",
+        "companyName=Test GmbH;contractType=Gartenpflege;zip=12345;dashboardUrl=https://landschaftshelden.io/login"
+      );
+      if (rawVars) {
+        rawVars.split(";").forEach((pair) => {
+          const [k, ...rest] = pair.split("=");
+          if (k) vars[k.trim()] = rest.join("=").trim();
+        });
+      }
+    }
+    try {
+      setTesting(true);
+      const res = await fetch("/api/admin/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, template: template || undefined, vars }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(
+          "Test-E-Mail gesendet" +
+            (data.usedTemplate ? " (Template: " + data.usedTemplate + ")" : "")
+        );
+      } else {
+        alert("Fehler beim Senden: " + (data.error || "Unbekannt"));
+      }
+    } catch (e) {
+      console.error("Test email error", e);
+      alert("Fehler beim Senden der Test-E-Mail");
+    } finally {
+      setTesting(false);
+    }
   };
 
   if (loading) {
@@ -707,6 +754,13 @@ const AdminContractsPage = () => {
                     className='w-full'
                     onClick={() => deleteContract(selectedContract.id)}>
                     Auftrag löschen
+                  </Button>
+                  <Button
+                    variant='outline'
+                    className='w-full'
+                    disabled={testing}
+                    onClick={sendTestEmail}>
+                    {testing ? "Sende Test-E-Mail…" : "Test-E-Mail senden"}
                   </Button>
                 </div>
 

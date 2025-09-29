@@ -8,24 +8,33 @@ import {
 } from "@/actions/cityActions/customerCityAction";
 import { deslugify } from "@/utils/slugify";
 import type { CityPage } from "@/types/city/CityPage";
+import type { CityPageSection } from "@/types/city/CityPageSection";
+import { CityAdminTabs } from "@/components/admin/city/CityAdminTabs";
+import { CityFaqTab } from "@/components/admin/city/CityFaqTab";
+import { CitySectionsTab } from "@/components/admin/city/CitySectionsTab";
+import { CityMetaTab } from "@/components/admin/city/CityMetaTab";
 
 interface EditableFaq {
   question: string;
   answer: string;
 }
-
 interface State {
   loading: boolean;
   saving: boolean;
   error?: string;
   cityPage?: CityPage;
   faqs: EditableFaq[];
+  sections: CityPageSection[];
+  title: string;
+  description: string;
 }
-
 const initialState: State = {
   loading: true,
   saving: false,
   faqs: [{ question: "", answer: "" }],
+  sections: [{ titel: "", text: "", image: undefined }],
+  title: "",
+  description: "",
 };
 
 export default function CityFaqEditorPage() {
@@ -44,7 +53,6 @@ export default function CityFaqEditorPage() {
       try {
         let cp = await getCityPage(slug);
         if (!cp) {
-          // create with deterministic id = slug, store original human form in city field
           const id = await createCityPage({
             id: slug,
             city: cityReadable,
@@ -57,12 +65,16 @@ export default function CityFaqEditorPage() {
           ...s,
           loading: false,
           cityPage: cp,
-          faqs:
-            cp.faq.length > 0
-              ? cp.faq.map((f: { question: string; answer: string }) => ({
-                  ...f,
-                }))
-              : [{ question: "", answer: "" }],
+          faqs: cp.faq.length
+            ? cp.faq.map((f: { question: string; answer: string }) => ({
+                ...f,
+              }))
+            : [{ question: "", answer: "" }],
+          sections: cp.sections?.length
+            ? cp.sections.map((sec) => ({ ...sec }))
+            : [{ titel: "", text: "", image: undefined }],
+          title: cp.title || "",
+          description: cp.description || "",
         }));
       } catch {
         if (cancelled) return;
@@ -93,20 +105,79 @@ export default function CityFaqEditorPage() {
     setState((s) => ({ ...s, faqs: s.faqs.filter((_, i) => i !== index) }));
   }
 
+  // --- Sections Logic ---
+  function updateSection(index: number, patch: Partial<CityPageSection>) {
+    setState((s) => ({
+      ...s,
+      sections: s.sections.map((sec, i) =>
+        i === index ? { ...sec, ...patch } : sec
+      ),
+    }));
+  }
+
+  function addSection() {
+    setState((s) => ({
+      ...s,
+      sections:
+        s.sections.length < 3
+          ? [...s.sections, { titel: "", text: "", image: undefined }]
+          : s.sections,
+    }));
+  }
+
+  function removeSection(index: number) {
+    setState((s) => ({
+      ...s,
+      sections: s.sections.filter((_, i) => i !== index),
+    }));
+  }
+
   async function save() {
     if (!state.cityPage) return;
     // Filter out empty entries (both fields blank)
     const cleaned = state.faqs
       .map((f) => ({ question: f.question.trim(), answer: f.answer.trim() }))
       .filter((f) => f.question || f.answer);
+    const cleanedSections = state.sections
+      .map((sec) => ({
+        titel: sec.titel.trim(),
+        text: sec.text.trim(),
+        image: sec.image || undefined,
+        link: sec.link && sec.link.trim() ? sec.link.trim() : undefined,
+      }))
+      .filter((sec) => sec.titel && sec.text)
+      .slice(0, 3)
+      .map((sec) => {
+        const cleaned: CityPageSection = {
+          titel: sec.titel,
+          text: sec.text,
+          ...(sec.image ? { image: sec.image } : {}),
+          ...(sec.link ? { link: sec.link } : {}),
+        };
+        return cleaned;
+      });
     setState((s) => ({ ...s, saving: true, error: undefined }));
     try {
-      await updateCityPage(state.cityPage.id, { faq: cleaned });
+      await updateCityPage(state.cityPage.id, {
+        faq: cleaned,
+        sections: cleanedSections,
+        title: state.title.trim() || undefined,
+        description: state.description.trim() || undefined,
+      });
       setState((s) => ({
         ...s,
         saving: false,
-        cityPage: { ...s.cityPage!, faq: cleaned },
+        cityPage: {
+          ...s.cityPage!,
+          faq: cleaned,
+          sections: cleanedSections,
+          title: state.title.trim() || undefined,
+          description: state.description.trim() || undefined,
+        },
         faqs: cleaned.length ? cleaned : [{ question: "", answer: "" }],
+        sections: cleanedSections.length
+          ? cleanedSections
+          : [{ titel: "", text: "", image: undefined }],
       }));
     } catch {
       setState((s) => ({
@@ -122,60 +193,71 @@ export default function CityFaqEditorPage() {
   if (state.error) return <div className='p-6 text-red-600'>{state.error}</div>;
 
   return (
-    <div className='max-w-4xl mx-auto p-6'>
-      <h1 className='text-2xl font-bold mb-6'>FAQ für {cityReadable}</h1>
-      <p className='text-sm text-gray-600 mb-8'>
-        Lege Fragen & Antworten an. Leerzeilen werden beim Speichern ignoriert.
-      </p>
-
-      <div className='space-y-8'>
-        {state.faqs.map((f, i) => (
-          <div
-            key={i}
-            className='border rounded-md p-4 bg-white shadow-sm relative'>
-            <div className='flex items-start gap-4 flex-col md:flex-row'>
-              <label className='flex-1 block'>
-                <span className='block text-xs font-semibold text-gray-600 mb-1'>
-                  Frage
-                </span>
-                <input
-                  value={f.question}
-                  onChange={(e) => updateFaq(i, "question", e.target.value)}
-                  className='w-full border rounded px-3 py-2 text-sm'
-                  placeholder='Wie lange dauert ...?'
-                />
-              </label>
-              <label className='flex-1 block'>
-                <span className='block text-xs font-semibold text-gray-600 mb-1'>
-                  Antwort
-                </span>
-                <textarea
-                  value={f.answer}
-                  onChange={(e) => updateFaq(i, "answer", e.target.value)}
-                  className='w-full border rounded px-3 py-2 text-sm min-h-[80px]'
-                  placeholder='In der Regel ...'
-                />
-              </label>
-            </div>
-            {state.faqs.length > 1 && (
-              <button
-                type='button'
-                onClick={() => removeFaq(i)}
-                className='absolute top-2 right-2 text-xs text-red-600 hover:underline'>
-                Entfernen
-              </button>
-            )}
-          </div>
-        ))}
+    <div className='max-w-5xl mx-auto p-6'>
+      <div className='flex items-start gap-4 flex-wrap mb-6'>
+        <div>
+          <h1 className='text-2xl font-bold'>
+            Stadtseite bearbeiten: {cityReadable}
+          </h1>
+          <p className='text-sm text-gray-600 mt-1'>
+            FAQ, Sektionen & Meta Daten verwalten.
+          </p>
+        </div>
+        {state.cityPage && (
+          <span className='text-xs text-gray-500 ml-auto mt-1'>
+            ID: {state.cityPage.id}
+          </span>
+        )}
       </div>
-
-      <div className='mt-8 flex flex-wrap gap-4 items-center'>
-        <button
-          type='button'
-          onClick={addFaq}
-          className='px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-sm'>
-          Weitere Frage hinzufügen
-        </button>
+      <CityAdminTabs
+        tabs={[
+          {
+            id: "faq",
+            label: "FAQ",
+            content: (
+              <CityFaqTab
+                faqs={state.faqs}
+                onChange={(i, patch) => {
+                  const entries = Object.entries(patch) as [
+                    keyof EditableFaq,
+                    string
+                  ][];
+                  if (entries.length) {
+                    const [key, val] = entries[0];
+                    updateFaq(i, key, val);
+                  }
+                }}
+                onAdd={addFaq}
+                onRemove={removeFaq}
+              />
+            ),
+          },
+          {
+            id: "sections",
+            label: "Sektionen",
+            content: (
+              <CitySectionsTab
+                sections={state.sections}
+                onChange={updateSection}
+                onAdd={addSection}
+                onRemove={removeSection}
+              />
+            ),
+          },
+          {
+            id: "meta",
+            label: "Meta / SEO",
+            content: (
+              <CityMetaTab
+                titleValue={state.title}
+                descriptionValue={state.description}
+                onChange={(patch) => setState((s) => ({ ...s, ...patch }))}
+              />
+            ),
+          },
+        ]}
+      />
+      <div className='mt-8 flex flex-wrap gap-4 items-center border-t pt-6'>
         <button
           type='button'
           disabled={state.saving}
@@ -186,11 +268,9 @@ export default function CityFaqEditorPage() {
         {state.error && (
           <span className='text-xs text-red-600'>{state.error}</span>
         )}
-        {state.cityPage && (
-          <span className='text-xs text-gray-500 ml-auto'>
-            ID: {state.cityPage.id}
-          </span>
-        )}
+        <span className='text-xs text-gray-500'>
+          Änderungen wirken nach kurzer Cache-Aktualisierung.
+        </span>
       </div>
     </div>
   );

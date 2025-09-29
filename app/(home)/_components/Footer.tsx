@@ -50,8 +50,10 @@ const Footer = () => {
               <Link href='/kontakt' className='text-white hover:text-green-400'>
                 Kontakt
               </Link>
-              <Link href='/blog' className='text-white hover:text-green-400'>
-                Blog
+              <Link
+                href='/blog/ratgeber'
+                className='text-white hover:text-green-400'>
+                Ratgeber
               </Link>
               <Link
                 href='/calculator'
@@ -80,6 +82,11 @@ const Footer = () => {
                 href='/fuer-unternehmen'
                 className='text-white hover:text-green-400'>
                 Für Unternehmen
+              </Link>
+              <Link
+                href='/blog/unternehmen'
+                className='text-white hover:text-green-400'>
+                Blog für Unternehmen
               </Link>
             </div>
           </div>
@@ -138,6 +145,11 @@ const Footer = () => {
               href={"/register/partner"}
               className='text-white hover:text-green-400'>
               Jetzt Partner werden
+            </Link>
+            <Link
+              href={"/blog/ereignisse"}
+              className='text-white hover:text-green-400'>
+              Events
             </Link>
           </div>
         </div>

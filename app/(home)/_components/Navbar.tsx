@@ -39,7 +39,7 @@ const Navbar = () => {
         </Link>
 
         {/* Desktop Navigation */}
-        <div className='hidden md:flex space-x-6'>
+        <div className='hidden xl:flex space-x-6'>
           <Link href='/' className='text-gray-600 hover:text-green-600'>
             Startseite
           </Link>
@@ -74,7 +74,7 @@ const Navbar = () => {
 
         {/* Mobile Menu Button */}
         <button
-          className='md:hidden text-gray-600 focus:outline-none'
+          className='xl:hidden text-gray-600 focus:outline-none'
           onClick={() => setIsMenuOpen(!isMenuOpen)}>
           <svg
             className='w-6 h-6'
