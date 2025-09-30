@@ -138,8 +138,10 @@ function Section({
           </div>
         </div>
       )}
-      <div className={hasImage ? "md:w-1/2" : "w-full"}>
-        <h2 className='text-xl font-semibold mb-4'>{section.titel}</h2>
+      <div className={hasImage ? "md:w-1/2" : "w-full text-center"}>
+        <h2 className='text-xl font-semibold mb-4 text-green-600'>
+          {section.titel}
+        </h2>
         <div className='prose max-w-none'>{renderDraftRaw(section.text)}</div>
         {section.link && (
           <p className='mt-4'>
@@ -187,9 +189,9 @@ export default async function BlogArticlePage({
   }
 
   return (
-    <article className='max-w-5xl mx-auto px-4 py-10 space-y-14'>
-      <header className='space-y-4'>
-        <nav className='text-xs text-slate-500 flex gap-1 flex-wrap'>
+    <article className='max-w-5xl mx-auto px-4 py-10 flex flex-col gap-12'>
+      <header className='space-y-4 mb-24'>
+        <nav className='text-xs text-slate-500 flex gap-1 flex-wrap mb-12'>
           <Link href='/blog/unternehmen' className='hover:underline'>
             Unternehmen
           </Link>
@@ -219,7 +221,7 @@ export default async function BlogArticlePage({
       </header>
 
       {/* Sections */}
-      <section className='space-y-16'>
+      <section className='space-y-24'>
         {(() => {
           let imageCounter = 0;
           return page.sections.map((s, i) => {
