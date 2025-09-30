@@ -106,15 +106,17 @@ export async function createCityPage(
     const ref = doc(database, CITY_PAGES_COLLECTION, input.id);
     const existing = await getDoc(ref);
     if (existing.exists()) {
-      await updateDoc(ref, { ...parsed });
+      // Remove undefined fields before updating
+      await updateDoc(ref, sanitize({ ...parsed }));
     } else {
-      await setDoc(ref, { ...parsed });
+      // Ensure no undefined values are sent on initial creation
+      await setDoc(ref, sanitize({ ...parsed }));
     }
     invalidateCityCaches(input.id, parsed.city);
     revalidateCityRoutes(parsed.city);
     return input.id;
   } else {
-    const docRef = await addDoc(colRef, { ...parsed });
+    const docRef = await addDoc(colRef, sanitize({ ...parsed }));
     invalidateCityCaches(docRef.id, parsed.city);
     revalidateCityRoutes(parsed.city);
     return docRef.id;
