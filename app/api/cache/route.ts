@@ -2,7 +2,7 @@
 // Ermöglicht manuelle Cache-Operationen und Status-Abfragen
 
 import { NextRequest, NextResponse } from 'next/server';
-import { cacheManager, invalidateContractCaches, invalidateCompanyCaches } from '@/lib/cache';
+import { cacheManager } from '@/lib/cache';
 import { cacheRefreshService } from '@/lib/cacheRefreshService';
 
 export async function GET(request: NextRequest) {
@@ -73,28 +73,7 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      case 'invalidate-contracts': {
-        // Contract-Caches invalidieren
-        invalidateContractCaches();
-        console.log('Contract-Caches manuell invalidiert');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Contract-Caches erfolgreich invalidiert'
-        });
-      }
-
-      case 'invalidate-companies': {
-        // Company-Caches invalidieren
-        invalidateCompanyCaches();
-        console.log('Company-Caches manuell invalidiert');
-        
-        return NextResponse.json({
-          success: true,
-          message: 'Company-Caches erfolgreich invalidiert'
-        });
-      }
-
+    
       case 'refresh-all': {
         // Alle Refresh-Jobs manuell ausführen
         await cacheRefreshService.runAllJobs();
@@ -135,8 +114,6 @@ export async function POST(request: NextRequest) {
             error: 'companies Array ist erforderlich'
           }, { status: 400 });
         }
-
-        await cacheRefreshService.initializeCompanyCaches(companies);
         
         return NextResponse.json({
           success: true,
