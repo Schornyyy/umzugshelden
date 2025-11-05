@@ -8,7 +8,7 @@ import {
 import EditReferenceForm from "../_components/EditReferenceForm";
 
 type Props = {
-  params: { userid: string; referenceid: string };
+  params: Promise<{ userid: string; referenceid: string }>;
 };
 
 const page = async ({ params }: Props) => {
