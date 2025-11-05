@@ -6,11 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 
-type Props = {
-  params: { id: string };
-};
-
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata({ params }: { params: { id: string } }) {
   const { id } = params;
   const ref = await getReferenceById(id);
   if (!ref) return { title: "Referenz" };
@@ -30,7 +26,11 @@ export async function generateMetadata({ params }: Props) {
   };
 }
 
-export default async function ReferencePage({ params }: Props) {
+export default async function ReferencePage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const { id } = params;
   const ref: (Reference & { id: string }) | null = await getReferenceById(id);
 
