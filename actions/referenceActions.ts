@@ -12,6 +12,7 @@ import {
 	where,
 	updateDoc,
 	deleteDoc,
+	type UpdateData,
 } from "firebase/firestore";
 
 const REFERENCES_COLLECTION = "references";
@@ -88,15 +89,15 @@ export async function getReferencesByBranch(branch: string): Promise<Array<Refer
 	const snaps = await getDocs(q);
 	return snaps.docs.map((d) => ({ ...(d.data() as Reference), id: d.id }));
 }
-
 export async function updateReference(id: string, updates: Partial<Reference>): Promise<void> {
  if (!id) throw new Error("Missing reference id");
  const refDoc = doc(database, REFERENCES_COLLECTION, id);
- await updateDoc(refDoc, updates as Record<string, unknown>);
+ await updateDoc(refDoc, updates as UpdateData<Reference>);
  // invalidate caches
  clearReferenceCache(id);
  clearPublishedReferencesCache();
 }
+
 
 export async function deleteReference(id: string): Promise<void> {
  if (!id) throw new Error("Missing reference id");
@@ -116,14 +117,14 @@ export async function upsertReferenceByCompany(ref: Omit<Reference, 'id'>): Prom
 	const col = collection(database, REFERENCES_COLLECTION);
 	const q = query(col, where("comanyName", "==", ref.comanyName));
 	const snaps = await getDocs(q);
-	const first = snaps.docs[0];
-	if (first) {
-	 await updateDoc(doc(database, REFERENCES_COLLECTION, first.id), ref as Record<string, unknown>);
+	if (snaps.docs.length > 0) {
+	 await updateDoc(doc(database, REFERENCES_COLLECTION, snaps.docs[0].id), ref as UpdateData<Reference>);
 	 // invalidate
-	 clearReferenceCache(first.id);
+	 clearReferenceCache(snaps.docs[0].id);
 	 clearPublishedReferencesCache();
-	 return first.id;
+	 return snaps.docs[0].id;
 	}
+	
  	const created = await addDoc(col, ref as Record<string, unknown>);
  	// invalidate published list cache
  	clearPublishedReferencesCache();
