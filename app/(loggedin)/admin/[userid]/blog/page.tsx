@@ -11,10 +11,10 @@ import SubcategoryClient from "./subcategoryClient";
 import ThumbnailPickerField from "./ThumbnailPickerField";
 
 const MAIN_CATEGORIES: AdminBlogMainCategory[] = [
-  "unternehmen",
+  "webdesign",
   "partner",
   "ratgeber",
-  "ereignisse",
+  "seo",
 ];
 
 export const dynamic = "force-dynamic";
