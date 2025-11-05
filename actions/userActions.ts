@@ -14,6 +14,7 @@ import {
 	updateDoc,
 	deleteDoc,
 } from "firebase/firestore";
+import type { UpdateData, DocumentData } from "firebase/firestore";
 import { redirect } from "next/navigation";
 
 const USERS_COLLECTION = "users";
@@ -59,7 +60,7 @@ export async function getUserByEmail(email: string): Promise<(User & { id: strin
 export async function updateUser(id: string, updates: Partial<User>): Promise<void> {
 	if (!id) throw new Error("Missing user id");
 	const ref = doc(database, USERS_COLLECTION, id);
-	await updateDoc(ref, updates as Record<string, unknown>);
+		await updateDoc(ref, updates as UpdateData<DocumentData>);
 }
 
 /**
