@@ -28,7 +28,7 @@ const BulletPointCards = () => {
   ];
 
   return (
-    <div className='flex flex-row justify-between w-full gap-12'>
+    <div className='flex flex-col md:flex-row justify-between w-full gap-12'>
       {points.map((point, index) => (
         <div
           key={index}

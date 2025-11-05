@@ -69,7 +69,7 @@ const page = () => {
   ];
 
   return (
-    <div className='flex flex-col gap-12 md:gap-44 container mx-auto px-4 sm:px-6 lg:px-8 py-8'>
+    <div className='flex flex-col gap-32 md:gap-44 container mx-auto px-4 sm:px-6 lg:px-8 py-8'>
       <Hero />
       <CustomerLogoLoop />
       <ProblemSection />
