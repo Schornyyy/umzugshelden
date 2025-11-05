@@ -110,37 +110,37 @@ const Navbar = () => {
 
           <Link
             href='/'
-            className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-100'
+            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-100'
             onClick={handleLinkClick}>
             Startseite
           </Link>
           <Link
             href='/dienstleistung'
-            className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-100'
+            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-100'
             onClick={handleLinkClick}>
             Dienstleistung
           </Link>
           <Link
             href='/referenzen'
-            className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-200'
+            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-200'
             onClick={handleLinkClick}>
             Referenzen
           </Link>
           <Link
             href='/ueber-uns'
-            className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-300'
+            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-300'
             onClick={handleLinkClick}>
             Über uns
           </Link>
           <Link
             href='/kontakt'
-            className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-400'
+            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-400'
             onClick={handleLinkClick}>
             Kontakt
           </Link>
           <Link
             href='/website-check'
-            className='bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700 transition-opacity delay-500'
+            className='bg-primary text-white px-6 py-3 rounded hover:bg-primary/90 transition-opacity delay-500'
             onClick={handleLinkClick}>
             Kostenloser Website-Check
           </Link>
