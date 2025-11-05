@@ -7,11 +7,11 @@ import { ArrowRight } from "lucide-react";
 import Image from "next/image";
 
 type Props = {
-  params: { id: string } | Promise<{ id: string }>;
+  params: { id: string };
 };
 
 export async function generateMetadata({ params }: Props) {
-  const { id } = (await params) as { id: string };
+  const { id } = params;
   const ref = await getReferenceById(id);
   if (!ref) return { title: "Referenz" };
   const title = ref.comanyName || "Referenz";
@@ -31,7 +31,7 @@ export async function generateMetadata({ params }: Props) {
 }
 
 export default async function ReferencePage({ params }: Props) {
-  const { id } = (await params) as { id: string };
+  const { id } = params;
   const ref: (Reference & { id: string }) | null = await getReferenceById(id);
 
   if (!ref) {
