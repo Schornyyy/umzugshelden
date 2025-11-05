@@ -1,7 +1,7 @@
 // Background Service für automatische Cache-Aktualisierung
 // Läuft alle 24 Stunden und aktualisiert Contract- und Company-Caches
 
-import { cacheManager, CACHE_KEYS, CACHE_OPTIONS, logCacheStats } from '@/lib/cache';
+import { cacheManager, CACHE_OPTIONS, logCacheStats } from '@/lib/cache';
 
 interface CacheRefreshJob {
   key: string;
@@ -200,80 +200,8 @@ class CacheRefreshService {
       }))
     };
   }
-
-  /**
-   * Cache für alle aktiven Unternehmen initialisieren
-   */
-  async initializeCompanyCaches(companies: Array<{
-    id: string;
-    latitude: number;
-    longitude: number;
-    services: string[];
-    radius?: number;
-  }>) {
-    console.log(`Initialisiere Cache für ${companies.length} Unternehmen`);
-
-    // Importiere Contract-Actions dynamisch um Circular Dependencies zu vermeiden
-    const { getContractsInRadius, getContractPreviewsInRadius } = await import('@/actions/contractActions');
-
-    for (const company of companies) {
-      const radius = company.radius || 50;
-      
-      // Job für vollständige Contract-Daten
-      // Verwende vereinheitlichten Services-Key ['ALL'] für Radius-Caches
-      const contractsKey = CACHE_KEYS.CONTRACTS_IN_RADIUS(
-        company.latitude,
-        company.longitude,
-        radius,
-        ["ALL"]
-      );
-
-      this.addJob({
-        key: contractsKey,
-        refreshFunction: async () => {
-          const result = await getContractsInRadius(
-            company.latitude,
-            company.longitude,
-            radius,
-            company.services,
-            undefined,
-            50, // Mehr Contracts laden für Cache
-            false // Frisch laden und internen ['ALL']-Key befüllen
-          );
-          return result;
-        },
-        interval: CACHE_OPTIONS.CONTRACTS.refreshInterval
-      });
-
-      // Job für Contract-Previews
-      const previewsKey = CACHE_KEYS.CONTRACT_PREVIEWS(
-        company.latitude,
-        company.longitude,
-        radius,
-        ["ALL"]
-      );
-
-      this.addJob({
-        key: previewsKey,
-        refreshFunction: async () => {
-          const result = await getContractPreviewsInRadius(
-            company.latitude,
-            company.longitude,
-            radius,
-            company.services,
-            undefined,
-            50, // Mehr Previews laden für Cache
-            false // Frisch laden und internen ['ALL']-Key befüllen
-          );
-          return result;
-        },
-        interval: CACHE_OPTIONS.CONTRACTS.refreshInterval
-      });
-    }
-
-    console.log(`${this.jobs.length} Cache-Jobs konfiguriert`);
-  }
 }
+
 
 // Singleton Service
 export const cacheRefreshService = new CacheRefreshService();
