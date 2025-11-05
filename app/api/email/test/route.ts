@@ -3,7 +3,7 @@ import { sendCustomEmail } from '@/actions/emailActions';
 
 export async function POST(req: NextRequest) {
   try {
-    const { to = 'support@landschaftshelden.io', contractId = 'test-contract' } = await req.json().catch(() => ({}));
+  const { to = 'kontakt@gs-creatives.de', contractId = 'test-contract' } = await req.json().catch(() => ({}));
     const base = process.env.NEXT_PUBLIC_BASE_URL || '';
     const replacements = {
       contractLink: `${base}/login`,

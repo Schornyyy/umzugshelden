@@ -25,40 +25,36 @@ const Navbar = () => {
   };
 
   return (
-    <nav className='bg-white shadow-md'>
+    <nav className='bg-white shadow-md z-50 sticky top-0 w-full'>
       <div className='container mx-auto px-4 py-4 flex items-center justify-between'>
         {/* Logo */}
         <Link href='/' className='text-2xl font-bold text-green-600'>
           <Image
-            alt='JobSmith Logo'
-            src={"/images/JobSmith_Logo_Green.png"}
+            alt='GS-Creatives Logo'
+            src={"/images/Logo.png"}
             height={128}
             width={256}
-            className='object-cover'
+            className='object-cover h-12 w-auto'
           />
         </Link>
 
         {/* Desktop Navigation */}
         <div className='hidden xl:flex space-x-6'>
-          <Link href='/' className='text-gray-600 hover:text-green-600'>
+          <Link href='/' className='text-gray-600 hover:text-primary'>
             Startseite
           </Link>
           <Link
-            href='/auftrag-erstellen'
-            className='text-gray-600 hover:text-green-600'>
-            Auftrag erstellen
+            href='/dienstleistung'
+            className='text-gray-600 hover:text-primary'>
+            Dienstleistung
           </Link>
-          <Link
-            href='/fuer-unternehmen'
-            className='text-gray-600 hover:text-green-600'>
-            Für Unternehmen
+          <Link href='/referenzen' className='text-gray-600 hover:text-primary'>
+            Referenzen
           </Link>
-          <Link
-            href='/unternehmen-finden'
-            className='text-gray-600 hover:text-green-600'>
-            Unternehmen finden
+          <Link href='/ueber-uns' className='text-gray-600 hover:text-primary'>
+            Über uns
           </Link>
-          <Link href='/kontakt' className='text-gray-600 hover:text-green-600'>
+          <Link href='/kontakt' className='text-gray-600 hover:text-primary'>
             Kontakt
           </Link>
         </div>
@@ -66,9 +62,9 @@ const Navbar = () => {
         {/* Call-to-Action Button */}
         <div className='hidden md:block'>
           <Link
-            href='/auftrag-erstellen'
-            className='bg-green-600 text-white px-4 py-3 rounded hover:bg-green-700'>
-            Jetzt Kostenlos Auftrag erstellen
+            href='/website-check'
+            className='bg-primary text-white px-4 py-3 rounded hover:bg-primary/90'>
+            Kostenloser Website-Check
           </Link>
         </div>
 
@@ -119,22 +115,22 @@ const Navbar = () => {
             Startseite
           </Link>
           <Link
-            href='/auftrag-erstellen'
+            href='/dienstleistung'
             className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-100'
             onClick={handleLinkClick}>
-            Auftrag erstellen
+            Dienstleistung
           </Link>
           <Link
-            href='/fuer-unternehmen'
+            href='/referenzen'
             className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-200'
             onClick={handleLinkClick}>
-            Für Unternehmen
+            Referenzen
           </Link>
           <Link
-            href='/unternehmen-finden'
+            href='/ueber-uns'
             className='text-2xl text-gray-600 hover:text-green-600 transition-opacity delay-300'
             onClick={handleLinkClick}>
-            Unternehmen finden
+            Über uns
           </Link>
           <Link
             href='/kontakt'
@@ -143,10 +139,10 @@ const Navbar = () => {
             Kontakt
           </Link>
           <Link
-            href='/auftrag-erstellen'
+            href='/website-check'
             className='bg-green-600 text-white px-6 py-3 rounded hover:bg-green-700 transition-opacity delay-500'
             onClick={handleLinkClick}>
-            Jetzt Kostenlos Auftrag erstellen
+            Kostenloser Website-Check
           </Link>
         </div>
       )}

@@ -6,13 +6,12 @@ import {getStorage} from "firebase/storage"
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA442lHya1rJ4xvG_EpFWZAXATMRalqY4Q",
-  authDomain: "gym-crm-6216d.firebaseapp.com",
-  databaseURL: "https://gym-crm-6216d-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "gym-crm-6216d",
-  storageBucket: "gym-crm-6216d.appspot.com",
-  messagingSenderId: "248617571191",
-  appId: "1:248617571191:web:42eaad09c1da08ab2d0772"
+  apiKey: "AIzaSyBaQQ2KWYefEL7SxxLooeljWxRWYvYFtP4",
+  authDomain: "gs-templates.firebaseapp.com",
+  projectId: "gs-templates",
+  storageBucket: "gs-templates.firebasestorage.app",
+  messagingSenderId: "887669918597",
+  appId: "1:887669918597:web:de28477d9ab6d400b452ec"
 };
 
 // Initialize Firebase

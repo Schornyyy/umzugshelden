@@ -17,8 +17,8 @@ const generateCityListSchema = () => {
     "@type": "ItemList",
     name: "Garten- und Landschaftsbau Städte in Deutschland",
     description:
-      "Alle verfügbaren Städte für Garten- und Landschaftsbau Services auf Landschaftshelden.io",
-    url: "https://landschaftshelden.io/stadt",
+      "Alle verfügbaren Städte für Webdesign- & Handwerks-Services auf GS-Creatives",
+    url: "https://gs-creatives.de/stadt",
     numberOfItems: cities.length,
     itemListElement: cities.slice(0, 50).map((city, index) => ({
       "@type": "ListItem",
@@ -26,7 +26,7 @@ const generateCityListSchema = () => {
       item: {
         "@type": "Place",
         name: city,
-        url: `https://landschaftshelden.io/stadt/${slugify(city)}`,
+        url: `https://gs-creatives.de/stadt/${slugify(city)}`,
         address: {
           "@type": "PostalAddress",
           addressLocality: city,
@@ -205,15 +205,15 @@ const Page = () => {
           wartet
         </h2>
         <p>
-          <strong>Landschaftshelden.io</strong> verbindet Sie mit qualifizierten
-          Garten- und Landschaftsbauern in über {cities.length} deutschen
-          Städten. Egal ob Großstadt oder Kleinstadt – wir haben den passenden
-          Galabau-Betrieb für Ihr Projekt.
+          <strong>GS-Creatives</strong> verbindet Sie mit qualifizierten Garten-
+          und Landschaftsbauern in über {cities.length} deutschen Städten. Egal
+          ob Großstadt oder Kleinstadt – wir haben den passenden Galabau-Betrieb
+          für Ihr Projekt.
         </p>
 
         <div className='bg-green-50 border border-green-200 rounded-lg p-6 my-8'>
           <h3 className='text-green-800 font-semibold mb-4'>
-            🌱 Warum Landschaftshelden.io für Ihre Stadt?
+            🌱 Warum GS-Creatives für Ihre Stadt?
           </h3>
           <div className='grid md:grid-cols-2 gap-4 text-green-700'>
             <ul className='space-y-2'>

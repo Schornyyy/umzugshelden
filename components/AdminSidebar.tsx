@@ -29,16 +29,8 @@ const data = {
       url: "/",
       items: [
         {
-          title: "Unternehmen",
-          url: "/",
-        },
-        {
-          title: "Aufträge",
-          url: "/contracts",
-        },
-        {
-          title: "Partner",
-          url: "/partners",
+          title: "Referenzen",
+          url: "/reference",
         },
         {
           title: "Städte",
@@ -47,14 +39,6 @@ const data = {
         {
           title: "Blogs",
           url: "/blog",
-        },
-        {
-          title: "Statistiken",
-          url: "/statistiken",
-        },
-        {
-          title: "Importieren",
-          url: "/imports",
         },
       ],
     },
@@ -75,10 +59,10 @@ export function AdminSideBar({
     <Sidebar {...props} className='bg-slate-800 sticky left-0 top-0'>
       <SidebarHeader className='p-6'>
         <Image
-          src={"/images/JobSmith_Logo.png"}
-          alt='Reinigungshelden Logo'
-          height={420}
-          width={420}
+          src={"/images/Logo.png"}
+          alt='Logo'
+          height={64}
+          width={64}
           className='object-contain'
         />
       </SidebarHeader>

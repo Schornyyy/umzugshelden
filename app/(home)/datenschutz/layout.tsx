@@ -2,29 +2,24 @@ import { Metadata } from "next";
 
 export const metadata: Metadata = {
   title:
-    "Datenschutzerklärung | Landschaftshelden.io - DSGVO-konforme Datenverarbeitung",
+    "Datenschutzerklärung | GS-Creatives - DSGVO-konforme Datenverarbeitung",
   description:
-    "Vollständige DSGVO-konforme Datenschutzerklärung für Landschaftshelden.io. Erfahren Sie, wie wir Ihre Daten schützen und verarbeiten. Transparenz und Datenschutz haben höchste Priorität.",
+    "Vollständige DSGVO-konforme Datenschutzerklärung für GS-Creatives. Erfahren Sie, wie wir Ihre Daten schützen und verarbeiten. Transparenz und Datenschutz haben höchste Priorität.",
   keywords:
-    "Datenschutz, DSGVO, Datenschutzerklärung, Landschaftshelden, Garten und Landschaftsbau, Datenverarbeitung, Privatsphäre",
-  authors: [{ name: "Landschaftshelden.io" }],
+    "Datenschutz, DSGVO, Datenschutzerklärung, GS-Creatives, Webdesign, Datenverarbeitung, Privatsphäre",
+  authors: [{ name: "GS-Creatives" }],
   robots: "index, follow",
   openGraph: {
-    title: "Datenschutzerklärung | Landschaftshelden.io",
+    title: "Datenschutzerklärung | GS-Creatives",
     description:
-      "DSGVO-konforme Datenschutzerklärung für Landschaftshelden.io. Transparenz und Datenschutz haben höchste Priorität.",
-    url: "https://landschaftshelden.io/datenschutz",
-    siteName: "Landschaftshelden.io",
+      "DSGVO-konforme Datenschutzerklärung für GS-Creatives. Transparenz und Datenschutz haben höchste Priorität.",
+    url: "https://gs-creatives.de/datenschutz",
+    siteName: "GS-Creatives",
     locale: "de_DE",
     type: "website",
   },
   twitter: {
     card: "summary",
-    title: "Datenschutzerklärung | Landschaftshelden.io",
-    description: "DSGVO-konforme Datenschutzerklärung für Landschaftshelden.io",
-  },
-  alternates: {
-    canonical: "https://landschaftshelden.io/datenschutz",
   },
 };
 

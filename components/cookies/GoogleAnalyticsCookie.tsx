@@ -39,7 +39,7 @@ const GoogleAnalyticsCookie = () => {
       typeof consent?.analytics === "boolean"
         ? consent.analytics
         : (() => {
-            const saved = Cookies.get("cookieConsentLandschaftshelden");
+            const saved = Cookies.get("cookieConsentGScreatives");
             if (!saved) return false;
             try {
               return Boolean(JSON.parse(saved)?.analytics);

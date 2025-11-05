@@ -21,9 +21,9 @@ const Datenschutz = () => {
           </h2>
           <div className='bg-gray-50 p-6 rounded-lg mb-4'>
             <p className='text-gray-700 mb-2'>
-              <strong>JobSmith - Landschaftshelden.io</strong>
+              <strong>GS-Creatives.de</strong>
               <br />
-              Heidnocken 1<br />
+              In der Trifft. 1<br />
               57489 Drolshagen
               <br />
               Deutschland
@@ -31,17 +31,17 @@ const Datenschutz = () => {
             <p className='text-gray-700'>
               <strong>E-Mail:</strong>{" "}
               <a
-                href='mailto:support@landschaftshelden.io'
+                href='mailto:kontakt@gs-creatives.de'
                 className='text-green-600 hover:text-green-800 font-medium'>
-                support@landschaftshelden.io
+                kontakt@gs-creatives.de
               </a>
               <br />
               <br />
               <strong>Website:</strong>{" "}
               <a
-                href='https://landschaftshelden.io'
+                href='https://gs-creatives.de'
                 className='text-green-600 hover:text-green-800 font-medium'>
-                landschaftshelden.io
+                gs-creatives.de
               </a>
             </p>
           </div>
@@ -468,9 +468,9 @@ const Datenschutz = () => {
             <p className='text-gray-700'>
               <strong>E-Mail:</strong>{" "}
               <a
-                href='mailto:datenschutz@landschaftshelden.io'
+                href='mailto:kontakt@gs-creatives.de'
                 className='text-green-600 hover:text-green-800 font-medium'>
-                datenschutz@landschaftshelden.io
+                kontakt@gs-creatives.de
               </a>
               <br />
               <strong>Betreff:</strong> &quot;Datenschutzanfrage - [Ihr
@@ -554,9 +554,9 @@ const Datenschutz = () => {
             ändern. Die jeweils aktuelle Datenschutzerklärung kann jederzeit auf
             der Website unter
             <a
-              href='https://landschaftshelden.io/datenschutz'
+              href='https://gs-creatives.de/datenschutz'
               className='text-green-600 hover:text-green-800 font-medium ml-1'>
-              https://landschaftshelden.io/datenschutz
+              https://gs-creatives.de/datenschutz
             </a>{" "}
             von Ihnen abgerufen und ausgedruckt werden.
           </p>

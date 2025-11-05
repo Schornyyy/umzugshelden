@@ -8,7 +8,7 @@ const AnalyticsCookies = () => {
   const [isConsentGiven, setIsConsentGiven] = useState<boolean>(false);
 
   useEffect(() => {
-    const savedConsent = Cookies.get("cookieConsentLandschaftshelden");
+    const savedConsent = Cookies.get("cookieConsentGScreatives");
     if (savedConsent) {
       const parsedConsent = JSON.parse(savedConsent);
       setIsConsentGiven(parsedConsent.analytics);

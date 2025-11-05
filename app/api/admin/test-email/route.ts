@@ -38,8 +38,8 @@ export async function POST(req: Request) {
 
     const payload = {
       sender: {
-        name: 'Landschaftshelden System',
-        email: 'noreply@landschaftshelden.io'
+  name: 'GS-Creatives System',
+  email: 'noreply@gs-creatives.de'
       },
       to: [{ email: to, name }],
       subject,

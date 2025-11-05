@@ -1,24 +1,18 @@
 "use client";
 
 import React, { Suspense, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/config/firebase";
-import {
-  findCompanyByEmail,
-  findCompanyByOwnerId,
-  updateCompanyInDatabase,
-} from "@/actions/companyActions";
-import { navigateUser } from "@/actions/userActions";
-import {
-  createAccountInDatabase,
-  findAccountByEmail,
-} from "@/actions/AccountActions";
-import { Account } from "@/types/AccountType";
 import { v4 as uuid } from "uuid";
+import {
+  createUser,
+  getUserByEmail,
+  navigateUser,
+} from "@/actions/userActions";
 
 // Zod Schema für Validierung
 const loginSchema = z.object({
@@ -42,28 +36,7 @@ const LoginInner: React.FC = () => {
     resolver: zodResolver(loginSchema),
   });
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const next = searchParams.get("next");
   const prefillEmail = searchParams.get("prefillEmail") || undefined;
-
-  // Only allow safe, internal redirects
-  function sanitizeNextPath(v: string | null): string | null {
-    if (!v) return null;
-    if (v.startsWith("//")) return null; // no schema-less
-    if (/^https?:\/\//i.test(v)) return null; // no absolute URLs
-    if (!v.startsWith("/")) return null; // must be internal path
-    return v;
-  }
-
-  const createAccount = async (email: string) => {
-    const account: Account = {
-      id: uuid(),
-      email: email,
-      role: "company",
-    };
-    await createAccountInDatabase(account);
-    return account;
-  };
 
   const onSubmit = async (data: LoginFormInputs) => {
     const { email, password } = data;
@@ -73,45 +46,16 @@ const LoginInner: React.FC = () => {
       const result = await signInWithEmailAndPassword(auth, email, password);
       if (!result) throw new Error("Auth failed");
 
-      let account = await findAccountByEmail(email);
+      let account = await getUserByEmail(email);
       if (!account) {
-        account = await createAccount(email);
+        await createUser({ email: email, role: "company", id: uuid() });
+        account = await getUserByEmail(email);
       }
 
-      if (account.role === "company") {
-        const companyByOwner = await findCompanyByOwnerId(account.id);
-        if (!companyByOwner) {
-          const companyByEmail = await findCompanyByEmail(email);
-          if (companyByEmail) {
-            if (
-              companyByEmail.type === "company" ||
-              companyByEmail.type == undefined
-            ) {
-              await updateCompanyInDatabase({
-                ...companyByEmail,
-                ownerid: account.id,
-              });
-            }
-            return navigateUser(companyByEmail.type, companyByEmail.id!);
-          }
-          // If no company found, fall back to role-based navigation
-          return navigateUser("company", account.id);
-        } else {
-          const safeNext = sanitizeNextPath(next);
-          if (safeNext) {
-            if (safeNext === "/company/contracts") {
-              return router.push(`/company/${companyByOwner.id}/contracts`);
-            }
-            return router.push(safeNext);
-          }
-          return navigateUser(companyByOwner.type, companyByOwner.id!);
-        }
-      } else if (account.role === "partner") {
-        return navigateUser("partner", account.id);
-      } else if (account.role === "admin") {
-        const companyByOwner = await findCompanyByOwnerId(account.id);
-        return navigateUser("admin", companyByOwner!.id!);
-      }
+      navigateUser(
+        account ? account : { email: "", role: "company", id: uuid() },
+        ""
+      );
     } catch {
       setFormError(
         "Login fehlgeschlagen. Bitte überprüfe deine E-Mail und dein Passwort."

@@ -11,7 +11,7 @@ const Impressum = () => {
         Angaben gemäß § 5 TMG
       </h2>
       <p className='text-gray-600 mb-2'>
-        <strong>Firma:</strong> Landschaftshelden{" "}
+        <strong>Firma:</strong> GS-Creatives{" "}
       </p>
       <p className='text-gray-600 mb-4'>
         <strong>Vertreten durch:</strong> Lukas Schornstein
@@ -21,9 +21,9 @@ const Impressum = () => {
       <p className='text-gray-600 mb-2'>
         <strong>E-Mail:</strong>{" "}
         <a
-          href='mailto:support@landschaftshelden.io'
+          href='mailto:kontakt@gs-creatives.de'
           className='text-blue-600 hover:text-blue-800'>
-          support@landschaftshelden.io
+          kontakt@gs-creatives.de
         </a>
       </p>
       <p className='text-gray-600 mb-4'>
@@ -81,9 +81,9 @@ const Impressum = () => {
 
       <h2 className='text-xl font-semibold text-gray-700 mb-4'>Adresse</h2>
       <p className='text-gray-600 mb-6'>
-        <strong>Landschaftshelden</strong>
+        <strong>GS-Creatives</strong>
         <br />
-        Heidnocken 1, 57489 Drolshagen
+        In der Trifft. 1, 57489 Drolshagen
       </p>
     </div>
   );

@@ -1,158 +1,139 @@
-"use client"
-// app/kontakt/page.tsx (oder der entsprechende Pfad)
+"use client";
 
-import React, { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { z } from 'zod'
-import { zodResolver } from '@hookform/resolvers/zod'
+import React, { useState } from "react";
 
-// Zod-Schema für die Formularvalidierung
-const ContactSchema = z.object({
-  name: z.string().min(1, 'Name ist erforderlich'),
-  email: z.string().email('Bitte gib eine gültige E-Mail-Adresse ein'),
-  phone: z.string().optional(),
-  message: z.string().min(1, 'Nachricht ist erforderlich'),
-})
+const ContactPage = () => {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<null | { ok: boolean; msg: string }>(
+    null
+  );
 
-// Typen für die Formularfelder
-type ContactFormData = z.infer<typeof ContactSchema>
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus(null);
 
+    if (!email || !message || !name) {
+      setStatus({
+        ok: false,
+        msg: "Bitte fülle Name, E-Mail und Nachricht aus.",
+      });
+      return;
+    }
 
-const page = () => {
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const [formStatus, setFormStatus] = useState<'idle' | 'success' | 'error'>('idle')
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  } = useForm<ContactFormData>({
-    resolver: zodResolver(ContactSchema),
-  })
-
-  const onSubmit = async (data: ContactFormData) => {
+    setLoading(true);
     try {
-      const response = await fetch('https://formspree.io/f/xdkkpezj', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: "kontakt@gs-creatives.de",
+          subject: `Kontaktformular: ${name}`,
+          replacements: { name, phone, email, message },
+          templatePath: "ContactEmailTemplate.html",
+          tracking: false,
+        }),
+      });
 
-      if (response.ok) {
-        setFormStatus('success')
-        reset() // Formular zurücksetzen
+      const data = await res.json();
+      if (res.ok && !data.error) {
+        setStatus({ ok: true, msg: "Danke — Ihre Nachricht wurde gesendet." });
+        setName("");
+        setPhone("");
+        setEmail("");
+        setMessage("");
       } else {
-        throw new Error('Fehler beim Senden der Nachricht.')
+        setStatus({
+          ok: false,
+          msg:
+            data.error || data.message || "Fehler beim Senden der Nachricht.",
+        });
       }
-    } catch (error) {
-      console.error('Error:', error)
-      setFormStatus('error')
+    } catch (err) {
+      console.error(err);
+      setStatus({
+        ok: false,
+        msg: "Netzwerkfehler. Bitte versuchen Sie es später erneut.",
+      });
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <div className="container mx-auto px-4 my-12 max-w-2xl">
-      <h1 className="text-3xl font-bold text-center mb-8">Kontaktieren Sie uns</h1>
-      <form
-        onSubmit={handleSubmit(onSubmit)}
-        className="flex flex-col gap-6 bg-white p-6 rounded-lg shadow-lg"
-      >
-        {/* Name */}
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-            Name
-          </label>
-          <input
-            id="name"
-            type="text"
-            {...register('name')}
-            className={`mt-1 p-2 block w-full border ${
-              errors.name ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm`}
-          />
-          {errors.name && (
-            <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
-          )}
-        </div>
+    <div className='container mx-auto py-12 px-4 max-w-2xl'>
+      <h1 className='text-3xl font-bold mb-4'>Kontakt</h1>
+      <p className='text-gray-600 mb-6'>
+        Schreib uns eine Nachricht — wir melden uns innerhalb von 24 Stunden.
+      </p>
 
-        {/* Email */}
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            E-Mail
-          </label>
+      <form onSubmit={handleSubmit} className='grid gap-4'>
+        <label className='flex flex-col'>
+          <span className='font-medium'>Name *</span>
           <input
-            id="email"
-            type="email"
-            {...register('email')}
-            className={`mt-1 p-2 block w-full border ${
-              errors.email ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className='border p-2 rounded'
+            placeholder='Dein Name'
+            required
           />
-          {errors.email && (
-            <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
-          )}
-        </div>
+        </label>
 
-        {/* Telefonnummer */}
-        <div>
-          <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-            Telefonnummer
-          </label>
+        <label className='flex flex-col'>
+          <span className='font-medium'>Telefonnummer</span>
           <input
-            id="phone"
-            type="text"
-            {...register('phone')}
-            className={`mt-1 p-2 block w-full border ${
-              errors.phone ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm`}
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className='border p-2 rounded'
+            placeholder='+49 170 0000000'
           />
-          {errors.phone && (
-            <p className="text-red-500 text-sm mt-1">{errors.phone.message}</p>
-          )}
-        </div>
+        </label>
 
-        {/* Nachricht */}
-        <div>
-          <label htmlFor="message" className="block text-sm font-medium text-gray-700">
-            Nachricht
-          </label>
+        <label className='flex flex-col'>
+          <span className='font-medium'>E‑Mail *</span>
+          <input
+            type='email'
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className='border p-2 rounded'
+            placeholder='name@beispiel.de'
+            required
+          />
+        </label>
+
+        <label className='flex flex-col'>
+          <span className='font-medium'>Nachricht *</span>
           <textarea
-            id="message"
-            {...register('message')}
-            rows={5}
-            className={`mt-1 p-2 block w-full border ${
-              errors.message ? 'border-red-500' : 'border-gray-300'
-            } rounded-md shadow-sm`}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className='border p-2 rounded h-32'
+            placeholder='Worum geht es?'
+            required
           />
-          {errors.message && (
-            <p className="text-red-500 text-sm mt-1">{errors.message.message}</p>
+        </label>
+
+        <div className='flex items-center gap-4'>
+          <button
+            type='submit'
+            disabled={loading}
+            className='bg-primary text-white px-4 py-2 rounded disabled:opacity-60'>
+            {loading ? "Senden…" : "Nachricht senden"}
+          </button>
+          {status && (
+            <div
+              className={`text-sm ${
+                status.ok ? "text-green-600" : "text-red-600"
+              }`}>
+              {status.msg}
+            </div>
           )}
         </div>
-
-        {/* Absenden */}
-        <button
-          type="submit"
-          className="py-2 px-4 bg-green-500 text-white font-medium rounded-lg hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-400"
-        >
-          Nachricht senden
-        </button>
-
-        {/* Erfolgs- und Fehlermeldungen */}
-        {formStatus === 'success' && (
-          <p className="text-green-500 text-sm mt-2">Vielen Dank! Ihre Nachricht wurde gesendet.</p>
-        )}
-        {formStatus === 'error' && (
-          <p className="text-red-500 text-sm mt-2">
-            Etwas ist schiefgelaufen. Bitte versuchen Sie es später erneut.
-          </p>
-        )}
       </form>
     </div>
-  )
-}
+  );
+};
 
-export default page
+export default ContactPage;

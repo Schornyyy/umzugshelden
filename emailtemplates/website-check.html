@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Website-Check Anfrage</title>
+    <style>
+      :root { --primary: #4693DD; }
+      body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; color: #111827; }
+      .header { background: var(--primary); color: white; padding: 18px; text-align: center; }
+      .container { padding: 18px; }
+      .table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+      .table th, .table td { text-align: left; padding: 8px; border-bottom: 1px solid #e5e7eb; }
+      .footer { margin-top: 20px; font-size: 13px; color: #6b7280; }
+      .badge { display:inline-block; background:#e6f2ff; color:var(--primary); padding:6px 10px; border-radius:6px; font-weight:600 }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Neue Website-Check Anfrage</h1>
+    </div>
+
+    <div class="container">
+      <p>Es wurde eine neue Website-Check Anfrage über das Formular gesendet. Alle Angaben stehen unten.</p>
+
+      <table class="table">
+        <tr>
+          <th>Firmenname</th>
+          <td>{{company}}</td>
+        </tr>
+        <tr>
+          <th>Ansprechperson</th>
+          <td>{{contactPerson}}</td>
+        </tr>
+        <tr>
+          <th>E‑Mail</th>
+          <td>{{email}}</td>
+        </tr>
+        <tr>
+          <th>Telefon</th>
+          <td>{{phone}}</td>
+        </tr>
+        <tr>
+          <th>Art der Seite</th>
+          <td>{{siteType}}</td>
+        </tr>
+        <tr>
+          <th>Website</th>
+          <td><a href="{{siteUrl}}" target="_blank" rel="noreferrer noopener">{{siteUrl}}</a></td>
+        </tr>
+        <tr>
+          <th>Ziel der Website</th>
+          <td>{{goal}} {{goalOther}}</td>
+        </tr>
+        <tr>
+          <th>Besondere Funktionen</th>
+          <td>{{specialFeatures}}</td>
+        </tr>
+        <tr>
+          <th>Datenschutz akzeptiert</th>
+          <td>{{acceptPrivacy}}</td>
+        </tr>
+      </table>
+
+      <div class="footer">
+        <p class="badge">GS-Creatives</p>
+        <p>Kontakt: kontakt@gs-creatives.de</p>
+        <p>Dies ist eine automatisch generierte Nachricht.</p>
+      </div>
+    </div>
+  </body>
+</html>

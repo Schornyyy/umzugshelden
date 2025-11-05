@@ -2,8 +2,139 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Local Poppins fonts: place woff2 files in `public/fonts/poppins/`
+  Example filenames used below:
+    - Poppins-300.woff2
+    - Poppins-400.woff2
+    - Poppins-500.woff2
+    - Poppins-600.woff2
+    - Poppins-700.woff2
+    - Poppins-800.woff2
+
+  You can acquire these from Google Fonts (download family) and convert/keep woff2.
+*/
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-300.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-800.woff2') format('woff2');
+}
+
+/* Additional weights and italic variants so Tailwind utilities map to the correct files */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 100;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-100.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-200.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-900.woff2') format('woff2');
+}
+
+/* Italic variants */
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 300;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-300italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-500italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-600italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-700italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-800italic.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: italic;
+  font-weight: 900;
+  font-display: swap;
+  src: url('/fonts/poppins-v24-latin-900italic.woff2') format('woff2');
+}
+
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  /* Use the locally hosted Poppins; fall back to system fonts */
+  font-family: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Segoe UI Emoji", "Segoe UI Symbol";
 }
 
 @layer base {
@@ -41,40 +172,8 @@ body {
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-  .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* primary color in RGB */
+    --color-primary: rgb(70, 147, 221);
   }
 }
 
@@ -97,3 +196,114 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+
+/* removed stray @theme rule (not standard CSS) */
+
+/* Logo marquee styles */
+.logo-marquee {
+  width: 100%;
+  overflow: hidden;
+}
+.logo-track {
+  display: flex;
+  align-items: center;
+  /* duplicate list is used in markup; translate by -50% for seamless loop */
+  animation: marquee 20s linear infinite;
+  flex-wrap: nowrap; /* prevent wrapping */
+  width: max-content; /* ensure track width equals content width */
+  will-change: transform;
+}
+.logo-track:hover {
+  animation-play-state: paused;
+}
+
+.logo-track > * {
+  flex: 0 0 auto; /* keep each logo item's width constant so the duplicated sequence aligns */
+}
+
+/* Sticky section styles */
+.sticky-section {
+  position: relative;
+}
+.sticky-inner {
+  position: sticky;
+  top: calc(var(--nav-height, 0px) + var(--sticky-extra, 0px));
+  transition: 180ms ease, border-radius 180ms ease, transform 180ms ease;
+}
+
+.sticky-section[data-sticky-index="0"] .sticky-inner {
+  --sticky-extra: 0px; /* first sticks flush under nav */
+}
+.sticky-section[data-sticky-index]:not([data-sticky-index="0"]) .sticky-inner {
+  --sticky-extra: 48px; /* subsequent stick 48px lower */
+}
+
+.sticky-inner.stuck {
+  border-radius: 0.5rem;
+  background: var(--card);
+  z-index: 60;
+  background-color: white;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .logo-track {
+    animation: none;
+  }
+}
+
+/* System sticky card styles */
+.system-points {
+  position: relative;
+}
+.system-point {
+  position: relative;
+  margin-bottom: 1rem;
+}
+.sticky-card {
+  position: -webkit-sticky;
+  position: sticky;
+  top: calc(var(--nav-height, 0px) + var(--card-offset, 0px));
+  background: var(--card);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+/* ensure each child keeps its width and stacking order from inline z-index */
+.system-point > .sticky-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .sticky-card {
+    top: calc(var(--nav-height, 0px) + calc(var(--card-offset, 0px) / 2));
+    padding: 1rem;
+  }
+  .system-point {
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* fixed-card used by JS: style when an element is pinned to viewport */
+.fixed-card {
+  box-shadow: 0 12px 30px rgba(2,6,23,0.12) !important;
+  border-radius: 0.75rem !important;
+}
+.fixed-placeholder {
+  display: block;
+  width: 100%;
+}
+

@@ -1,4 +1,4 @@
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://landschaftshelden.io';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://gs-creatives.de';
 
 module.exports = {
   siteUrl,

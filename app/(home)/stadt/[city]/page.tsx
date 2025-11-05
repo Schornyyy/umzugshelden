@@ -1,22 +1,22 @@
+import { getCityContent, buildFAQSchema } from "@/lib/cityContent";
+import {
+  getCityPage,
+  getCityPageByCity,
+} from "@/actions/cityActions/customerCityAction";
+import { ReactNode } from "react";
+import { deslugify } from "@/utils/slugify";
+import ReferenceBlock from "@/components/blocks/ReferenceBlock";
 import Link from "next/link";
-import React from "react";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { getAllCompanysFromDatabaseByCity } from "@/actions/companyActions";
-import { getGalbauServices } from "@/statics/Lists";
-import { getCityContent, buildFAQSchema } from "@/lib/cityContent";
-import {
-  getCityPage,
-  getCityPageByCity,
-} from "@/actions/cityActions/customerCityAction";
-import type { CityPageSection } from "@/types/city/CityPageSection";
-import { ReactNode } from "react";
-import { deslugify } from "@/utils/slugify";
-import SearchBarResults from "../../unternehmen-finden/_components/SearchbarResults";
+import Image from "next/image";
+// Image intentionally omitted here; use Next/Image in other components if needed
+
+type FAQItem = { question: string; answer: string };
 
 export async function generateMetadata({
   params,
@@ -24,67 +24,30 @@ export async function generateMetadata({
   params: Promise<{ city: string }>;
 }) {
   const { city } = await params;
-  // Sicherstellen, dass ggf. doppelt/roh encodete Städte (m%C3%BCnchen) sauber angezeigt werden
-  const trimmedCityRaw = city.trim();
-  let decoded = trimmedCityRaw;
+  const slugRaw = city.trim();
+  let decoded = slugRaw;
   try {
-    decoded = decodeURIComponent(trimmedCityRaw);
-  } catch {
-    // ignore malformed URI sequences
-  }
-  const trimmedCity = decoded;
-  const companys = await getAllCompanysFromDatabaseByCity(trimmedCity);
-  const count = companys.length;
-  const topN = Math.min(count, 5);
-
-  if (count === 0) {
-    return {
-      title: `Gartenbauer ${trimmedCity} ► Jetzt 5 kostenlose Angebote erhalten`,
-      description: `Garten- & Landschaftsbauer in ${trimmedCity} finden: Jetzt kostenlosen Auftrag einstellen und bis zu 5 Angebote vergleichen – unverbindlich & schnell.`,
-      keywords: [
-        `Gartenbauer ${trimmedCity}`,
-        `Garten Landschaftsbau ${trimmedCity}`,
-        `GaLaBau ${trimmedCity}`,
-        `Landschaftsgärtner ${trimmedCity}`,
-        `Gartengestaltung ${trimmedCity}`,
-        `Angebote Gartenbau ${trimmedCity}`,
-        "Kostenlose Angebote",
-        "Landschaftshelden",
-      ],
-      openGraph: {
-        title: `Gartenbauer ${trimmedCity} – 5 kostenlose Angebote sichern`,
-        description: `Jetzt Auftrag für Garten- und Landschaftsbau in ${trimmedCity} erstellen und bis zu 5 Angebote qualifizierter Betriebe erhalten.`,
-        type: "website",
-        locale: "de_DE",
-      },
-      alternates: {
-        canonical: `https://landschaftshelden.io/stadt/${encodeURIComponent(
-          trimmedCity
-        )}`,
-      },
-    };
-  }
+    decoded = decodeURIComponent(slugRaw);
+  } catch {}
+  const cityName = deslugify(decoded);
 
   return {
-    title: `${trimmedCity}: ${topN} Gartenbauer im Vergleich (0 € Aufwand, 5 Angebote)`,
-    description: `${topN} empfohlene Garten- & Landschaftsbauer in ${trimmedCity} ✔ Jetzt Projekt gratis einstellen & bis zu 5 Angebote vergleichen.`,
+    title: `${cityName} — Webdesign von GS-Creatives | Agentur für Websites`,
+    description: `GS-Creatives bietet professionelle Webdesign-Leistungen in ${cityName}. Wir bauen moderne Websites, Landingpages und Online-Shops — direkt von der Agentur.`,
     keywords: [
-      `Gartenbauer ${trimmedCity}`,
-      `Garten Landschaftsbau ${trimmedCity}`,
-      `GaLaBau ${trimmedCity}`,
-      `Landschaftsgärtner ${trimmedCity}`,
-      `Gartenbau Angebote ${trimmedCity}`,
-      `Kosten Gartenbau ${trimmedCity}`,
+      `Webdesign ${cityName}`,
+      `Webagentur ${cityName}`,
+      `Website erstellen ${cityName}`,
     ],
     openGraph: {
-      title: `${trimmedCity}: Gartenbauer Vergleich & Angebote`,
-      description: `Vergleichen Sie Garten- und Landschaftsbauer in ${trimmedCity}. Kostenlos Auftrag einstellen & mehrere Angebote erhalten.`,
+      title: `${cityName} — Webdesign von GS-Creatives`,
+      description: `Professionelles Webdesign in ${cityName} von GS-Creatives — Agenturleistung, keine Vermittlung.`,
       type: "website",
       locale: "de_DE",
     },
     alternates: {
-      canonical: `https://landschaftshelden.io/stadt/${encodeURIComponent(
-        trimmedCity
+      canonical: `https://gs-creatives.io/stadt/${encodeURIComponent(
+        cityName
       )}`,
     },
   };
@@ -92,47 +55,31 @@ export async function generateMetadata({
 
 const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
   const { city } = await params;
-  // Route param entspricht jetzt einem Slug (deterministischer Doc-ID). Deslugify für Display/DB city Name.
   const slug = city.trim();
   let cityDisplay = deslugify(slug);
-  // Falls Sonderfälle (doppelt encodet) auftreten, versuchen decodeURIComponent – wirkt nur wenn keine Umlaute durch deslugify ersetzt wurden
   try {
     cityDisplay = decodeURIComponent(cityDisplay);
-  } catch {
-    /* ignore */
-  }
-  const trimmedCity = cityDisplay.trim();
+  } catch {}
 
   try {
-    const allCompanys = await getAllCompanysFromDatabaseByCity(trimmedCity);
-    // Begrenze auf maximal 5 Unternehmen für bessere Conversion
-    const companys = allCompanys.slice(0, 5);
-
-    // CityPage via slug (Doc-ID = slug) laden; Fallback: legacy per city Feld
+    // Load optional CityPage overrides from DB
     let cityPage = await getCityPage(slug);
-    if (!cityPage) {
-      // Versuch über city Feld (alte Struktur, vor slug Migration)
-      cityPage = await getCityPageByCity(cityDisplay);
-    }
-    const {
-      headline,
-      faq: staticFaq,
-      costLow,
-      costHigh,
-    } = getCityContent(cityDisplay);
-    // FAQ Zusammenführung: erst DB FAQ (falls vorhanden), dann statische Ergänzungen ohne doppelte Fragen
-    let faq = staticFaq;
-    if (cityPage?.faq && cityPage.faq.length > 0) {
-      const existingQuestions = new Set(
-        cityPage.faq.map((f) => f.question.trim().toLowerCase())
+    if (!cityPage) cityPage = await getCityPageByCity(cityDisplay);
+
+    const { faq: staticFaq = [] } = getCityContent(cityDisplay);
+
+    // merge DB FAQ with static FAQ without duplicates
+    let faq: FAQItem[] = staticFaq as FAQItem[];
+    if (cityPage?.faq && (cityPage.faq as FAQItem[]).length > 0) {
+      const existing = new Set(
+        (cityPage.faq as FAQItem[]).map((f) => f.question.trim().toLowerCase())
       );
-      const additional = staticFaq.filter(
-        (f) => !existingQuestions.has(f.question.trim().toLowerCase())
+      const additional = (staticFaq as FAQItem[]).filter(
+        (f) => !existing.has(f.question.trim().toLowerCase())
       );
-      faq = [...cityPage.faq, ...additional];
+      faq = [...(cityPage.faq as FAQItem[]), ...additional];
     }
 
-    // Lightweight Draft.js raw renderer (no draft-js import on server)
     function renderDraft(raw?: string): ReactNode {
       if (!raw) return null;
       try {
@@ -149,335 +96,190 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
       }
     }
 
-    // Optional overrides from CityPage (title/description). Keep old fallback if not provided.
-    const dynamicTitle = cityPage?.title?.trim() || headline;
-    const dynamicDescription = cityPage?.description?.trim();
-
-    if (allCompanys.length === 0) {
-      return (
-        <div className='container mx-auto py-24 px-4'>
-          {/* SEO Hero Section */}
-          <div className='text-center mb-12'>
-            <h1 className='text-4xl md:text-5xl font-bold mb-6'>
-              {dynamicTitle}
-            </h1>
-            {dynamicDescription ? (
-              <div className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto space-y-4'>
-                {renderDraft(dynamicDescription)}
-              </div>
-            ) : (
-              <p className='text-xl text-gray-600 mb-8 max-w-3xl mx-auto'>
-                Suchen Sie professionelle Garten- und Landschaftsbauer in{" "}
-                {cityDisplay}? Holen Sie jetzt mehrere Angebote ein – viele
-                Projekte liegen typischerweise zwischen{" "}
-                {costLow.toLocaleString("de-DE")} € und{" "}
-                {costHigh.toLocaleString("de-DE")} € abhängig von Umfang &
-                Material.
-              </p>
-            )}
-
-            {/* Call-to-Action Button */}
-            <div className='flex justify-center'>
-              <Link
-                href='/auftrag-erstellen'
-                className='bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg transition-colors'>
-                🚀 Jetzt kostenlosen Auftrag erstellen
-              </Link>
-            </div>
-          </div>
-
-          {/* Service Grid */}
-          <div className='mb-12'>
-            <h2 className='text-2xl font-semibold mb-6 text-center'>
-              Garten- und Landschaftsbau Services in {cityDisplay}
-            </h2>
-            <div className='grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4'>
-              {getGalbauServices().map((service) => (
-                <Link
-                  href={`/auftrag-erstellen?service=${encodeURIComponent(
-                    service
-                  )}&city=${cityDisplay}`}
-                  key={service}
-                  className='bg-green-500 hover:bg-green-600 p-4 rounded-xl flex items-center justify-center transition-colors'>
-                  <span className='text-white md:text-base font-semibold text-center text-sm'>
-                    {service}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Local SEO Content */}
-          <div className='prose max-w-none'>
-            <h2>Professioneller Garten- und Landschaftsbau in {cityDisplay}</h2>
-            <p>
-              Sie suchen einen zuverlässigen{" "}
-              <strong>Garten- und Landschaftsbauer in {cityDisplay}</strong>?
-              Landschaftshelden.io verbindet Sie kostenlos mit den besten
-              Galabau-Betrieben in Ihrer Region. Egal ob Gartengestaltung,
-              Pflasterarbeiten oder Baumpflege – unsere Partner bieten
-              professionelle Lösungen für Ihren Garten.
-            </p>
-            <p>
-              <strong>
-                Warum Landschaftshelden.io für Ihr Garten-Projekt in{" "}
-                {cityDisplay}?
-              </strong>
-            </p>
-            <ul>
-              <li>✅ Kostenlose Auftragserstellung</li>
-              <li>✅ Bis zu 5 Angebote von geprüften Betrieben</li>
-              <li>✅ Nur qualifizierte Garten- und Landschaftsbauer</li>
-              <li>✅ Direkter Kontakt zu lokalen Experten</li>
-              <li>✅ Transparente Preisvergleiche</li>
-            </ul>
-          </div>
-
-          {/* Rotierendes FAQ auch bei 0 Unternehmen */}
-          <div className='mt-16'>
-            <h2 className='text-2xl font-semibold mb-6 text-center'>
-              Häufige Fragen zu Garten- & Landschaftsbau in {cityDisplay}
-            </h2>
-            {faq.length > 0 && (
-              <Accordion
-                type='single'
-                collapsible
-                className='max-w-4xl mx-auto'>
-                {faq.map((item, i) => (
-                  <AccordionItem key={i} value={`item-${i}`}>
-                    <AccordionTrigger>{item.question}</AccordionTrigger>
-                    <AccordionContent>
-                      <p>{item.answer}</p>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            )}
-            <script
-              type='application/ld+json'
-              dangerouslySetInnerHTML={{
-                __html: JSON.stringify(buildFAQSchema(faq)),
-              }}
-            />
-          </div>
-        </div>
-      );
-    }
+    const pageIntro =
+      cityPage?.description?.trim() ||
+      `GS-Creatives bietet individuelle Webdesign-Leistungen in ${cityDisplay}. Wir sind eine Webdesign-Agentur und realisieren Ihre Website direkt für Sie — von Beratung über Design bis zur technischen Umsetzung und Betreuung.`;
 
     return (
-      <div className='max-w-7xl mx-auto py-12 px-4'>
-        {/* SEO-optimized Hero Section */}
-        <div className='text-center mb-12'>
-          <h1 className='text-4xl md:text-5xl font-bold mb-4'>
-            {dynamicTitle}
-          </h1>
-          <p className='text-sm text-gray-500 mb-2'>
-            {companys.length} aktive Betriebe gefunden – jetzt vergleichen
-          </p>
-          {dynamicDescription ? (
-            <div className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto space-y-4'>
-              {renderDraft(dynamicDescription)}
+      <main className='mx-auto container flex flex-col gap-24 py-12 px-4'>
+        {/* 2. Header / Hero */}
+        <header className='grid grid-cols-1 md:grid-cols-2 gap-8 items-center'>
+          <div>
+            <h1 className='text-4xl md:text-5xl font-extrabold mb-4'>
+              Webdesign für {cityDisplay} – Websites, die verkaufen.
+            </h1>
+            <div className='text-lg text-gray-700 mb-6'>
+              {renderDraft(pageIntro as string)}
             </div>
-          ) : (
-            <p className='text-xl text-gray-600 mb-6 max-w-4xl mx-auto'>
-              Vergleichen Sie jetzt qualifizierte{" "}
-              <strong>Garten- & Landschaftsbauer in {cityDisplay}</strong>.
-              Typische Projektbereiche starten bei ca.{" "}
-              {costLow.toLocaleString("de-DE")} € – umfangreichere
-              Umgestaltungen erreichen {costHigh.toLocaleString("de-DE")} € oder
-              mehr. Mehrere Angebote schaffen Preisklarheit.
-            </p>
-          )}
-          {/* Micro CTA early in content for higher conversion */}
-          <div className='mb-6'>
-            <Link
-              href='/auftrag-erstellen'
-              className='inline-block bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-md text-sm font-semibold shadow'>
-              Jetzt kostenloses Angebot sichern
-            </Link>
-          </div>
-        </div>
 
-        {/* Featured Companies (max 5) */}
-        <div className='mb-12'>
-          <div className='flex items-center justify-between mb-6'>
-            <h2 className='text-2xl font-semibold'>
-              Empfohlene Garten- und Landschaftsbauer in {cityDisplay}
-            </h2>
-            {allCompanys.length > 5 && (
+            <div className='flex flex-wrap gap-4 items-center'>
               <Link
-                href='/unternehmen-finden'
-                className='text-green-600 hover:text-green-700 font-medium'>
-                Alle {allCompanys.length} Anbieter ansehen →
+                href='/kontakt'
+                className='bg-primary text-white px-5 py-3 rounded-md font-semibold'>
+                Kostenloses Erstgespräch sichern
               </Link>
-            )}
+            </div>
           </div>
+          <Image
+            src={"/images/figma.png"}
+            alt={`webdesign in ${cityDisplay}`}
+            height={700}
+            width={700}
+          />
+        </header>
 
-          <div className='bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6'>
-            <p className='text-blue-800 text-center'>
-              <strong>💡 Tipp:</strong> Erstellen Sie einen kostenlosen Auftrag
-              und lassen Sie sich von mehreren Betrieben unverbindlich beraten.
-              So finden Sie das beste Angebot für Ihr Projekt!
-            </p>
-          </div>
-
-          <SearchBarResults loading={false} results={companys} />
-
-          {allCompanys.length > 5 && (
-            <div className='text-center mt-8'>
-              <div className='bg-gray-50 border rounded-lg p-6'>
-                <h3 className='text-lg font-semibold mb-2'>
-                  Weitere {allCompanys.length - 5} Gartenbauer in {cityDisplay}
-                </h3>
-                <p className='text-gray-600 mb-4'>
-                  Verpassen Sie nicht die Chance auf das beste Angebot!
-                  Erstellen Sie einen kostenlosen Auftrag und erhalten Sie
-                  Angebote von allen verfügbaren Betrieben.
-                </p>
-                <Link
-                  href='/auftrag-erstellen'
-                  className='bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors inline-block'>
-                  Alle Anbieter anfragen
-                </Link>
+        {/* 3. Problem → Lösung */}
+        <section className='mb-12'>
+          <h2 className='text-2xl font-semibold mb-4'>
+            Warum deine Website in {cityDisplay} mehr leisten sollte als nur gut
+            aussehen.
+          </h2>
+          <div className='grid md:grid-cols-2 gap-6'>
+            <div>
+              <h3 className='font-semibold mb-2'>Typische Probleme</h3>
+              <ul className='list-disc pl-5 text-gray-700'>
+                <li>Schlechte Sichtbarkeit in Google</li>
+                <li>Keine oder schlechte Lead-Generierung</li>
+                <li>Langsame Ladezeiten und schlechte Mobile-Experience</li>
+              </ul>
+            </div>
+            <div>
+              <h3 className='font-semibold mb-2'>Unsere Lösung</h3>
+              <div className='text-gray-700'>
+                Wir kombinieren conversion-optimiertes Design, technische
+                Performance und SEO-Strategie, damit deine Website Besucher in
+                zahlende Kunden verwandelt.
               </div>
             </div>
-          )}
-        </div>
-
-        {/* Local SEO Content */}
-        <div className='prose max-w-none mb-12'>
-          <h2>
-            Professioneller Garten- und Landschaftsbau in {cityDisplay} – Ihr
-            Weg zum Traumgarten
-          </h2>
-          <p>
-            Sie planen ein{" "}
-            <strong>Garten- und Landschaftsbau-Projekt in {cityDisplay}</strong>{" "}
-            und suchen den richtigen Partner? Landschaftshelden.io macht es
-            Ihnen einfach: Mit nur einem Auftrag erreichen Sie mehrere
-            qualifizierte
-            <strong> Galabau-Betriebe in {cityDisplay}</strong> und können die
-            besten Angebote vergleichen.
-          </p>
-
-          <h3>Warum sollten Sie mehrere Angebote einholen?</h3>
-          <p>
-            Bei{" "}
-            <strong>
-              Garten- und Landschaftsbau-Projekten in {cityDisplay}
-            </strong>{" "}
-            können die Preise stark variieren. Durch den Vergleich mehrerer
-            Angebote sparen Sie nicht nur Geld, sondern finden auch den Betrieb,
-            der am besten zu Ihren Vorstellungen passt.
-          </p>
-
-          <div className='bg-green-50 border border-green-200 rounded-lg p-6 my-6'>
-            <h4 className='text-green-800 font-semibold mb-3'>
-              🌱 Vorteile von Landschaftshelden.io:
-            </h4>
-            <ul className='text-green-700 space-y-2'>
-              <li>
-                ✅ <strong>100% kostenlos</strong> – Keine versteckten Gebühren
-              </li>
-              <li>
-                ✅ <strong>Schnell & einfach</strong> – Auftrag in 2 Minuten
-                erstellt
-              </li>
-              <li>
-                ✅ <strong>Geprüfte Betriebe</strong> – Nur seriöse Garten- und
-                Landschaftsbauer
-              </li>
-              <li>
-                ✅ <strong>Direkte Vergleiche</strong> – Beste Preise für Ihr
-                Projekt
-              </li>
-              <li>
-                ✅ <strong>Lokale Experten</strong> – Betriebe aus {cityDisplay}{" "}
-                und Umgebung
-              </li>
-            </ul>
           </div>
+        </section>
 
-          {/* Dynamic CityPage Sections injected below Vorteile box */}
-          {cityPage?.sections && cityPage.sections.length > 0 && (
-            <div className='space-y-20 my-16'>
-              {cityPage.sections.map((sec: CityPageSection, idx: number) => {
-                const hasImage = !!sec.image;
-                const imageLeft = idx % 2 === 0; // 0 -> left, 1 -> right, etc.
-                return (
-                  <section key={idx} className='max-w-6xl mx-auto'>
-                    <div className='grid grid-cols-1 md:grid-cols-8 gap-8 items-center'>
-                      {hasImage && (
-                        <div
-                          className={`md:col-span-4 ${imageLeft ? 'md:order-none' : 'md:order-last'}`}> 
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={sec.image!}
-                            alt={sec.titel || 'Section Bild'}
-                            className='w-full aspect-video object-cover rounded-xl border shadow-sm'
-                            loading='lazy'
-                          />
-                        </div>
-                      )}
-                      <div
-                        className={`space-y-4 ${hasImage ? 'md:col-span-4' : 'md:col-span-8'} ${imageLeft ? '' : 'md:order-first'}`}> 
-                        {sec.titel && (
-                          <h3 className='text-2xl font-semibold tracking-tight'>
-                            {sec.titel}
-                          </h3>
-                        )}
-                        <div className='prose max-w-none text-gray-700 leading-relaxed'>
-                          {renderDraft(sec.text)}
-                        </div>
-                        {sec.link && (
-                          <div>
-                            <Link
-                              href={sec.link}
-                              className='inline-flex items-center gap-1 text-green-600 hover:text-green-700 font-medium text-sm'>
-                              Mehr erfahren <span aria-hidden='true'>→</span>
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </section>
-                );
-              })}
-            </div>
-          )}
-
-          <h3>Beliebte Garten- und Landschaftsbau-Services in {cityDisplay}</h3>
-          <p>
-            Unsere Partner-Betriebe in {cityDisplay} bieten das komplette
-            Spektrum des Garten- und Landschaftsbaus: von der Gartenplanung über
-            Pflasterarbeiten bis hin zur Baumpflege. Egal ob Privatgarten oder
-            Gewerbeimmobilie – hier finden Sie den passenden Experten.
-          </p>
-        </div>
-
-        {/* Call-to-Action Section */}
-        <div className='bg-gradient-to-r from-green-500 to-green-600 rounded-xl p-8 text-white text-center mb-12'>
-          <h2 className='text-2xl md:text-3xl font-bold mb-4'>
-            Bereit für Ihr Garten-Projekt in {cityDisplay}?
+        {/* 4. Unsere Lösung / Leistungen */}
+        <section className='mb-12'>
+          <h2 className='text-2xl font-semibold mb-4'>
+            Unsere Webdesign-Leistungen für {cityDisplay} im Überblick
           </h2>
-          <p className='text-xl mb-6 opacity-90'>
-            Kostenlos · Unverbindlich · In 2 Minuten erledigt
-          </p>
-          <Link
-            href='/auftrag-erstellen'
-            className='bg-white text-green-600 hover:bg-gray-100 px-8 py-4 rounded-lg text-lg font-bold shadow-lg transition-colors inline-block'>
-            Jetzt kostenlosen Auftrag erstellen
-          </Link>
-        </div>
+          <div className='grid grid-cols-1 md:grid-cols-3 gap-6'>
+            <div className='p-6 border rounded-lg'>
+              <h4 className='font-semibold'>Webdesign &amp; UX/UI</h4>
+              <p className='text-sm text-gray-600'>
+                Conversion-orientiertes Design & Prototyping.
+              </p>
+            </div>
+            <div className='p-6 border rounded-lg'>
+              <h4 className='font-semibold'>SEO &amp; Google-Optimierung</h4>
+              <p className='text-sm text-gray-600'>
+                On-Page SEO, Tech-Audit und Content-Strategie.
+              </p>
+            </div>
+            <div className='p-6 border rounded-lg'>
+              <h4 className='font-semibold'>Content-Erstellung</h4>
+              <p className='text-sm text-gray-600'>
+                Texte, Bildsprache und Content-Workflows.
+              </p>
+            </div>
+            <div className='p-6 border rounded-lg'>
+              <h4 className='font-semibold'>Technische Umsetzung</h4>
+              <p className='text-sm text-gray-600'>
+                WordPress, Webflow, Headless-Setups und moderne Frameworks.
+              </p>
+            </div>
+            <div className='p-6 border rounded-lg'>
+              <h4 className='font-semibold'>Betreuung &amp; Wartung</h4>
+              <p className='text-sm text-gray-600'>
+                Langfristige Betreuung, Security & Performance.
+              </p>
+            </div>
+            <div className='p-6 border rounded-lg'>
+              <h4 className='font-semibold'>Detailseiten</h4>
+              <p className='text-sm text-gray-600'>
+                Mehr Infos zu einzelnen Leistungen auf Anfrage.
+              </p>
+            </div>
+          </div>
+        </section>
 
-        {/* FAQ Section (rotierend) */}
-        <div className='mb-12'>
+        {/* 5. Referenzen */}
+        <section className='mb-12'>
+          <h2 className='text-2xl font-semibold mb-6'>
+            Websites, die für {cityDisplay} Ergebnisse liefern
+          </h2>
+          <ReferenceBlock
+            maxReferences={3}
+            title='Mehr als 10 Erfolgreiche Handwerksbetriebe'
+            subtext='Es geht nicht um Klicks - sondern Anfragen.'
+          />
+        </section>
+
+        {/* 6. cityPage local argument */}
+        <section className='mb-12 bg-gray-50 p-6 rounded-lg'>
+          <h2 className='text-2xl font-semibold mb-3'>
+            Warum wir die richtige Webdesign-Agentur für {cityDisplay} sind
+          </h2>
+          <div className='prose max-w-none text-gray-700'>
+            <p>
+              {cityDisplay} ist digital, kreativ und schnelllebig – wir helfen
+              dir, online herauszustechen. Wir haben Erfahrung mit Berliner
+              Kunden und kennen die regionale Konkurrenz und Erwartungen.
+            </p>
+            <p>
+              Unsere Projekte für lokale Unternehmen zeigen, wie wir
+              Sichtbarkeit und Leads steigern – direkt aus der Agentur heraus.
+            </p>
+          </div>
+        </section>
+
+        {/* 7. Prozess / Ablauf */}
+        <section className='mb-12'>
+          <h2 className='text-2xl font-semibold mb-4'>
+            So läuft unser Webdesign-Prozess ab
+          </h2>
+          <div className='grid grid-cols-1 md:grid-cols-5 gap-4 text-center'>
+            <div className='p-4'>
+              <div className='text-3xl mb-2'>🔎</div>
+              <div className='font-semibold'>Analyse &amp; Beratung</div>
+            </div>
+            <div className='p-4'>
+              <div className='text-3xl mb-2'>🧭</div>
+              <div className='font-semibold'>Konzept &amp; Design</div>
+            </div>
+            <div className='p-4'>
+              <div className='text-3xl mb-2'>🛠️</div>
+              <div className='font-semibold'>Umsetzung</div>
+            </div>
+            <div className='p-4'>
+              <div className='text-3xl mb-2'>⚙️</div>
+              <div className='font-semibold'>SEO-Optimierung</div>
+            </div>
+            <div className='p-4'>
+              <div className='text-3xl mb-2'>🚀</div>
+              <div className='font-semibold'>Launch &amp; Betreuung</div>
+            </div>
+          </div>
+        </section>
+
+        {/* 9. CTA / Angebotssektion */}
+        <section className='mb-12 text-center'>
+          <h2 className='text-2xl font-semibold mb-4'>
+            Bereit für eine Website, die Kunden bringt?
+          </h2>
+          <div className='flex items-center justify-center gap-4 mb-4'>
+            <Link
+              href='/website-check'
+              className='bg-primary text-white px-6 py-3 rounded-md font-semibold'>
+              Kostenloser Website Check
+            </Link>
+          </div>
+        </section>
+
+        {/* 10. FAQ-Bereich (SEO) */}
+        <section className='mb-12 '>
           <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Häufige Fragen zu Garten- & Landschaftsbau in {cityDisplay}
+            Häufige Fragen zum Thema Webdesign in {cityDisplay}
           </h2>
           {faq.length > 0 && (
             <Accordion type='single' collapsible className='max-w-4xl mx-auto'>
-              {faq.map((item, i) => (
+              {faq.map((item: FAQItem, i: number) => (
                 <AccordionItem key={i} value={`it-${i}`}>
                   <AccordionTrigger>{item.question}</AccordionTrigger>
                   <AccordionContent>
@@ -495,88 +297,11 @@ const Page = async ({ params }: { params: Promise<{ city: string }> }) => {
               }}
             />
           )}
-        </div>
-
-        {/* Final CTA */}
-        <div className='text-center bg-gray-50 rounded-xl p-8'>
-          <h2 className='text-2xl font-bold mb-4'>
-            Starten Sie jetzt Ihr Garten-Projekt in {cityDisplay}
-          </h2>
-          <p className='text-gray-600 mb-6 max-w-2xl mx-auto'>
-            Über 1.000 Kunden haben bereits erfolgreich ihren Traumgarten
-            realisiert. Werden auch Sie zum zufriedenen
-            Landschaftshelden-Kunden!
-          </p>
-          <div className='flex flex-col sm:flex-row gap-4 justify-center'>
-            <Link
-              href='/auftrag-erstellen'
-              className='bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg text-lg font-semibold shadow-lg transition-colors'>
-              🚀 Kostenlosen Auftrag erstellen
-            </Link>
-            <Link
-              href={`/unternehmen-finden?city=${cityDisplay}`}
-              className='border-2 border-green-600 text-green-600 hover:bg-green-50 px-8 py-4 rounded-lg text-lg font-semibold transition-colors'>
-              📋 Alle {allCompanys.length} Anbieter ansehen
-            </Link>
-          </div>
-        </div>
-
-        {/* Service-spezifische Stadtseiten Links */}
-        <div className='mt-16 border-t pt-12'>
-          <h2 className='text-2xl font-semibold mb-6 text-center'>
-            Spezialisierte Services in {cityDisplay}
-          </h2>
-          <p className='text-gray-600 text-center mb-8 max-w-3xl mx-auto'>
-            Entdecken Sie unsere spezialisierten Seiten für einzelne Garten- und
-            Landschaftsbau-Services in {cityDisplay}. Hier finden Sie gezielt
-            Experten für Ihren spezifischen Bedarf.
-          </p>
-
-          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4'>
-            {getGalbauServices().map((service) => (
-              <Link
-                href={`/stadt/${cityDisplay}/${service
-                  .toLowerCase()
-                  .replace(/\s+/g, "-")
-                  .replace(/[äöüß]/g, (match) => {
-                    const replacements: { [key: string]: string } = {
-                      ä: "ae",
-                      ö: "oe",
-                      ü: "ue",
-                      ß: "ss",
-                    };
-                    return replacements[match] || match;
-                  })}`}
-                key={service}
-                className='bg-white border border-gray-200 hover:border-green-500 rounded-lg p-4 transition-all duration-200 hover:shadow-md group'>
-                <div className='flex items-center justify-between'>
-                  <div>
-                    <h3 className='font-semibold text-gray-900 group-hover:text-green-600 transition-colors'>
-                      {service} in {cityDisplay}
-                    </h3>
-                    <p className='text-sm text-gray-600 mt-1'>
-                      Spezialisierte Anbieter für {service}
-                    </p>
-                  </div>
-                  <div className='text-green-500 group-hover:text-green-600 transition-colors'>
-                    →
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-
-          <div className='text-center mt-8'>
-            <p className='text-gray-600 text-sm'>
-              Diese Seiten bieten Ihnen gezielt Experten für spezifische Garten-
-              und Landschaftsbau-Services in {cityDisplay}
-            </p>
-          </div>
-        </div>
-      </div>
+        </section>
+      </main>
     );
   } catch (error) {
-    console.error("Fehler beim Laden der Unternehmensdaten:", error);
+    console.error("Fehler beim Laden der Daten:", error);
     return (
       <div className='container mx-auto py-24 text-center'>
         <h1 className='text-2xl font-bold'>Fehler beim Laden der Daten</h1>

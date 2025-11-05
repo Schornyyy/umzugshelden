@@ -24,93 +24,83 @@ function hashCity(name: string): number {
   return h;
 }
 
-// Headline Templates – {city}, {count?} wird später ersetzt
-const HEADLINE_TEMPLATES: string[] = [
-  'Gartenbauer in {city}: Jetzt Angebote vergleichen',
-  '{city}: Garten- & Landschaftsbau – In 2 Minuten Anfrage starten',
-  'Top Garten- und Landschaftsbauer {city} (Kostenlos bis zu 5 Angebote)',
-  'Gartengestaltung {city}: Betriebe & Preise im Schnellvergleich',
-  '{city}: Ihr Projekt mit qualifizierten GaLaBau Betrieben starten',
-  '{city}: Landschaftsgärtner finden & transparente Preise erhalten',
-  'GaLaBau {city}: Experten für Planung, Pflege & Pflasterarbeiten',
-];
 
 // Mehrere FAQ-Variantensets – jede Funktion erzeugt dynamische Q/A basierend auf Stadt & Kostenspanne
 type FAQGenerator = (city: string, low: number, high: number) => CityFAQItem[];
 
 const FAQ_VARIANTS: FAQGenerator[] = [
-  (city, low, high) => [
+  (city, low, high) => { void city; void low; void high; return [
     {
-      question: `Was kostet Garten- & Landschaftsbau in ${city}?`,
-      answer: `Die Kosten hängen stark von Projektgröße und Materialwahl ab. Kleine Arbeiten starten oft ab ca. ${low.toLocaleString('de-DE')} € – umfangreichere Projekte (Terrasse, Pflaster, Komplettgestaltung) können ${high.toLocaleString('de-DE')} € oder mehr erreichen. Mehrere Angebote über unsere Plattform machen Preisstrukturen transparent.`,
+      question: `Wie viel kostet eine Website in ${city} und wovon hängt der Preis ab?`,
+    answer: `Bei GS-Creatives erklären wir zuerst den Scope und erstellen auf Basis Ihres Briefings ein transparentes Angebot. Die Preise variieren nach Umfang, Funktionalität und Content-Aufwand: einfache Webseiten beginnen oft bei ca. ${low.toLocaleString('de-DE')} €, komplexe Projekte oder Shops können bis ${high.toLocaleString('de-DE')} € oder mehr kosten. Wir liefern eine klare Leistungsbeschreibung, damit Sie genau wissen, was enthalten ist.`,
     },
     {
-      question: `Wie finde ich den passenden Gartenbauer in ${city}?`,
-      answer: `Statt auf ein einzelnes Angebot zu setzen, stellen Sie eine kostenlose Anfrage und vergleichen mehrere qualifizierte Betriebe aus ${city} und Umgebung – so erhalten Sie bessere Preise und passendere Lösungen.`,
+      question: `Wie lange dauert die Fertigstellung einer Website für ${city}?`,
+    answer: `Wir bei GS-Creatives arbeiten in klaren Phasen (Konzept → Design → Umsetzung → Launch). Kleine Seiten realisieren wir oft in 2–6 Wochen; komplexe Projekte mit Integrationen oder Shops planen wir mit 6–16 Wochen. Verzögerungen vermeiden wir durch feste Meilensteine und klare Deadlines für Feedback und Content.`,
     },
     {
-      question: `Wie schnell bekomme ich Angebote in ${city}?`,
-      answer: `In der Regel melden sich erste Betriebe innerhalb von 24 Stunden. Saisonabhängig (Frühjahr/Sommer) kann es etwas länger dauern – frühes Anfragen sichert Kapazitäten.`,
+      question: `Wer ist für Inhalte (Texte, Bilder) verantwortlich?`,
+    answer: `Bei GS-Creatives bieten wir flexible Content-Optionen: Sie liefern vorhandene Texte/Bilder oder wir erstellen Content (Texte, Bildsprache) gegen Aufpreis. Im Angebot legen wir genau fest, welche Content-Leistungen enthalten sind und welche zusätzlich berechnet werden.`,
     },
     {
-      question: `Welche Leistungen decken Betriebe in ${city} ab?`,
-      answer: `Von Planung, Erd- & Pflasterarbeiten über Rollrasen, Bewässerung, Sichtschutz, Baumpflege bis hin zu Pflegeverträgen. Geben Sie Ihre Bedürfnisse einfach im Anfrageformular an.`,
+      question: `Welche Ergebnisse muss ich vor dem Start bereitstellen?`,
+    answer: `Damit wir zügig starten können, benötigen wir in der Regel Logo, CI-Farben, grobe Seitenstruktur, vorhandene Texte und Beispielseiten. Wenn Inhalte fehlen, bieten wir Unterstützung bei der Content-Erstellung an — das sprechen wir vor Projektstart ab.`,
     },
-  ],
-  (city, low, high) => [
+  ]; },
+  (city, low, high) => { void city; void low; void high; return [
     {
-      question: `Warum mehrere Angebote für ${city} einholen?`,
-      answer: `Preisunterschiede von 20–35% sind im GaLaBau üblich. Durch den strukturierten Vergleich sparen Sie Zeit & Budget und minimieren Fehlentscheidungen.`,
-    },
-    {
-      question: `Welche Preisfaktoren gelten in ${city}?`,
-      answer: `Flächengröße, Geländezustand, Material (Naturstein vs. Beton), Entsorgung und Maschinenaufwand. Beispiel: Standardarbeiten starten bei ca. ${low.toLocaleString('de-DE')} €, Premium-Ausführungen erreichen leicht ${high.toLocaleString('de-DE')} €.`,
+      question: `Wie viele Korrekturrunden sind im Preis enthalten?`,
+    answer: `In unseren Angeboten sind typischerweise 2–3 Korrekturrunden für Design enthalten; weitere Anpassungen definieren wir als Nachtragsleistung. Wir dokumentieren Änderungswünsche und schlagen ggf. ein Zusatzangebot vor, damit der Zeit- und Kostenrahmen klar bleibt.`,
     },
     {
-      question: `Sind Betriebe aus ${city} geprüft?`,
-      answer: `Wir prüfen Basisdaten (Gewerbe, Erreichbarkeit) und priorisieren aktive, bewertete Betriebe. So erhalten Sie nur relevante Rückmeldungen.`,
+      question: `Wer übernimmt Hosting, Wartung und Sicherheit nach dem Launch?`,
+    answer: `Wir bieten sowohl Managed-Hosting- und Wartungspakete als auch Beratung zur eigenen Hosting-Auswahl an. Unsere Pakete beinhalten Backups, Security-Updates und definierte Reaktionszeiten — diese Leistungen werden im Vertrag klar beschrieben.`,
     },
     {
-      question: `Welche Saison ist ideal für Projekte in ${city}?`,
-      answer: `Planung & Angebotsphase ab Winter/Frühjahr sichern frühere Umsetzung. Pflanzarbeiten gelingen oft am besten im Frühjahr oder frühen Herbst.`,
-    },
-  ],
-  (city, low, high) => [
-    {
-      question: `Kann ich auch kleine Arbeiten in ${city} vergeben?`,
-      answer: `Ja. Auch Teilaufträge wie Beet-Neuanlage, Zaunbau oder Rasenpflege werden angenommen – besonders wenn Umfang & Bilder sauber beschrieben sind.`,
+      question: `Wer erhält die Zugänge und Rechte (CMS, Domains)?`,
+    answer: `Bei GS-Creatives stellen wir sicher, dass Sie nach Abschluss die notwendigen Zugänge (Domain, Hosting, CMS) erhalten. Wenn Sie wünschen, übernehmen wir die Verwaltung im Rahmen eines Wartungsvertrags — alle Zugriffsrechte und Übergaben regeln wir transparent im Vertrag.`,
     },
     {
-      question: `Wie bereite ich meine Anfrage für ${city} optimal vor?`,
-      answer: `Fotos, grobe Maße, gewünschte Materialien und Nutzungsideen hinzufügen. Das reduziert Rückfragen und beschleunigt belastbare Angebote.`,
+      question: `Wie ist das Zahlungsmodell (Stunden, Pauschale, Meilensteine)?`,
+    answer: `Wir arbeiten je nach Projekt mit Festpreis, Meilensteinen oder Zeit & Material. In Angeboten definieren wir Zahlungspläne (z. B. Abschlag bei Projektstart, Meilensteinzahlungen) und regeln, wie Änderungsanforderungen abgerechnet werden.`,
+    },
+  ]; },
+  (city, low, high) => { void city; void low; void high; return [
+    {
+      question: `Wie wird die Suchmaschinen-Optimierung (SEO) berücksichtigt?`,
+    answer: `Wir integrieren On-Page-SEO (Meta-Tags, strukturierte Inhalte, Performance-Optimierung) in unsere Basis-Leistungen. Für nachhaltige Sichtbarkeit bieten wir ergänzende SEO-Pakete (Keyword-Recherche, Content-Optimierung, Monitoring) mit klar definierten Deliverables an.`,
     },
     {
-      question: `Welche typischen Preisbereiche gelten in ${city}?`,
-      answer: `Einfache Anpassungen liegen häufig im Bereich ${low.toLocaleString('de-DE')}–${Math.round(low*1.4).toLocaleString('de-DE')} €. Größere Umgestaltungen, Pflasterflächen oder Komplettpakete erreichen ${high.toLocaleString('de-DE')} € oder darüber.`,
+      question: `Welche Garantien oder Supportzeiten gibt es nach dem Launch?`,
+    answer: `Nach dem Launch gewähren wir eine Fehlerbehebungsphase und bieten optionale Support- und Wartungsverträge mit definierten Reaktionszeiten und Stundenkontingenten an. Details stehen im Angebot und Service-Level-Agreement.`,
     },
     {
-      question: `Bekomme ich feste Pauschalpreise in ${city}?`,
-      answer: `Viele Betriebe kalkulieren kombiniert aus Material + Arbeitsaufwand. Vergleich mehrerer detaillierter Angebote schafft Kostensicherheit.`,
-    },
-  ],
-  (city, low, high) => [
-    {
-      question: `Wie realistisch kalkuliere ich mein Budget in ${city}?`,
-      answer: `Legen Sie zuerst ein Zielniveau fest (Basis, Komfort, Premium). Prüfen Sie danach Positionen wie Erdarbeiten, Entwässerung & Material. Für mittlere Projekte ist ein Rahmen von ${low.toLocaleString('de-DE')}–${high.toLocaleString('de-DE')} € häufig praxisnah.`,
+      question: `Kann ich Referenzprojekte sehen und sprechen?`,
+    answer: `Wir präsentieren Ihnen gerne passende Referenzprojekte und Case Studies mit Ergebnissen. Auf Wunsch stellen wir Kontakte zu früheren Kunden her oder zeigen vergleichbare Live-Projekte, damit Sie die Arbeitsweise und Resultate beurteilen können.`,
     },
     {
-      question: `Übernimmt ein Betrieb auch Pflege nach Fertigstellung in ${city}?`,
-      answer: `Ja, viele bieten Saisonpflege oder Jahresverträge (Rasen, Gehölz, Bewässerung) an – direkt in die Anfrage schreiben erhöht die Erfolgsquote.`,
+      question: `Wie wird der Datenschutz (DSGVO) umgesetzt?`,
+    answer: `Datenschutz ist Teil unseres Projekts: Wir unterstützen bei DSGVO-konformer Umsetzung (Cookie-Banner, AV-Verträge, Einbindung von Tracking/Forms) und klären gemeinsam notwendige Maßnahmen im Briefing.`,
+    },
+  ]; },
+  (city, low, high) => { void city; void low; void high; return [
+    {
+      question: `Was passiert, wenn ich nach dem Angebot Änderungen will?`,
+    answer: `Wenn sich Anforderungen ändern, dokumentieren wir die Wünsche und erstellen ein Änderungsangebot mit transparenter Zeit- und Kostenabschätzung. So bleibt das Projekt für beide Seiten planbar.`,
     },
     {
-      question: `Wie erkenne ich seriöse Anbieter in ${city}?`,
-      answer: `Vollständige Angebotspositionen, klare Materialdefinition, transparente Stundensätze & nachvollziehbare Referenzen. Mehrere Angebote machen Unterschiede sichtbar.`,
+      question: `Gehören mir die Designs und der Code nach Abschluss?`,
+    answer: `Standardmäßig übertragen wir Ihnen nach Zahlung die Nutzungsrechte und übergeben alle notwendigen Zugänge. Wenn besondere Lizenz- oder Wiederverwendungsfragen bestehen, regeln wir das vertraglich im Vorfeld.`,
     },
     {
-      question: `Warum jetzt Projekt in ${city} starten?`,
-      answer: `Frühzeitige Planung sichert Kapazitäten – viele Kalender füllen sich schnell. Eine Anfrage kostet nichts und verschafft Vergleichsdaten.`,
+      question: `Wie werden Inhalte und Wartung später aktualisiert?`,
+    answer: `Bei Verwendung eines CMS erhalten Sie auf Wunsch eine kurze Schulung, damit Sie Inhalte selbst pflegen können. Für fortlaufende Aktualisierungen bieten wir Wartungs- und Pflegepakete an, die in Stundenkontingenten oder monatlichen Retainern abgerechnet werden.`,
     },
-  ],
+    {
+      question: `Worauf sollte ich bei der Angebotseinholung besonders achten?`,
+    answer: `Beim Vergleich von Angeboten empfehlen wir, neben dem Preis besonders auf Scope, Lieferumfang, Zeitplan, Referenzen und Support-Optionen zu achten. Ein detailliertes Briefing ermöglicht comparable Angebote und verhindert spätere Nachträge.`,
+    },
+  ]; },
 ];
 
 export function getCityContent(city: string): CityContentData {
@@ -124,8 +114,8 @@ export function getCityContent(city: string): CityContentData {
   const costLow = 300 + (pos % 40) * 25; // 300 – 1300
   const costHigh = costLow + 1500 + (h % 900); // Spread 1500–2400 plus low
 
-  const headlineTemplate = HEADLINE_TEMPLATES[h % HEADLINE_TEMPLATES.length];
-  const headline = headlineTemplate.replace('{city}', base);
+  // Dynamische Headline basierend auf Stadt
+  const headline = `Garten- & Landschaftsbau in ${base}`;
 
   const faqGen = FAQ_VARIANTS[h % FAQ_VARIANTS.length];
   const faq = faqGen(base, costLow, costHigh);

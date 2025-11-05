@@ -8,18 +8,18 @@ const MAIN_CATEGORY_INFO: Record<
   AdminBlogMainCategory,
   { label: string; description: string }
 > = {
-  unternehmen: {
-    label: "Unternehmen",
-    description: "Tipps & Wissen für Firmen",
+  seo: {
+    label: "SEO",
+    description: "Tipps & Wissen für Suchmaschinenoptimierung",
   },
   partner: {
     label: "Partner",
     description: "Informationen für Kooperationspartner",
   },
   ratgeber: { label: "Ratgeber", description: "Guides, Hilfe & Wissen" },
-  ereignisse: {
-    label: "Ereignisse",
-    description: "Aktuelles & Veranstaltungen",
+  webdesign: {
+    label: "Webdesign",
+    description: "Tipps & Tricks für modernes Webdesign",
   },
 };
 
@@ -47,13 +47,13 @@ export default async function MainCategoryOverview({ params }: Props) {
         <p className='text-slate-600 text-sm'>{info.description}</p>
         <nav className='text-xs flex gap-2 text-slate-500'>
           <Link
-            href='/blog/unternehmen'
+            href='/blog/webdesign'
             className={
-              key === "unternehmen"
+              key === "webdesign"
                 ? "font-semibold text-blue-600"
                 : "hover:text-blue-600"
             }>
-            Unternehmen
+            Webdesign
           </Link>
           <span>|</span>
           <Link
@@ -77,13 +77,13 @@ export default async function MainCategoryOverview({ params }: Props) {
           </Link>
           <span>|</span>
           <Link
-            href='/blog/ereignisse'
+            href='/blog/seo'
             className={
-              key === "ereignisse"
+              key === "seo"
                 ? "font-semibold text-blue-600"
                 : "hover:text-blue-600"
             }>
-            Ereignisse
+            SEO
           </Link>
         </nav>
       </header>

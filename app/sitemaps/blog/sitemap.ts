@@ -4,12 +4,11 @@ import { listBlogPagesBySubcategory } from "@/actions/blogPageActions";
 import type { MetadataRoute } from "next";
 
 // If domain changes, adjust here or move to config
-const BASE_URL = "https://www.landschaftshelden.io";
+const BASE_URL = "https://www.gs-creatives.de";
 const MAIN_CATEGORIES: { key: string; path: string }[] = [
-  { key: "unternehmen", path: "/blog/unternehmen" },
-  { key: "partner", path: "/blog/partner" },
-  { key: "ratgeber", path: "/blog/ratgeber" },
-  { key: "ereignisse", path: "/blog/ereignisse" },
+  { key: "seo", path: "/blog/seo" },
+  { key: "webdesign", path: "/blog/webdesign" },
+  { key: "online-marketing", path: "/blog/online-marketing" },
 ];
 
 export const dynamic = "force-dynamic"; // always latest content

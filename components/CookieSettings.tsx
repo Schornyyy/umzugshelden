@@ -12,7 +12,7 @@ import Clarity from "@microsoft/clarity";
 
 const CookieSettings: React.FC = () => {
   const resetConsent = () => {
-    Cookies.remove("cookieConsentLandschaftshelden");
+    Cookies.remove("cookieConsentGScreatives");
     window.location.reload();
   };
 
@@ -36,9 +36,9 @@ const CookieSettings: React.FC = () => {
         <Button
           asChild
           variant='outline'
-          className='bg-green-700 text-white hover:bg-green-600 p-4  rounded-full shadow-md'>
+          className='bg-primary text-white hover:bg-primary/90 p-4  rounded-full shadow-md'>
           <motion.button
-            className='bg-green-500'
+            className='bg-primary'
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={resetConsent}>

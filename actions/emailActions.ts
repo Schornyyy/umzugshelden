@@ -3,9 +3,23 @@ import fs from 'fs';
 import nodemailer from 'nodemailer';
 
 // Hilfsfunktion zur Textersetzung
-const replaceTemplatePlaceholders = (template: string, replacements: { [key: string]: string }) => {
+const replaceTemplatePlaceholders = (template: string, replacements: Record<string, unknown>) => {
   return template.replace(/\{\{(.*?)\}\}/g, (_, key) => {
-    return replacements[key.trim()] || `{{${key}}}`;
+    const k = key.trim();
+    const val = replacements?.[k];
+    if (val === null || val === undefined) return `{{${k}}}`;
+    // Localize booleans to German yes/no and coerce other non-strings
+    if (typeof val === "boolean") {
+      return val ? "Ja" : "Nein";
+    }
+    if (typeof val === "object") {
+      try {
+        return JSON.stringify(val);
+      } catch {
+        return String(val);
+      }
+    }
+    return String(val);
   });
 };
 
@@ -93,7 +107,7 @@ export async function sendCustomEmail({
   const transporter = getTransporter();
 
     const info = await transporter.sendMail({
-      from: `"Landschaftshelden.io" <${process.env.SMTP_USER}>`,
+      from: `"GS-Creatives " <${process.env.SMTP_USER}>`,
       to,
       subject,
       html: emailContentHtml,

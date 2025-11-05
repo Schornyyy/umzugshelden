@@ -20,7 +20,7 @@ const CookieBanner: React.FC = () => {
   });
 
   useEffect(() => {
-    const savedConsent = Cookies.get("cookieConsentLandschaftshelden");
+    const savedConsent = Cookies.get("cookieConsentGScreatives");
     if (!savedConsent) {
       setShowBanner(true);
     } else {
@@ -29,7 +29,7 @@ const CookieBanner: React.FC = () => {
   }, []);
 
   const handleAccept = () => {
-    Cookies.set("cookieConsentLandschaftshelden", JSON.stringify(consent), {
+    Cookies.set("cookieConsentGScreatives", JSON.stringify(consent), {
       expires: 365,
     });
     setShowBanner(false);
@@ -75,7 +75,7 @@ const CookieBanner: React.FC = () => {
         <div className='flex flex-row gap-3'>
           <span>Marketing</span>
           <Switch
-            className='bg-green-500'
+            className='bg-primary'
             checked={consent.marketing}
             onCheckedChange={() => handleToggle("marketing")}
           />
@@ -85,7 +85,7 @@ const CookieBanner: React.FC = () => {
       <motion.button
         whileHover={{ scale: 1.009 }}
         whileTap={{ scale: 0.95 }}
-        className='mt-4 w-full bg-green-500 hover:bg-green-700 text-white font-semibold py-2 rounded-lg transition-all'
+        className='mt-4 w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2 rounded-lg transition-all'
         onClick={handleAccept}>
         Akzeptieren
       </motion.button>
