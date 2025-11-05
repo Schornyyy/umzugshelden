@@ -5,9 +5,14 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import Image from "next/image";
+import { Metadata } from "next";
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  const { id } = params;
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
+  const { id } = await params;
   const ref = await getReferenceById(id);
   if (!ref) return { title: "Referenz" };
   const title = ref.comanyName || "Referenz";
@@ -31,7 +36,7 @@ export default async function ReferencePage({
 }: {
   params: { id: string };
 }) {
-  const { id } = params;
+  const { id } = await params;
   const ref: (Reference & { id: string }) | null = await getReferenceById(id);
 
   if (!ref) {
