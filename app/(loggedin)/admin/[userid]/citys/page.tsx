@@ -1,5 +1,6 @@
 "use client";
 import React, { useMemo, useState } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { cities } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 import { redirectUser } from "@/actions/userActions";
@@ -8,8 +9,23 @@ import { useCompanyData } from "@/provider/CompanyDataProvider";
 const PAGE_SIZE = 24;
 
 export default function AdminCitiesPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1); // 1-based
+  // page state (1-based). Initialize synchronously from window.location.search
+  // when available so the initial state matches the URL before effects run.
+  const [page, setPage] = useState(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const p = Number(params.get("page") || "1");
+        return Number.isFinite(p) && p >= 1 ? p : 1;
+      }
+    } catch {}
+    return 1;
+  });
   const { companyData } = useCompanyData();
 
   // Normalize search once
@@ -44,16 +60,89 @@ export default function AdminCitiesPage() {
   function goto(p: number) {
     if (p < 1 || p > totalPages) return;
     setPage(p);
+    // update URL query param without reloading the page
+    try {
+      console.debug(
+        `[cities] goto -> updating URL page=${p} (current search: ${
+          typeof window !== "undefined" ? window.location.search : ""
+        })`
+      );
+      // Prefer the real current location search (keeps params in sync if user edited URL)
+      const params =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search)
+          : new URLSearchParams(Array.from(searchParams.entries()));
+      params.set("page", String(p));
+      router.replace(
+        `${pathname}${params.toString() ? "?" + params.toString() : ""}`
+      );
+    } catch {
+      console.debug(`[cities] goto -> router.replace fallback page=${p}`);
+      // fallback: replace using simple query
+      router.replace(`${pathname}?page=${p}`);
+    }
     // Scroll to top of list for better UX
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   }
 
-  // Reset to first page on new search
+  // Reset to first page on new search, but only when the user actually changes the
+  // search input after mount. We track the previous normalizedSearch value so
+  // hydration or initial mount won't trigger a reset.
+  const prevSearchRef = React.useRef<string | null>(null);
   React.useEffect(() => {
+    const prev = prevSearchRef.current;
+    if (prev === null) {
+      // first run on mount: store the value and do nothing
+      prevSearchRef.current = normalizedSearch;
+      return;
+    }
+    // If the search didn't change, do nothing
+    if (prev === normalizedSearch) return;
+    // store new value
+    prevSearchRef.current = normalizedSearch;
+
+    // Reset page to 1 when search filter changes and reflect in URL.
     setPage(1);
+    try {
+      const params =
+        typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search)
+          : new URLSearchParams(Array.from(searchParams.entries()));
+      // Only update URL if it does not already point to page=1
+      if (params.get("page") !== "1") {
+        console.debug(
+          "[cities] reset-on-search -> setting page=1 in URL (prev",
+          prev,
+          "->",
+          normalizedSearch,
+          ")"
+        );
+        params.set("page", "1");
+        router.replace(
+          `${pathname}${params.toString() ? "?" + params.toString() : ""}`
+        );
+      }
+    } catch (e) {
+      console.debug("[cities] reset-on-search fallback replace", e);
+      router.replace(`${pathname}?page=1`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [normalizedSearch]);
+
+  // Keep internal page state in sync when user navigates with browser history
+  // Sync page state from URL when search params change (e.g., back/forward navigation)
+  React.useEffect(() => {
+    const p = Number(searchParams.get("page") || "1");
+    const newP = Number.isFinite(p) && p >= 1 ? Math.min(p, totalPages) : 1;
+    if (newP !== page) setPage(newP);
+    // intentionally exclude `page` from deps to avoid loops; searchParams changes drive this
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, totalPages]);
+
+  // No separate mount initialization required because we synchronously
+  // read window.location.search in the useState initializer above.
 
   return (
     <div className='max-w-5xl mx-auto p-6'>
