@@ -219,9 +219,9 @@ export default async function CityServicePage({
 export async function generateMetadata({
   params,
 }: {
-  params: { city: string };
+  params: Promise<{ city: string }>;
 }) {
-  const { city } = params;
+  const { city } = await params;
   const slugRaw = city.trim();
   let decoded = slugRaw;
   try {
