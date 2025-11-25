@@ -86,7 +86,7 @@ type ServiceKey = keyof typeof serviceConfig;
 export default async function ServicePage({
   params,
 }: {
-  params: { city: string; service: string };
+  params: Promise<{ city: string; service: string }>;
 }) {
   const { city, service } = await params;
 
