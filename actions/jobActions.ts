@@ -7,7 +7,7 @@ import {  and, collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, wh
 const JOB_COLLECTION = "jobs"
 
 
-export async function createJob(ownerId: string, titel: string): Promise<Job> {
+export async function createJob(ownerId: string, titel: string, jobArt: "vollzeit" | "teilzeit" | "aushilfe" | "praktikum" | "ferienjob"): Promise<Job> {
 
     const colRef = collection(database, JOB_COLLECTION);
 
@@ -16,6 +16,7 @@ export async function createJob(ownerId: string, titel: string): Promise<Job> {
         ownerId: ownerId,
         titel: titel,
         active: false,
+        jobArt: jobArt,
     } 
 
     await setDoc(doc(colRef, job.id), job)
