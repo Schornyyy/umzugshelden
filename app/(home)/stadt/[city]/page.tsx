@@ -18,9 +18,9 @@ function isAllowedCity(cityName: string): boolean {
 export default async function CityServicePage({
   params,
 }: {
-  params: { city: string };
+  params: Promise<{ city: string }>;
 }) {
-  const city = params?.city || "";
+  const { city } = await params;
 
   const slugRaw = city.trim();
   let decoded = slugRaw;

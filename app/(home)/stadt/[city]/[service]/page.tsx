@@ -86,10 +86,9 @@ type ServiceKey = keyof typeof serviceConfig;
 export default async function ServicePage({
   params,
 }: {
-  params: { city: string; service: string };
+  params: Promise<{ city: string; service: string }>;
 }) {
-  const city = params?.city || "";
-  const service = params?.service || "";
+  const { city, service } = await params;
 
   // City dekodieren und normalisieren
   const slugRaw = city.trim();
