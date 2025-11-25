@@ -7,12 +7,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 
   const companyCities = cities.map((city) => ({
-    url: `https://www.gs-creatives.de/stadt/${city}`,
+    url: `https://weiss-hausmeisterservice.de/stadt/${city}`,
     lastModified: new Date(),
     priority: 0.8,
     alternates: {
       languages: {
-        de: `https://www.gs-creatives.de/stadt/${city}`,
+        de: `https://weiss-hausmeisterservice.de/stadt/${city}`,
       },
     },
   }))

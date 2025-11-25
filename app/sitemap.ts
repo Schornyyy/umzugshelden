@@ -9,10 +9,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   
 
   const namedList = named.map(n => ({
-    url: `https://www.gs-creatives.de/sitemaps/${n}/sitemap.xml`,
+    url: `https://weiss-hausmeisterservice.de/sitemaps/${n}/sitemap.xml`,
     lastModified: new Date(),
   }));
 
   return [ ...namedList];
 }
-
