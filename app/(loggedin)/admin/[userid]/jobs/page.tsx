@@ -129,7 +129,7 @@ const JobDialog = ({
     setLoading(true);
     setFormError(undefined);
     try {
-      const created = await createJob(ownerid, data.titel);
+      const created = await createJob(ownerid, data.titel, "vollzeit");
       onCreated(created);
       reset();
       setOpen(false);
