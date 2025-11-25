@@ -95,7 +95,7 @@ export default function CityFaqEditorPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, cityReadable]);
+  }, [slug, cityReadable, companyData]);
 
   function updateFaq(index: number, field: keyof EditableFaq, value: string) {
     setState((s) => ({

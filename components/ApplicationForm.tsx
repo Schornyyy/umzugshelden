@@ -81,6 +81,15 @@ export default function ApplicationForm({
     }
     setUploading(true);
     const applicationId = crypto.randomUUID();
+    function getErrorMessage(e: unknown) {
+      if (e instanceof Error) return e.message;
+      try {
+        return JSON.stringify(e);
+      } catch {
+        return String(e);
+      }
+    }
+
     try {
       const fileUrls = await uploadAllFiles(applicationId);
       const app = await createApplication({
@@ -98,10 +107,9 @@ export default function ApplicationForm({
       reset();
       setFiles([]);
       onCreated?.(app.id);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e);
-      setError(e?.message || "Fehler beim Absenden der Bewerbung.");
+      setError(getErrorMessage(e) || "Fehler beim Absenden der Bewerbung.");
     } finally {
       setUploading(false);
     }

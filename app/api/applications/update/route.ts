@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { updateApplicationFields } from "@/actions/applicationActions";
 
+function getErrorMessage(e: unknown) {
+  if (e instanceof Error) return e.message;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return String(e);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { id, ownerId, message, salary, availableAt } = await req.json();
@@ -12,7 +21,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Bewerbung nicht gefunden oder Owner ungültig." }, { status: 404 });
     }
     return NextResponse.json({ application: updated });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Unbekannter Fehler" }, { status: 500 });
+  } catch (e: unknown) {
+    return NextResponse.json({ error: getErrorMessage(e) || "Unbekannter Fehler" }, { status: 500 });
   }
 }
