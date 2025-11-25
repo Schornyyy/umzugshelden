@@ -326,10 +326,9 @@ export default async function ServicePage({
 export async function generateMetadata({
   params,
 }: {
-  params: { city: string; service: string };
+  params: Promise<{ city: string; service: string }>;
 }) {
-  const city = params?.city || "";
-  const service = params?.service || "";
+  const { city, service } = await params;
 
   // City dekodieren
   const slugRaw = city.trim();
