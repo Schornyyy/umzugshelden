@@ -11,29 +11,43 @@ const Impressum = () => {
         Angaben gemäß § 5 TMG
       </h2>
       <p className='text-gray-600 mb-2'>
-        <strong>Firma:</strong> GS-Creatives{" "}
+        <strong>Firma:</strong> Hausmeisterservice Björn Weiß
       </p>
       <p className='text-gray-600 mb-4'>
-        <strong>Vertreten durch:</strong> Lukas Schornstein
+        <strong>Vertreten durch:</strong> Björn Weiß
       </p>
 
       <h2 className='text-xl font-semibold text-gray-700 mb-4'>Kontakt</h2>
       <p className='text-gray-600 mb-2'>
         <strong>E-Mail:</strong>{" "}
         <a
-          href='mailto:kontakt@gs-creatives.de'
+          href='mailto:info@weiss-hausmeisterservice.de'
           className='text-blue-600 hover:text-blue-800'>
-          kontakt@gs-creatives.de
+          info@weiss-hausmeisterservice.de
         </a>
       </p>
       <p className='text-gray-600 mb-4'>
         <strong>Telefon:</strong>{" "}
         <a
-          href='tel:+4915168567708'
+          href='tel:+492084458875'
           className='text-blue-600 hover:text-blue-800'>
-          +49 151 68567708
+          +49 208 4458875
         </a>
       </p>
+
+      <h2 className='text-xl font-semibold text-gray-700 mb-4'>Adresse</h2>
+      <p className='text-gray-600 mb-4'>
+        Hausmeisterservice Björn Weiß
+        <br />
+        Duisburger Str. 261
+        <br />
+        45478 Mülheim an der Ruhr
+        <br />
+        Deutschland
+      </p>
+
+      <h2 className='text-xl font-semibold text-gray-700 mb-4'>Steuernummer</h2>
+      <p className='text-gray-600 mb-6'>Steuer-Nr.: 120/2657/2389</p>
 
       <h2 className='text-xl font-semibold text-gray-700 mb-4'>
         Haftungsausschluss
@@ -70,20 +84,29 @@ const Impressum = () => {
         sind nur für den privaten, nicht kommerziellen Gebrauch erlaubt.
       </p>
 
-      <h2 className='text-xl font-semibold text-gray-700 mb-4'>Datenschutz</h2>
-      <p className='text-gray-600 mb-6'>
-        Informationen zum Datenschutz findest du in unserer{" "}
-        <a href='/datenschutz' className='text-blue-600 hover:text-blue-800'>
-          Datenschutzerklärung
+      <h2 className='text-xl font-semibold text-gray-700 mb-4'>
+        Online-Streitbeilegung
+      </h2>
+      <p className='text-gray-600 mb-4'>
+        Die Europäische Kommission stellt eine Plattform zur Online-
+        Streitbeilegung (OS) bereit:{" "}
+        <a
+          href='https://ec.europa.eu/odr'
+          target='_blank'
+          rel='noopener noreferrer'
+          className='text-blue-600 hover:text-blue-800'>
+          https://ec.europa.eu/odr
         </a>
-        .
+        <br />
+        Unsere E-Mail-Adresse finden Sie oben im Impressum.
       </p>
 
-      <h2 className='text-xl font-semibold text-gray-700 mb-4'>Adresse</h2>
+      <h2 className='text-xl font-semibold text-gray-700 mb-4'>
+        Verbraucherstreitbeilegung
+      </h2>
       <p className='text-gray-600 mb-6'>
-        <strong>GS-Creatives</strong>
-        <br />
-        In der Trifft. 1, 57489 Drolshagen
+        Wir sind zur Teilnahme an einem Streitbeilegungsverfahren vor einer
+        Verbraucherschlichtungsstelle weder verpflichtet noch bereit.
       </p>
     </div>
   );

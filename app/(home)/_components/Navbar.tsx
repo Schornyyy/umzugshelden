@@ -30,8 +30,8 @@ const Navbar = () => {
         {/* Logo */}
         <Link href='/' className='text-2xl font-bold text-green-600'>
           <Image
-            alt='GS-Creatives Logo'
-            src={"/images/Logo.png"}
+            alt='Hausmeisterservice Weiss'
+            src={"/images/Hausmeisterservice-Weiss-Logo.png"}
             height={128}
             width={256}
             className='object-cover h-12 w-auto'
@@ -44,28 +44,27 @@ const Navbar = () => {
             Startseite
           </Link>
           <Link
-            href='/dienstleistung'
+            href='/gebaeudereinigung'
             className='text-gray-600 hover:text-primary'>
-            Dienstleistung
+            Gebäudereinigung
           </Link>
-          <Link href='/referenzen' className='text-gray-600 hover:text-primary'>
-            Referenzen
-          </Link>
-          <Link href='/ueber-uns' className='text-gray-600 hover:text-primary'>
-            Über uns
-          </Link>
-          <Link href='/kontakt' className='text-gray-600 hover:text-primary'>
-            Kontakt
-          </Link>
-        </div>
-
-        {/* Call-to-Action Button */}
-        <div className='hidden md:block'>
           <Link
-            href='/website-check'
-            className='bg-primary text-white px-4 py-3 rounded hover:bg-primary/90'>
-            Kostenloser Website-Check
+            href='/grundstueckpflege'
+            className='text-gray-600 hover:text-primary'>
+            Grundstückpflege
           </Link>
+          <Link
+            href='/hausmeisterservice'
+            className='text-gray-600 hover:text-primary'>
+            Hausmeisterservice
+          </Link>
+          <div className='hidden md:block'>
+            <Link
+              href='/kontakt'
+              className='bg-primary text-white px-4 py-3 rounded hover:bg-primary/90'>
+              Kontakt aufnehmen
+            </Link>
+          </div>
         </div>
 
         {/* Mobile Menu Button */}

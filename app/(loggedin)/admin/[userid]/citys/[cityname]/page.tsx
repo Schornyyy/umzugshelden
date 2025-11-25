@@ -13,6 +13,7 @@ import { CityAdminTabs } from "@/components/admin/city/CityAdminTabs";
 import { CityFaqTab } from "@/components/admin/city/CityFaqTab";
 import { CitySectionsTab } from "@/components/admin/city/CitySectionsTab";
 import { CityMetaTab } from "@/components/admin/city/CityMetaTab";
+import { useCompanyData } from "@/provider/CompanyDataProvider";
 
 interface EditableFaq {
   question: string;
@@ -43,6 +44,7 @@ export default function CityFaqEditorPage() {
   const slug = decodeURIComponent(citySlugParam || "");
   const cityReadable = deslugify(slug);
   const [state, setState] = useState<State>(initialState);
+  const { companyData } = useCompanyData();
 
   // Load or create city page doc using slug as deterministic ID
   useEffect(() => {
@@ -51,14 +53,22 @@ export default function CityFaqEditorPage() {
       if (!slug) return;
       setState((s) => ({ ...s, loading: true, error: undefined }));
       try {
-        let cp = await getCityPage(slug);
+        let cp = await getCityPage(slug, companyData ? companyData.id : "");
         if (!cp) {
-          const id = await createCityPage({
-            id: slug,
+          const id = await createCityPage(
+            {
+              id: slug,
+              city: cityReadable,
+              faq: [],
+            },
+            companyData ? companyData.id : ""
+          );
+          cp = {
+            id,
             city: cityReadable,
             faq: [],
-          });
-          cp = { id, city: cityReadable, faq: [] };
+            ownerId: companyData ? companyData.id : "",
+          };
         }
         if (cancelled) return;
         setState((s) => ({
@@ -158,12 +168,16 @@ export default function CityFaqEditorPage() {
       });
     setState((s) => ({ ...s, saving: true, error: undefined }));
     try {
-      await updateCityPage(state.cityPage.id, {
-        faq: cleaned,
-        sections: cleanedSections,
-        title: state.title.trim() || undefined,
-        description: state.description.trim() || undefined,
-      });
+      await updateCityPage(
+        state.cityPage.id,
+        {
+          faq: cleaned,
+          sections: cleanedSections,
+          title: state.title.trim() || undefined,
+          description: state.description.trim() || undefined,
+        },
+        companyData ? companyData.id : ""
+      );
       setState((s) => ({
         ...s,
         saving: false,

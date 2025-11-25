@@ -29,16 +29,24 @@ const data = {
       url: "/",
       items: [
         {
-          title: "Referenzen",
-          url: "/reference",
-        },
-        {
           title: "Städte",
           url: "/citys",
         },
         {
           title: "Blogs",
           url: "/blog",
+        },
+        {
+          title: "Anfragen",
+          url: "/requests",
+        },
+        {
+          title: "Jobs",
+          url: "/jobs",
+        },
+        {
+          title: "Bewerbungen",
+          url: "/applications",
         },
       ],
     },
@@ -59,7 +67,7 @@ export function AdminSideBar({
     <Sidebar {...props} className='bg-slate-800 sticky left-0 top-0'>
       <SidebarHeader className='p-6'>
         <Image
-          src={"/images/Logo.png"}
+          src={"/images/Hausmeisterservice-weiss-logo-weiss.png"}
           alt='Logo'
           height={64}
           width={64}

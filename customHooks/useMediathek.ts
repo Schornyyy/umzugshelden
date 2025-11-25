@@ -15,10 +15,13 @@ import {
   startAfter,
   QueryDocumentSnapshot,
   DocumentData,
+  and,
+  where,
 } from 'firebase/firestore';
 import { database } from '@/config/firebase';
 import { storage } from '@/config/firebase';
 import { MediathekItem } from '@/types/utils/MediathekType';
+import { useCompanyData } from '@/provider/CompanyDataProvider';
 
 const COL = 'mediathek';
 const DEFAULT_PAGE_SIZE = 30;
@@ -55,6 +58,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
+  const {companyData} = useCompanyData()
   const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
 
   const mapDoc = (d: QueryDocumentSnapshot<DocumentData>): MediathekItem => {
@@ -65,6 +69,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
       ? (tsUnknown as { toMillis: () => number }).toMillis()
       : (typeof tsUnknown === 'number' ? tsUnknown : Date.now());
     return {
+      ownerId: raw.ownerId as string,
       id: d.id,
       url: raw.url as string,
       thumbUrl: (raw.thumbUrl as string) || (raw.url as string),
@@ -92,7 +97,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
     setLoading(true);
     try {
       const colRef = collection(database, COL);
-      const qCol = query(colRef, orderBy('createdAt', 'desc'), limit(pageSize));
+      const qCol = query(colRef, and(where("ownerId", "==", companyData!.id)),orderBy('createdAt', 'desc'), limit(pageSize));
       const snap = await getDocs(qCol);
       const data: MediathekItem[] = snap.docs.map(mapDoc);
       const last = snap.docs[snap.docs.length - 1] || null;
@@ -107,7 +112,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
     } finally {
       setLoading(false);
     }
-  }, [pageSize]);
+  }, [pageSize, companyData]);
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return;
@@ -160,6 +165,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
         } catch {/* ignore */}
       }
       const meta: Omit<MediathekItem, 'id'> = {
+        ownerId: companyData ? companyData.id : "",
         url,
         thumbUrl: url, // placeholder for future real thumb
         name: file.name,

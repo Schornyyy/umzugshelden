@@ -23,7 +23,7 @@ const FAQBlock = ({ faqs, title }: { faqs: FAQType[]; title: string }) => {
     })),
   };
   return (
-    <div className='max-w-7xl bg-white shadow-md p-6 rounded-md self-center w-full'>
+    <div className='max-w-7xl bg-white shadow-md p-6 rounded-md self-center w-full my-36'>
       {/* Structured data for FAQ - JSON-LD */}
       <script
         type='application/ld+json'

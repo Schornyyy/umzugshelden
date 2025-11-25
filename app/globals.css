@@ -137,15 +137,14 @@ body {
   font-family: 'Poppins', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Segoe UI Emoji", "Segoe UI Symbol";
 }
 
-@layer base {
-  :root {
+:root {
     --background: 0 0% 100%;
     --foreground: 0 0% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 0 0% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
-    --primary: 142 76% 36%;
+    --primary: 48 57% 52%;
     --primary-foreground: 0 0% 98%;
     --secondary: 0 0% 96.1%;
     --secondary-foreground: 0 0% 9%;
@@ -173,9 +172,8 @@ body {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
     /* primary color in RGB */
-    --color-primary: rgb(70, 147, 221);
+    --color-primary: rgb(255, 211, 31);
   }
-}
 
 @layer base {
   * {
@@ -196,114 +194,3 @@ body {
     @apply bg-background text-foreground;
   }
 }
-
-
-/* removed stray @theme rule (not standard CSS) */
-
-/* Logo marquee styles */
-.logo-marquee {
-  width: 100%;
-  overflow: hidden;
-}
-.logo-track {
-  display: flex;
-  align-items: center;
-  /* duplicate list is used in markup; translate by -50% for seamless loop */
-  animation: marquee 20s linear infinite;
-  flex-wrap: nowrap; /* prevent wrapping */
-  width: max-content; /* ensure track width equals content width */
-  will-change: transform;
-}
-.logo-track:hover {
-  animation-play-state: paused;
-}
-
-.logo-track > * {
-  flex: 0 0 auto; /* keep each logo item's width constant so the duplicated sequence aligns */
-}
-
-/* Sticky section styles */
-.sticky-section {
-  position: relative;
-}
-.sticky-inner {
-  position: sticky;
-  top: calc(var(--nav-height, 0px) + var(--sticky-extra, 0px));
-  transition: 180ms ease, border-radius 180ms ease, transform 180ms ease;
-}
-
-.sticky-section[data-sticky-index="0"] .sticky-inner {
-  --sticky-extra: 0px; /* first sticks flush under nav */
-}
-.sticky-section[data-sticky-index]:not([data-sticky-index="0"]) .sticky-inner {
-  --sticky-extra: 48px; /* subsequent stick 48px lower */
-}
-
-.sticky-inner.stuck {
-  border-radius: 0.5rem;
-  background: var(--card);
-  z-index: 60;
-  background-color: white;
-}
-
-@keyframes marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-/* Respect users who prefer reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .logo-track {
-    animation: none;
-  }
-}
-
-/* System sticky card styles */
-.system-points {
-  position: relative;
-}
-.system-point {
-  position: relative;
-  margin-bottom: 1rem;
-}
-.sticky-card {
-  position: -webkit-sticky;
-  position: sticky;
-  top: calc(var(--nav-height, 0px) + var(--card-offset, 0px));
-  background: var(--card);
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  transition: transform 160ms ease, box-shadow 160ms ease;
-}
-
-/* ensure each child keeps its width and stacking order from inline z-index */
-.system-point > .sticky-card {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-@media (max-width: 640px) {
-  .sticky-card {
-    top: calc(var(--nav-height, 0px) + calc(var(--card-offset, 0px) / 2));
-    padding: 1rem;
-  }
-  .system-point {
-    margin-bottom: 0.75rem;
-  }
-}
-
-/* fixed-card used by JS: style when an element is pinned to viewport */
-.fixed-card {
-  box-shadow: 0 12px 30px rgba(2,6,23,0.12) !important;
-  border-radius: 0.75rem !important;
-}
-.fixed-placeholder {
-  display: block;
-  width: 100%;
-}
-

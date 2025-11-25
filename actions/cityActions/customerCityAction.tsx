@@ -12,6 +12,7 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
+  and,
 } from "firebase/firestore";
 import { revalidatePath } from "next/cache";
 import { cacheManager, CACHE_KEYS, CACHE_OPTIONS } from "@/lib/cache";
@@ -92,7 +93,8 @@ function revalidateCityRoutes(city?: string) {
 
 // Create or upsert a CityPage (if id provided)
 export async function createCityPage(
-  input: CreateCityPageInput
+  input: CreateCityPageInput,
+  ownerId: string
 ): Promise<string> {
   const parsed = cityPageSchema.parse({
     city: input.city,
@@ -107,44 +109,60 @@ export async function createCityPage(
     const existing = await getDoc(ref);
     if (existing.exists()) {
       // Remove undefined fields before updating
-      await updateDoc(ref, sanitize({ ...parsed }));
+      await updateDoc(ref, sanitize({ ...parsed, ownerId: ownerId }));
     } else {
       // Ensure no undefined values are sent on initial creation
-      await setDoc(ref, sanitize({ ...parsed }));
+      await setDoc(ref, sanitize({ ...parsed, ownerId: ownerId }));
     }
     invalidateCityCaches(input.id, parsed.city);
     revalidateCityRoutes(parsed.city);
     return input.id;
   } else {
-    const docRef = await addDoc(colRef, sanitize({ ...parsed }));
+    const docRef = await addDoc(
+      colRef,
+      sanitize({ ...parsed, ownerId: ownerId })
+    );
     invalidateCityCaches(docRef.id, parsed.city);
     revalidateCityRoutes(parsed.city);
     return docRef.id;
   }
 }
 
-export async function getCityPage(id: string): Promise<CityPage | null> {
+export async function getCityPage(
+  id: string,
+  ownerid: string
+): Promise<CityPage | null> {
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGE_BY_ID(id),
     async () => {
-      const ref = doc(database, CITY_PAGES_COLLECTION, id);
-      const snap = await getDoc(ref);
-      if (!snap.exists()) return null;
-      const data = snap.data() as Omit<CityPage, "id">;
-      return { id: snap.id, ...data } as CityPage;
+      const querySearch = query(
+        collection(database, CITY_PAGES_COLLECTION),
+        and(where("id", "==", id), where("ownerId", "==", ownerid))
+      );
+      const snap = await getDocs(querySearch);
+
+      if (snap.docs.length == 0) return null;
+
+      const data = snap.docs[0].data();
+
+      return { ...data } as CityPage;
     },
     CACHE_OPTIONS.CITY_PAGES
   );
 }
 
 export async function getCityPageByCity(
-  city: string
+  city: string,
+  ownerid: string
 ): Promise<CityPage | null> {
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGE_BY_CITY(city),
     async () => {
       const colRef = collection(database, CITY_PAGES_COLLECTION);
-      const qCity = query(colRef, where("city", "==", city));
+      const qCity = query(
+        colRef,
+        and(where("city", "==", city), where("ownerId", "==", ownerid))
+      );
       const snap = await getDocs(qCity);
       if (snap.empty) return null;
       const d = snap.docs[0];
@@ -154,12 +172,13 @@ export async function getCityPageByCity(
   );
 }
 
-export async function listCityPages(): Promise<CityPage[]> {
+export async function listCityPages(ownerid: string): Promise<CityPage[]> {
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGES_LIST,
     async () => {
       const colRef = collection(database, CITY_PAGES_COLLECTION);
-      const snap = await getDocs(colRef);
+      const qOwner = query(colRef, where("ownerid", "==", ownerid));
+      const snap = await getDocs(qOwner);
       return snap.docs.map((d) => ({
         id: d.id,
         ...(d.data() as Omit<CityPage, "id">),
@@ -171,11 +190,13 @@ export async function listCityPages(): Promise<CityPage[]> {
 
 export async function updateCityPage(
   id: string,
-  patch: UpdateCityPageInput
+  patch: UpdateCityPageInput,
+  ownerid: string
 ): Promise<boolean> {
-  const existing = await getCityPage(id);
+  const existing = await getCityPage(id, ownerid);
   if (!existing) return false;
   const merged: CityPage = {
+    ownerId: existing.ownerId,
     id: existing.id,
     city: patch.city ?? existing.city,
     faq: patch.faq ? patch.faq.map((f) => faqSchema.parse(f)) : existing.faq,
@@ -201,8 +222,11 @@ export async function updateCityPage(
   return true;
 }
 
-export async function deleteCityPage(id: string): Promise<boolean> {
-  const existing = await getCityPage(id);
+export async function deleteCityPage(
+  id: string,
+  ownerid: string
+): Promise<boolean> {
+  const existing = await getCityPage(id, ownerid);
   if (!existing) return false;
   const ref = doc(database, CITY_PAGES_COLLECTION, id);
   await deleteDoc(ref);

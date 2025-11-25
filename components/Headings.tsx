@@ -25,8 +25,8 @@ const Headings: React.FC<HeadingsProps> = ({
 
   // Standard-Stilklassen für jede Ebene
   const baseClass = {
-    1: "text-2xl font-bold md:text-5xl",
-    2: "text-xl md:text-3xl font-semibold",
+    1: "text-2xl font-bold md:text-8xl",
+    2: "text-xl md:text-5xl font-semibold",
     3: "text-md md:text-2xl font-medium",
     4: "text-md md:text-lg ",
     5: "text-md ",

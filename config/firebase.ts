@@ -6,12 +6,12 @@ import {getStorage} from "firebase/storage"
 
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBaQQ2KWYefEL7SxxLooeljWxRWYvYFtP4",
-  authDomain: "gs-templates.firebaseapp.com",
-  projectId: "gs-templates",
-  storageBucket: "gs-templates.firebasestorage.app",
-  messagingSenderId: "887669918597",
-  appId: "1:887669918597:web:de28477d9ab6d400b452ec"
+  apiKey: "AIzaSyBYUdfLuf5xfEmbzqF9w6DtULVuTdRuOUs",
+  authDomain: "nextjs-jobsmith.firebaseapp.com",
+  projectId: "nextjs-jobsmith",
+  storageBucket: "nextjs-jobsmith.appspot.com",
+  messagingSenderId: "20216257290",
+  appId: "1:20216257290:web:a5a09db039cf5f916838f3"
 };
 
 // Initialize Firebase

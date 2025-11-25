@@ -1,4 +1,5 @@
 export interface MediathekItem {
+	ownerId: string,
 	id: string;              // Firestore doc id
 	url: string;             // Public download URL
 	thumbUrl?: string;       // Thumbnail URL (can mirror url for now)

@@ -54,7 +54,7 @@ const LoginInner: React.FC = () => {
 
       navigateUser(
         account ? account : { email: "", role: "company", id: uuid() },
-        ""
+        "/requests"
       );
     } catch {
       setFormError(
