@@ -107,7 +107,7 @@ export async function sendCustomEmail({
   const transporter = getTransporter();
 
     const info = await transporter.sendMail({
-      from: `"GS-Creatives " <${process.env.SMTP_USER}>`,
+      from: `"Weiss-Hausmeisterservice " <${process.env.SMTP_USER}>`,
       to,
       subject,
       html: emailContentHtml,
