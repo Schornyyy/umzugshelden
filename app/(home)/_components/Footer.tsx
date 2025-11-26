@@ -48,8 +48,8 @@ const Footer = () => {
           </Headings>
           <Separator color='white' />
           <div className='flex flex-col text-white'>
-            <Link href={"/hausmeisterservices"} className='hover:text-primary'>
-              Hausmeisterservices
+            <Link href={"/hausmeisterservice"} className='hover:text-primary'>
+              Hausmeisterservice
             </Link>
             <Link href={"/grundstueckpflege"} className='hover:text-primary'>
               Garten- & Grundstückpflege

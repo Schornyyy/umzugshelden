@@ -106,42 +106,35 @@ const Navbar = () => {
                 d='M6 18L18 6M6 6l12 12'></path>
             </svg>
           </button>
-
           <Link
             href='/'
-            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-100'
-            onClick={handleLinkClick}>
+            onClick={() => handleLinkClick()}
+            className='text-gray-600 hover:text-primary'>
             Startseite
           </Link>
           <Link
-            href='/dienstleistung'
-            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-100'
-            onClick={handleLinkClick}>
-            Dienstleistung
+            href='/gebaeudereinigung'
+            onClick={() => handleLinkClick()}
+            className='text-gray-600 hover:text-primary'>
+            Gebäudereinigung
           </Link>
           <Link
-            href='/referenzen'
-            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-200'
-            onClick={handleLinkClick}>
-            Referenzen
+            href='/grundstueckpflege'
+            onClick={() => handleLinkClick()}
+            className='text-gray-600 hover:text-primary'>
+            Grundstückpflege
           </Link>
           <Link
-            href='/ueber-uns'
-            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-300'
-            onClick={handleLinkClick}>
-            Über uns
+            href='/hausmeisterservice'
+            onClick={() => handleLinkClick()}
+            className='text-gray-600 hover:text-primary'>
+            Hausmeisterservice
           </Link>
           <Link
             href='/kontakt'
-            className='text-2xl text-gray-600 hover:text-primary transition-opacity delay-400'
-            onClick={handleLinkClick}>
-            Kontakt
-          </Link>
-          <Link
-            href='/website-check'
-            className='bg-primary text-white px-6 py-3 rounded hover:bg-primary/90 transition-opacity delay-500'
-            onClick={handleLinkClick}>
-            Kostenloser Website-Check
+            onClick={() => handleLinkClick()}
+            className='bg-primary text-white px-4 py-3 rounded hover:bg-primary/90'>
+            Jetzt kontaktieren
           </Link>
         </div>
       )}
