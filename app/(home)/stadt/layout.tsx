@@ -1,25 +1,25 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title:
-    "Webdesign & Sichtbarkeit in über 1000 deutschen Städten | GS-Creatives",
+  title: "Hausmeisterservice Weiß — Stadtseiten",
   description:
-    "Finden Sie qualifizierte Garten- und Landschaftsbauer in Ihrer Stadt. Kostenlose Angebote von geprüften Galabau-Betrieben in über 1000 deutschen Städten. Jetzt Auftrag erstellen!",
+    "Hausmeisterservice Weiß bietet zuverlässige Hausmeisterdienste, Gebäudereinigung und Grundstückspflege in Ihrer Stadt. Jetzt unverbindlich anfragen!",
   keywords: [
-    "GS-Creatives",
-    "Deutschlandweit Galabau",
-    "Lokale Gartenbauer finden",
+    "Hausmeisterservice Weiß",
+    "Hausmeisterservice",
+    "Gebäudereinigung",
+    "Grundstückspflege",
   ],
   openGraph: {
-    title: "Garten- und Landschaftsbau in über 1000 deutschen Städten",
+    title: "Hausmeisterservice Weiß — Lokale Stadtseiten",
     description:
-      "Qualifizierte Galabau-Betriebe in Ihrer Stadt finden. Kostenlose Angebote von geprüften Garten- und Landschaftsbauern.",
+      "Professionelle Hausmeisterdienste und Pflege für Immobilien — lokal in Ihrer Stadt. Kontaktieren Sie Hausmeisterservice Weiß für ein Angebot.",
     type: "website",
     locale: "de_DE",
-    url: "https://www.gs-creatives.de/stadt",
+    url: "https://weiss-hausmeisterservice.de/stadt",
   },
   alternates: {
-    canonical: "https://www.gs-creatives.de/stadt",
+    canonical: "https://weiss-hausmeisterservice.de/stadt",
   },
   robots: {
     index: true,

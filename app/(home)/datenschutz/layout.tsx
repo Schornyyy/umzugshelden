@@ -1,20 +1,19 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title:
-    "Datenschutzerklärung | GS-Creatives - DSGVO-konforme Datenverarbeitung",
+  title: "Datenschutzerklärung | Hausmeisterservice Weiß",
   description:
-    "Vollständige DSGVO-konforme Datenschutzerklärung für GS-Creatives. Erfahren Sie, wie wir Ihre Daten schützen und verarbeiten. Transparenz und Datenschutz haben höchste Priorität.",
+    "Datenschutzerklärung von Hausmeisterservice Weiß. Informationen zur Erhebung, Verarbeitung und Nutzung Ihrer Daten – DSGVO-konform und transparent.",
   keywords:
-    "Datenschutz, DSGVO, Datenschutzerklärung, GS-Creatives, Webdesign, Datenverarbeitung, Privatsphäre",
-  authors: [{ name: "GS-Creatives" }],
+    "Datenschutz, DSGVO, Datenschutzerklärung, Hausmeisterservice Weiß, Datenverarbeitung, Privatsphäre",
+  authors: [{ name: "Hausmeisterservice Weiß" }],
   robots: "index, follow",
   openGraph: {
-    title: "Datenschutzerklärung | GS-Creatives",
+    title: "Datenschutzerklärung | Hausmeisterservice Weiß",
     description:
-      "DSGVO-konforme Datenschutzerklärung für GS-Creatives. Transparenz und Datenschutz haben höchste Priorität.",
-    url: "https://gs-creatives.de/datenschutz",
-    siteName: "GS-Creatives",
+      "Datenschutzerklärung von Hausmeisterservice Weiß. Transparente und DSGVO-konforme Angaben zur Verarbeitung personenbezogener Daten.",
+    url: "https://weiss-hausmeisterservice.de/datenschutz",
+    siteName: "Hausmeisterservice Weiß",
     locale: "de_DE",
     type: "website",
   },

@@ -32,7 +32,7 @@ const ContactForm = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            to: "kontakt@gs-creatives.de",
+            to: "info@weiss-hausmeisterservice.de",
             subject: `Kontaktformular: ${name}`,
             replacements: { name, phone, email, message },
             templatePath: "ContactEmailTemplate.html",
