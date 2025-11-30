@@ -7,7 +7,7 @@ import React from "react";
 
 const Footer = () => {
   return (
-    <div className='py-12 bg-[#656565]'>
+    <div className='py-12 bg-[#656565] flex flex-col'>
       <div className='container mx-auto flex flex-col max-md:gap-12 max-md:p-6 md:flex-row justify-between'>
         <div className='flex flex-col gap-6 w-full md:w-1/4'>
           <Image
@@ -89,6 +89,20 @@ const Footer = () => {
             </div>
           </div>
         </div>
+      </div>
+      <div className='flex flex-col items-center justify-center mt-12'>
+        <Image
+          src={"/images/GS-Creatives-Logo_no_Background.png"}
+          alt='Gs-Creatives'
+          height={64}
+          width={64}
+        />
+        <Link
+          href={"https://www.gs-creatives.de/"}
+          target='_blank'
+          className='text-white hover:text-blue-400'>
+          <Headings level={5}>In zusammenarbeit mit GS-Creatives.</Headings>
+        </Link>
       </div>
     </div>
   );
