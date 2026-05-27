@@ -2,18 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/*
-  Local Poppins fonts: place woff2 files in `public/fonts/poppins/`
-  Example filenames used below:
-    - Poppins-300.woff2
-    - Poppins-400.woff2
-    - Poppins-500.woff2
-    - Poppins-600.woff2
-    - Poppins-700.woff2
-    - Poppins-800.woff2
-
-  You can acquire these from Google Fonts (download family) and convert/keep woff2.
-*/
 
 @font-face {
   font-family: 'Poppins';
