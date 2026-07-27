@@ -21,6 +21,15 @@ export default {
   				'Arial',
   				'Noto Sans',
   				'sans-serif'
+  			],
+  			body: [
+  				'var(--font-raleway)',
+  				'ui-sans-serif',
+  				'system-ui',
+  				'-apple-system',
+  				'Segoe UI',
+  				'Roboto',
+  				'sans-serif'
   			]
   		},
   		colors: {
@@ -35,8 +44,12 @@ export default {
   				foreground: 'hsl(var(--popover-foreground))'
   			},
   			primary: {
-  				DEFAULT: '#FFD31F',
+  				DEFAULT: '#E87722',
   				foreground: 'hsl(var(--primary-foreground))'
+  			},
+  			navy: {
+  				DEFAULT: '#0D2650',
+  				light: '#1B3A6E',
   			},
   			secondary: {
   				DEFAULT: 'hsl(var(--secondary))',

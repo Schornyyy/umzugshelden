@@ -11,43 +11,44 @@ const Impressum = () => {
         Angaben gemäß § 5 TMG
       </h2>
       <p className='text-gray-600 mb-2'>
-        <strong>Firma:</strong> Hausmeisterservice Björn Weiß
+        <strong>Firma:</strong> Umzugshelden
+      </p>
+      <p className='text-gray-600 mb-2'>
+        <strong>Inhaber:</strong> Muhammed Ali Güngör
       </p>
       <p className='text-gray-600 mb-4'>
-        <strong>Vertreten durch:</strong> Björn Weiß
+        <strong>Unternehmensform:</strong> Einzelunternehmen
+      </p>
+
+      <h2 className='text-xl font-semibold text-gray-700 mb-4'>Adresse</h2>
+      <p className='text-gray-600 mb-4'>
+        In der Trift 1
+        <br />
+        57489 Drolshagen
+        <br />
+        Deutschland
       </p>
 
       <h2 className='text-xl font-semibold text-gray-700 mb-4'>Kontakt</h2>
       <p className='text-gray-600 mb-2'>
         <strong>E-Mail:</strong>{" "}
         <a
-          href='mailto:info@weiss-hausmeisterservice.de'
+          href='mailto:info@umzugshelden.io'
           className='text-blue-600 hover:text-blue-800'>
-          info@weiss-hausmeisterservice.de
+          info@umzugshelden.io
         </a>
       </p>
       <p className='text-gray-600 mb-4'>
         <strong>Telefon:</strong>{" "}
         <a
-          href='tel:+492084458875'
+          href='tel:+4915168567708'
           className='text-blue-600 hover:text-blue-800'>
-          +49 208 4458875
+          +49 151 68567708
         </a>
       </p>
 
-      <h2 className='text-xl font-semibold text-gray-700 mb-4'>Adresse</h2>
-      <p className='text-gray-600 mb-4'>
-        Hausmeisterservice Björn Weiß
-        <br />
-        Duisburger Str. 261
-        <br />
-        45478 Mülheim an der Ruhr
-        <br />
-        Deutschland
-      </p>
-
       <h2 className='text-xl font-semibold text-gray-700 mb-4'>Steuernummer</h2>
-      <p className='text-gray-600 mb-6'>Steuer-Nr.: 120/2657/2389</p>
+      <p className='text-gray-600 mb-6'>Steuer-Nr.: wird nachgetragen</p>
 
       <h2 className='text-xl font-semibold text-gray-700 mb-4'>
         Haftungsausschluss

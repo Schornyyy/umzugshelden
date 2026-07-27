@@ -18,7 +18,7 @@ export async function generateMetadata() {
       title: "Gebäudereinigung Mülheim an der Ruhr | Hausmeisterservice Weiß",
       description:
         "Ihre professionelle Gebäudereinigung in Mülheim: Treppenhaus-, Glas- & Büroreinigung, Grundreinigung, Bauendreinigung. Erfahrene Reinigungskräfte, flexible Zeiten, faire Preise.",
-      url: "https://weiss-hausmeisterservice.de/gebaeudereinigung",
+      url: "https://umzugshelden.io/gebaeudereinigung",
       images: [
         {
           url: "/images/gebäudereinigung/Hero.png",
@@ -349,9 +349,9 @@ const ContactSection = () => {
                 className='flex-shrink-0'
               />
               <Link
-                href={"mailto:info@weiss-hausmeisterservice.de"}
+                href={"mailto:info@umzugshelden.io"}
                 className='hover:text-primary text-sm md:text-base break-all'>
-                info@weiss-hausmeisterservice.de
+                info@umzugshelden.io
               </Link>
             </div>
             <div className='flex flex-row gap-2 items-start'>

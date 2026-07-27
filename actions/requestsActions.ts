@@ -14,7 +14,7 @@ import {
 	where,
 } from "firebase/firestore";
 
-const REQUEST_COLLECTION = "requests";
+const REQUEST_COLLECTION = "requests_umzugshelden";
 
 // Create a new request scoped to an owner
 export async function createRequest(

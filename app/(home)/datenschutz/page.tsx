@@ -16,40 +16,40 @@ const Datenschutz = () => {
 
         {/* 1. Verantwortlicher */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             1. Verantwortlicher
           </h2>
           <div className='bg-gray-50 p-6 rounded-lg mb-4'>
             <p className='text-gray-700 mb-2'>
-              <strong>Björn Weiß</strong>
+              <strong>Muhammed Ali Güngör</strong>
               <br />
-              Hausmeisterservice Björn Weiß
+              Umzugshelden (Einzelunternehmen)
               <br />
-              Duisburger Str. 261
+              In der Trift 1
               <br />
-              45478 Mülheim an der Ruhr
+              57489 Drolshagen
               <br />
               Deutschland
             </p>
             <p className='text-gray-700'>
-              <strong>Telefon:</strong> +49 208 4458875
+              <strong>Telefon:</strong> +49 151 12345678
               <br />
               <strong>E-Mail:</strong>{" "}
               <a
-                href='mailto:info@weiss-hausmeisterservice.de'
-                className='text-green-600 hover:text-green-800 font-medium'>
-                info@weiss-hausmeisterservice.de
+                href='mailto:info@umzugshelden.io'
+                className='text-primary hover:text-primary/80 font-medium'>
+                info@umzugshelden.io
               </a>
             </p>
             <p className='text-gray-700 mt-4'>
-              <strong>Steuernummer:</strong> 120/2657/2389
+              <strong>Steuernummer:</strong> wird nachgetragen
             </p>
           </div>
         </section>
 
         {/* 2. Allgemeine Hinweise */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             2. Allgemeine Hinweise zur Datenverarbeitung
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -63,7 +63,7 @@ const Datenschutz = () => {
 
         {/* 3. Kontakt & Kommunikation */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             3. Kontakt und E-Mail-Kommunikation
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -78,7 +78,7 @@ const Datenschutz = () => {
 
         {/* 4. Online-Streitbeilegung & Verbraucherstreit */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             4. Online-Streitbeilegung und Verbraucherstreitbeilegung
           </h2>
           <p className='text-gray-700 mb-2'>
@@ -89,7 +89,7 @@ const Datenschutz = () => {
               href='https://ec.europa.eu/odr'
               target='_blank'
               rel='noopener noreferrer'
-              className='text-green-600 hover:text-green-800'>
+              className='text-primary hover:text-primary/80'>
               https://ec.europa.eu/odr
             </a>
           </p>
@@ -107,7 +107,7 @@ const Datenschutz = () => {
             Informationen:{" "}
             <a
               href='https://www.fairness-im-handel.de'
-              className='text-green-600 hover:text-green-800'
+              className='text-primary hover:text-primary/80'
               target='_blank'
               rel='noopener noreferrer'>
               https://www.fairness-im-handel.de
@@ -117,7 +117,7 @@ const Datenschutz = () => {
 
         {/* 5. Bereitstellung der Website und Logfiles */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             5. Bereitstellung der Website und Erstellung von Logfiles
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -129,7 +129,7 @@ const Datenschutz = () => {
 
         {/* 6. Hosting */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             6. Hosting
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -142,7 +142,7 @@ const Datenschutz = () => {
 
         {/* 7. Cookies und Tracking */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             7. Cookies und Tracking
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -154,7 +154,7 @@ const Datenschutz = () => {
 
         {/* 8. Ihre Rechte */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             8. Ihre Rechte als betroffene Person
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -167,7 +167,7 @@ const Datenschutz = () => {
 
         {/* 9. Datensicherheit */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             9. Datensicherheit
           </h2>
           <p className='text-gray-700 mb-4'>
@@ -179,7 +179,7 @@ const Datenschutz = () => {
 
         {/* 10. Aktualität */}
         <section className='mb-8'>
-          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-green-500 pb-2'>
+          <h2 className='text-2xl font-bold text-gray-800 mb-4 border-b-2 border-primary pb-2'>
             10. Aktualität und Änderung
           </h2>
           <p className='text-gray-700 mb-4'>

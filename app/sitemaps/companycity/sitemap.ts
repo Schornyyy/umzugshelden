@@ -7,12 +7,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
 
   const companyCities = cities.map((city) => ({
-    url: `https://weiss-hausmeisterservice.de/stadt/${city}`,
+    url: `https://umzugshelden.io/stadt/${city}`,
     lastModified: new Date(),
     priority: 0.8,
     alternates: {
       languages: {
-        de: `https://weiss-hausmeisterservice.de/stadt/${city}`,
+        de: `https://umzugshelden.io/stadt/${city}`,
       },
     },
   }))

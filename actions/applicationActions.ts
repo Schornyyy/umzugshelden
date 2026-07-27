@@ -3,7 +3,7 @@ import { database } from "@/config/firebase";
 import { Application, ApplicationNote } from "@/types/Applications";
 import { and, collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore";
 
-const APPLICATION_COLLECTION = "applications";
+const APPLICATION_COLLECTION = "applications_umzugshelden";
 
 export interface CreateApplicationInput {
   id: string;

@@ -1,4 +1,4 @@
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://gs-creatives.de';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://umzugshelden.io';
 
 module.exports = {
   siteUrl,

@@ -4,7 +4,7 @@ import { listBlogPagesBySubcategory } from "@/actions/blogPageActions";
 import type { MetadataRoute } from "next";
 
 // If domain changes, adjust here or move to config
-const BASE_URL = "https://weiss-hausmeisterservice.de";
+const BASE_URL = "https://umzugshelden.io";
 const MAIN_CATEGORIES: { key: string; path: string }[] = [
   { key: "seo", path: "/blog/seo" },
   { key: "webdesign", path: "/blog/webdesign" },

@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Host
-Host: https://gs-creatives.de
+Host: https://umzugshelden.io
 
 # Sitemaps
-Sitemap: https://gs-creatives.de/sitemap.xml
+Sitemap: https://umzugshelden.io/sitemap.xml

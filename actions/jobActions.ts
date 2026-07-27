@@ -4,7 +4,7 @@ import { database } from "@/config/firebase"
 import { Job } from "@/types/Job";
 import {  and, collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore"
 
-const JOB_COLLECTION = "jobs"
+const JOB_COLLECTION = "jobs_umzugshelden"
 
 
 export async function createJob(ownerId: string, titel: string, jobArt: "vollzeit" | "teilzeit" | "aushilfe" | "praktikum" | "ferienjob"): Promise<Job> {

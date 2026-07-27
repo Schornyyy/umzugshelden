@@ -20,7 +20,7 @@ export async function generateMetadata() {
       title: "Hausmeisterservice Weiß — Hausmeisterservice Mülheim an der Ruhr",
       description:
         "Zuverlässige Hausmeisterdienste, schnelle Reaktionen und faire Preise. Kontaktieren Sie uns für ein unverbindliches Angebot.",
-      url: "https://weiss-hausmeisterservice.de",
+      url: "https://umzugshelden.io",
       images: [
         {
           url: "/images/fahrzeug.png",
@@ -327,9 +327,9 @@ const ContactSection = () => {
                 className='flex-shrink-0'
               />
               <Link
-                href={"mailto:info@weiss-hausmeisterservice.de"}
+                href={"mailto:info@umzugshelden.io"}
                 className='hover:text-primary text-sm md:text-base break-all'>
-                info@weiss-hausmeisterservice.de
+                info@umzugshelden.io
               </Link>
             </div>
             <div className='flex flex-row gap-2 items-start'>

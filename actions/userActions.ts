@@ -17,7 +17,7 @@ import {
 import type { UpdateData, DocumentData } from "firebase/firestore";
 import { redirect } from "next/navigation";
 
-const USERS_COLLECTION = "users";
+const USERS_COLLECTION = "users_umzugshelden";
 
 /**
  * Create a new user in Firestore.

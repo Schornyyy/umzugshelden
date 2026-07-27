@@ -9,7 +9,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   
 
   const namedList = named.map(n => ({
-    url: `https://weiss-hausmeisterservice.de/sitemaps/${n}/sitemap.xml`,
+    url: `https://umzugshelden.io/sitemaps/${n}/sitemap.xml`,
     lastModified: new Date(),
   }));
 

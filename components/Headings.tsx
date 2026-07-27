@@ -25,12 +25,12 @@ const Headings: React.FC<HeadingsProps> = ({
 
   // Standard-Stilklassen für jede Ebene
   const baseClass = {
-    1: "text-2xl font-bold md:text-8xl",
-    2: "text-xl md:text-5xl font-semibold",
-    3: "text-md md:text-2xl font-medium",
-    4: "text-md md:text-lg ",
-    5: "text-md ",
-    6: "text-base",
+    1: "font-sans text-2xl font-bold md:text-8xl",
+    2: "font-sans text-xl md:text-5xl font-semibold",
+    3: "font-sans text-md md:text-2xl font-medium",
+    4: "font-sans text-md md:text-lg ",
+    5: "font-sans text-md ",
+    6: "font-sans text-base",
   };
 
   // Kombination aus Standardklassen und zusätzlichen Klassen

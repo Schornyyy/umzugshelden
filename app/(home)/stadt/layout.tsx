@@ -1,25 +1,26 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Hausmeisterservice Weiß — Stadtseiten",
+  title: "Umzugshelden — Umzugsservice in Ihrer Stadt",
   description:
-    "Hausmeisterservice Weiß bietet zuverlässige Hausmeisterdienste, Gebäudereinigung und Grundstückspflege in Ihrer Stadt. Jetzt unverbindlich anfragen!",
+    "Umzugshelden bietet professionellen Umzugsservice, Anstricharbeiten und Möbelmontage im Kreis Olpe und 25 km Umkreis. Jetzt unverbindlich anfragen!",
   keywords: [
-    "Hausmeisterservice Weiß",
-    "Hausmeisterservice",
-    "Gebäudereinigung",
-    "Grundstückspflege",
+    "Umzugsservice",
+    "Umzugshelden",
+    "Anstricharbeiten",
+    "Möbelmontage",
+    "Kreis Olpe",
   ],
   openGraph: {
-    title: "Hausmeisterservice Weiß — Lokale Stadtseiten",
+    title: "Umzugshelden — Lokale Stadtseiten",
     description:
-      "Professionelle Hausmeisterdienste und Pflege für Immobilien — lokal in Ihrer Stadt. Kontaktieren Sie Hausmeisterservice Weiß für ein Angebot.",
+      "Professioneller Umzugsservice im Kreis Olpe und Umgebung — kontaktieren Sie Umzugshelden für ein kostenloses Angebot.",
     type: "website",
     locale: "de_DE",
-    url: "https://weiss-hausmeisterservice.de/stadt",
+    url: "https://umzugshelden.de/stadt",
   },
   alternates: {
-    canonical: "https://weiss-hausmeisterservice.de/stadt",
+    canonical: "https://umzugshelden.de/stadt",
   },
   robots: {
     index: true,

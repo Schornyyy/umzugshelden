@@ -3,12 +3,19 @@ import "./globals.css";
 import CookieBanner from "@/components/CookieBanner";
 import CookieSettings from "@/components/CookieSettings";
 import { Toaster } from "@/components/ui/sonner";
-// Using locally hosted Poppins via @font-face in globals.css
+import { Raleway } from "next/font/google";
+
+const raleway = Raleway({
+  subsets: ["latin"],
+  variable: "--font-raleway",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "GS-Creatives - Webdesign & Digitale Präsenz",
+  metadataBase: new URL("https://umzugshelden.io"),
+  title: "Umzugshelden — Ihr zuverlässiger Umzugsservice",
   description:
-    "GS-Creatives – Portfolio, Webdesign-Services und Agenturen für Ihren digitalen Auftritt",
+    "Umzugshelden – Professioneller Umzugsservice: schnell, zuverlässig und günstig. Kostenlose Anfrage stellen!",
 };
 
 export default function RootLayout({
@@ -17,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang='de'>
+    <html lang='de' className={raleway.variable}>
       <head>
         <link rel='icon' href='/favicon.ico' sizes='any' />
       </head>

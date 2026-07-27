@@ -1,19 +1,19 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Datenschutzerklärung | Hausmeisterservice Weiß",
+  title: "Datenschutzerklärung | Umzugshelden",
   description:
-    "Datenschutzerklärung von Hausmeisterservice Weiß. Informationen zur Erhebung, Verarbeitung und Nutzung Ihrer Daten – DSGVO-konform und transparent.",
+    "Datenschutzerklärung von Umzugshelden. Informationen zur Erhebung, Verarbeitung und Nutzung Ihrer Daten – DSGVO-konform und transparent.",
   keywords:
-    "Datenschutz, DSGVO, Datenschutzerklärung, Hausmeisterservice Weiß, Datenverarbeitung, Privatsphäre",
-  authors: [{ name: "Hausmeisterservice Weiß" }],
+    "Datenschutz, DSGVO, Datenschutzerklärung, Umzugshelden, Datenverarbeitung, Privatsphäre",
+  authors: [{ name: "Umzugshelden" }],
   robots: "index, follow",
   openGraph: {
-    title: "Datenschutzerklärung | Hausmeisterservice Weiß",
+    title: "Datenschutzerklärung | Umzugshelden",
     description:
-      "Datenschutzerklärung von Hausmeisterservice Weiß. Transparente und DSGVO-konforme Angaben zur Verarbeitung personenbezogener Daten.",
-    url: "https://weiss-hausmeisterservice.de/datenschutz",
-    siteName: "Hausmeisterservice Weiß",
+      "Datenschutzerklärung von Umzugshelden. Transparente und DSGVO-konforme Angaben zur Verarbeitung personenbezogener Daten.",
+    url: "https://umzugshelden.io/datenschutz",
+    siteName: "Umzugshelden",
     locale: "de_DE",
     type: "website",
   },

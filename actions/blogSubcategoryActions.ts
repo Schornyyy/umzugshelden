@@ -17,7 +17,7 @@ import type { BlogSubcategory, AdminBlogMainCategory } from "@/types/blog/BlogSu
 import { slugify } from "@/utils/slugify";
 import { revalidatePath } from "next/cache";
 
-const COLLECTION = "blogSubcategories";
+const COLLECTION = "blogSubcategories_umzugshelden";
 
 // Cache keys (extend existing CACHE_KEYS via prefix to avoid central modification for now)
 function cacheKeyAll(main?: string) {

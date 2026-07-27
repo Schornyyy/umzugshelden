@@ -22,7 +22,7 @@ import type { BlogPage, BlogPageSection, BlogPageFAQEntry } from "@/types/blog/B
 import type { AdminBlogMainCategory } from "@/types/blog/BlogSubcategory";
 import { slugify } from "@/utils/slugify";
 
-const COLLECTION = "blogPages";
+const COLLECTION = "blogPages_umzugshelden";
 
 // cache key helpers (local, to avoid editing central enum for now)
 const cacheKeyBySlug = (subcategorySlug: string, slug: string) => `BLOG_PAGE_${subcategorySlug}_${slug}`;

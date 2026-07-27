@@ -9,7 +9,7 @@ const ContactPage = () => {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<null | { ok: boolean; msg: string }>(
-    null
+    null,
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -30,7 +30,7 @@ const ContactPage = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to: "info@weiss-hausmeisterservice.de",
+          to: "info@umzugshelden.io",
           subject: `Kontaktformular: ${name}`,
           replacements: { name, phone, email, message },
           templatePath: "ContactEmailTemplate.html",

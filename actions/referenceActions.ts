@@ -15,7 +15,7 @@ import {
 	type UpdateData,
 } from "firebase/firestore";
 
-const REFERENCES_COLLECTION = "references";
+const REFERENCES_COLLECTION = "references_umzugshelden";
 
 // Simple in-memory caches (server process memory). Keys/entries expire after TTL.
 const CACHE_TTL_MS = 60_000; // 60s default TTL
