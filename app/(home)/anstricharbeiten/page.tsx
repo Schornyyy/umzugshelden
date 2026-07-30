@@ -133,7 +133,7 @@ const Hero = () => (
   <section
     className='relative min-h-[500px] flex items-center'
     style={{
-      backgroundImage: "url('/images/Hero_background.png')",
+      backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
       backgroundSize: "cover",
       backgroundPosition: "center",
     }}>

@@ -109,7 +109,7 @@ export default async function ServicePage({
       <section
         className='relative min-h-[480px] flex items-center'
         style={{
-          backgroundImage: "url('/images/Hero_background.png')",
+          backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}>

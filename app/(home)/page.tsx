@@ -16,7 +16,7 @@ export async function generateMetadata() {
       url: "https://umzugshelden.de",
       images: [
         {
-          url: "/images/fahrzeug.png",
+          url: "/images/Umzugsunternhemen_olpe.png",
           width: 1200,
           height: 630,
           alt: "Umzugshelden Fahrzeug",
@@ -28,7 +28,7 @@ export async function generateMetadata() {
       title: "Umzugshelden — Ihr zuverlässiger Umzugsservice",
       description:
         "Professioneller Umzugsservice – schnell, zuverlässig und günstig.",
-      image: "/images/fahrzeug.png",
+      image: "/images/Umzugsunternhemen_olpe.png",
     },
   };
 }
@@ -55,7 +55,7 @@ const Hero = () => {
       id='anfrage'
       className='relative min-h-[600px] flex items-center'
       style={{
-        backgroundImage: "url('/images/Hero_background.png')",
+        backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         backgroundSize: "cover",
@@ -238,7 +238,7 @@ const AboutSection = () => {
           {/* Image */}
           <div className='rounded-xl overflow-hidden shadow-2xl'>
             <Image
-              src='/images/fahrzeug.png'
+              src='/images/Umzugsunternhemen_olpe.png'
               alt='Umzugshelden Fahrzeug'
               width={700}
               height={500}

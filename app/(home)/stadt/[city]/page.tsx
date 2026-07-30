@@ -34,7 +34,7 @@ export default async function CityServicePage({
       name: "Umzugsservice",
       description:
         "Wohnungs-, Firmen- und Regionalumzug – zuverlässig und zu fairen Festpreisen.",
-      image: "/images/fahrzeug.png",
+      image: "/images/Umzugsunternhemen_olpe.png",
     },
     {
       slug: "anstricharbeiten",
@@ -58,7 +58,7 @@ export default async function CityServicePage({
       <section
         className='relative min-h-[480px] flex items-center'
         style={{
-          backgroundImage: "url('/images/Hero_background.png')",
+          backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}>

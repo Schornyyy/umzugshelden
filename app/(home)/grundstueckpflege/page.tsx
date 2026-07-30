@@ -23,7 +23,7 @@ export async function generateMetadata() {
       url: "https://umzugshelden.io",
       images: [
         {
-          url: "/images/fahrzeug.png",
+          url: "/images/Umzugsunternhemen_olpe.png",
           width: 1200,
           height: 630,
           alt: "Hausmeisterservice Weiß Fahrzeug",
@@ -35,7 +35,7 @@ export async function generateMetadata() {
       title: "Hausmeisterservice Weiß — Hausmeisterservice Mülheim an der Ruhr",
       description:
         "Zuverlässige Hausmeisterdienste, Gebäudereinigung und Grundstückspflege in Mülheim an der Ruhr.",
-      image: "/images/fahrzeug.png",
+      image: "/images/Umzugsunternhemen_olpe.png",
     },
   };
 }

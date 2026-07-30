@@ -133,7 +133,7 @@ const Hero = () => (
   <section
     className='relative min-h-[500px] flex items-center'
     style={{
-      backgroundImage: "url('/images/Hero_background.png')",
+      backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
       backgroundSize: "cover",
       backgroundPosition: "center",
     }}>
@@ -249,7 +249,7 @@ const WhySection = () => (
         </div>
         <div className='rounded-xl overflow-hidden shadow-xl'>
           <Image
-            src='/images/fahrzeug.png'
+            src='/images/Umzugsunternhemen_olpe.png'
             alt='Möbelmontage Umzugshelden'
             width={700}
             height={500}
