@@ -32,7 +32,7 @@ const CookieSettings: React.FC = () => {
         initial={{ opacity: 0, x: 50 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.4 }}
-        className='fixed bottom-4 right-4 z-40'>
+        className='fixed bottom-4 left-4 z-40'>
         <Button
           asChild
           variant='outline'

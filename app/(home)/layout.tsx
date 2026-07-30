@@ -1,15 +1,17 @@
-import React, { ReactNode } from 'react'
-import Navbar from './_components/Navbar'
-import Footer from './_components/Footer'
+import React, { ReactNode } from "react";
+import Navbar from "./_components/Navbar";
+import Footer from "./_components/Footer";
+import WhatsAppBtn from "./_components/WhatsAppBtn";
 
-const layout = ({children} : {children: ReactNode}) => {
+const layout = ({ children }: { children: ReactNode }) => {
   return (
     <>
-    <Navbar />
-    {children}
-    <Footer/>
+      <Navbar />
+      {children}
+      <WhatsAppBtn />
+      <Footer />
     </>
-  )
-}
+  );
+};
 
-export default layout
+export default layout;
