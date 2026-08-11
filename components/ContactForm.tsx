@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
+import { createRequest } from "@/actions/requestsActions";
 
-const ContactForm = () => {
+const inputBase =
+  "font-body w-full px-4 py-3 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary";
+const inputDark = `${inputBase} bg-white/90 text-gray-800 placeholder-gray-500`;
+const inputLight = `${inputBase} bg-white border border-gray-200 text-gray-800 placeholder-gray-400`;
+
+const ContactForm = ({ dark = false }: { dark?: boolean }) => {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -11,6 +17,8 @@ const ContactForm = () => {
   const [status, setStatus] = useState<null | { ok: boolean; msg: string }>(
     null,
   );
+
+  const inputClass = dark ? inputDark : inputLight;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,8 +34,10 @@ const ContactForm = () => {
 
     setLoading(true);
     try {
-      // Fire both operations (email + request creation) in parallel
-      const [emailRes, requestRes] = await Promise.all([
+      const ownerId = process.env.NEXT_PUBLIC_OWNERID;
+      if (!ownerId) throw new Error("Owner-ID nicht konfiguriert.");
+
+      const [emailRes] = await Promise.all([
         fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -39,20 +49,12 @@ const ContactForm = () => {
             tracking: false,
           }),
         }),
-        fetch("/api/requests/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, phone, email, message }),
-        }),
+        createRequest(ownerId, { name, email, phone, message }),
       ]);
 
       const emailData = await emailRes.json();
-      const requestData = await requestRes.json();
 
-      const emailOk = emailRes.ok && !emailData.error;
-      const requestOk = requestRes.ok && !requestData.error;
-
-      if (emailOk && requestOk) {
+      if (emailRes.ok && !emailData.error) {
         setStatus({
           ok: true,
           msg: "Danke — Anfrage erfasst und E-Mail gesendet.",
@@ -61,26 +63,10 @@ const ContactForm = () => {
         setPhone("");
         setEmail("");
         setMessage("");
-      } else if (emailOk && !requestOk) {
-        setStatus({
-          ok: false,
-          msg: `E-Mail gesendet, aber Anfrage konnte nicht gespeichert werden: ${
-            requestData.error || "Unbekannter Fehler"
-          }`,
-        });
-      } else if (!emailOk && requestOk) {
-        setStatus({
-          ok: false,
-          msg: `Anfrage gespeichert, aber E-Mail fehlgeschlagen: ${
-            emailData.error || "Unbekannter Fehler"
-          }`,
-        });
       } else {
         setStatus({
           ok: false,
-          msg: `Fehler: E-Mail und Anfrage fehlgeschlagen. (${
-            emailData.error || "Email"
-          }; ${requestData.error || "Request"})`,
+          msg: `Anfrage gespeichert, aber E-Mail fehlgeschlagen: ${emailData.error || "Unbekannter Fehler"}`,
         });
       }
     } catch (err) {
@@ -95,67 +81,51 @@ const ContactForm = () => {
   }
 
   return (
-    <form onSubmit={handleSubmit} className='grid gap-4 w-full'>
-      <label className='flex flex-col'>
-        <span className='font-medium'>Name *</span>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className='border p-2 rounded'
-          placeholder='Dein Name'
-          required
-        />
-      </label>
-
-      <label className='flex flex-col'>
-        <span className='font-medium'>Telefonnummer</span>
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className='border p-2 rounded'
-          placeholder='+49 170 0000000'
-        />
-      </label>
-
-      <label className='flex flex-col'>
-        <span className='font-medium'>E‑Mail *</span>
-        <input
-          type='email'
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className='border p-2 rounded'
-          placeholder='name@beispiel.de'
-          required
-        />
-      </label>
-
-      <label className='flex flex-col'>
-        <span className='font-medium'>Nachricht *</span>
-        <textarea
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          className='border p-2 rounded h-32'
-          placeholder='Worum geht es?'
-          required
-        />
-      </label>
-
-      <div className='flex items-center gap-4'>
-        <button
-          type='submit'
-          disabled={loading}
-          className='bg-primary text-white px-4 py-2 rounded disabled:opacity-60'>
-          {loading ? "Senden…" : "Nachricht senden"}
-        </button>
-        {status && (
-          <div
-            className={`text-sm ${
-              status.ok ? "text-green-600" : "text-red-600"
-            }`}>
-            {status.msg}
-          </div>
-        )}
-      </div>
+    <form onSubmit={handleSubmit} className='flex flex-col gap-4 w-full'>
+      <input
+        type='text'
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder='Name'
+        required
+        className={inputClass}
+      />
+      <input
+        type='email'
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder='E-Mail'
+        required
+        autoComplete='email'
+        inputMode='email'
+        className={inputClass}
+      />
+      <input
+        type='tel'
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder='Telefonnummer'
+        className={inputClass}
+      />
+      <textarea
+        rows={3}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder='Ihre Nachricht '
+        className={`${inputClass} resize-none`}
+      />
+      <button
+        type='submit'
+        disabled={loading}
+        className='w-full font-sans bg-primary hover:bg-primary/90 text-white py-3 rounded text-sm font-semibold disabled:opacity-60'>
+        {loading ? "Senden…" : "Kostenloses Angebot anfordern!"}
+      </button>
+      {status && (
+        <p
+          className={`text-sm text-center ${status.ok ? "text-green-600" : "text-red-500"}`}>
+          {status.msg}
+        </p>
+      )}
     </form>
   );
 };

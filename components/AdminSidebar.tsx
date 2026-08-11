@@ -67,10 +67,10 @@ export function AdminSideBar({
     <Sidebar {...props} className='bg-slate-800 sticky left-0 top-0'>
       <SidebarHeader className='p-6'>
         <Image
-          src={"/images/Hausmeisterservice-weiss-logo-weiss.png"}
+          src={"/images/Umzugshelden.png"}
           alt='Logo'
-          height={64}
-          width={64}
+          height={256}
+          width={256}
           className='object-contain'
         />
       </SidebarHeader>

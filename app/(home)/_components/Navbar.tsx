@@ -7,6 +7,8 @@ const services = [
   { label: "Umzugsservice", href: "/umzugsservice" },
   { label: "Anstricharbeiten", href: "/anstricharbeiten" },
   { label: "Möbel Ab- & Aufbau", href: "/moebel-service" },
+  { label: "Seniorenumzug", href: "/senior-umzug" },
+  { label: "Entrümpelung", href: "/entruempelung" },
 ];
 
 const Navbar = () => {

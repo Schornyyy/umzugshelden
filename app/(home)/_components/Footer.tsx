@@ -14,7 +14,7 @@ const Footer = () => {
           </Link>
           <p className='font-body text-gray-300 text-sm leading-relaxed'>
             Ihr zuverlässiger Partner für stressfreie Umzüge. Schnell, gründlich
-            und günstig – im Kreis Olpe und einem 25 km Umkreis.
+            und günstig – im Kreis Olpe und einem 30 km Umkreis.
           </p>
         </div>
 
@@ -62,7 +62,17 @@ const Footer = () => {
               href='/moebel-service'
               className='hover:text-primary transition-colors'>
               Möbel Ab- & Aufbau
-            </Link>{" "}
+            </Link>
+            <Link
+              href='/senior-umzug'
+              className='hover:text-primary transition-colors'>
+              Seniorenumzug
+            </Link>
+            <Link
+              href='/entrümpelung'
+              className='hover:text-primary transition-colors'>
+              Entrümpelung
+            </Link>
           </nav>
         </div>
 

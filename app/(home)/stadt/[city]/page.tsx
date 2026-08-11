@@ -41,7 +41,7 @@ export default async function CityServicePage({
       name: "Anstricharbeiten",
       description:
         "Streichen, Tapezieren, Schönheitsreparaturen – perfekt für die Wohnungsübergabe.",
-      image: "/images/gebäude.png",
+      image: "/images/Umzugsunternhemen_olpe.png",
     },
     {
       slug: "moebel-service",

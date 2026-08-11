@@ -17,7 +17,7 @@ export default function RequestDetailClient({
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<null | { ok: boolean; text: string }>(
-    null
+    null,
   );
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewStatus, setReviewStatus] = useState<null | {
@@ -39,7 +39,7 @@ export default function RequestDetailClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           requestId: request.id,
-          ownerId: userid,
+          ownerId: process.env.NEXT_PUBLIC_OWNERID,
           titel,
           msg,
         }),
@@ -68,7 +68,10 @@ export default function RequestDetailClient({
       const res = await fetch("/api/requests/request-review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId: request.id, ownerId: userid }),
+        body: JSON.stringify({
+          requestId: request.id,
+          ownerId: process.env.NEXT_PUBLIC_OWNERID,
+        }),
       });
       const data = await res.json();
       if (res.ok && !data.error && data.request) {

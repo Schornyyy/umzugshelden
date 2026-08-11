@@ -9,7 +9,8 @@ export default async function RequestDetailPage({
   params: Promise<{ userid: string; id: string }>;
 }) {
   const { userid, id } = await params;
-  const request = await getRequestById(id, userid);
+  const ownerId = process.env.NEXT_PUBLIC_OWNERID;
+  const request = await getRequestById(id, ownerId ?? userid);
   if (!request) notFound();
 
   return (

@@ -3,6 +3,7 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { StarIcon } from "lucide-react";
+import ContactForm from "@/components/ContactForm";
 
 export async function generateMetadata() {
   return {
@@ -74,31 +75,7 @@ const Hero = () => {
               Wir rufen Sie innerhalb der nächsten 24 Stunden an und besprechen
               gemeinsam Ihren Umzug.
             </p>
-            <form className='flex flex-col gap-4'>
-              <input
-                type='text'
-                placeholder='Name'
-                className='font-body w-full px-4 py-3 rounded bg-white/90 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary text-sm'
-              />
-              <input
-                type='email'
-                placeholder='E-Mail'
-                className='font-body w-full px-4 py-3 rounded bg-white/90 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary text-sm'
-              />
-              <input
-                type='tel'
-                placeholder='Telefonnummer'
-                className='font-body w-full px-4 py-3 rounded bg-white/90 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary text-sm'
-              />
-              <textarea
-                rows={3}
-                placeholder='Ihre Nachricht (optional)'
-                className='font-body w-full px-4 py-3 rounded bg-white/90 text-gray-800 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary text-sm resize-none'
-              />
-              <Button className='w-full font-sans bg-primary hover:bg-primary/90 text-white py-3 rounded text-sm font-semibold'>
-                Kostenloses Angebot anfordern!
-              </Button>
-            </form>
+            <ContactForm dark />
           </div>
 
           {/* Right: Heading + CTA */}

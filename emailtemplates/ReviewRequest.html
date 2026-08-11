@@ -1,20 +1,20 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="de">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Ihre Bewertung</title>
+    <title>Ihre Bewertung — Umzugshelden</title>
     <style>
-      :root { --primary:#4693DD; }
       body { margin:0; background:#f4f6f8; font-family:Arial,Helvetica,sans-serif; }
       .layout { max-width:600px; margin:0 auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 12px rgba(16,24,40,0.05); }
-      .header { background:var(--primary); color:#fff; padding:24px 30px; }
-      h1 { margin:0; font-size:20px; }
-      .content { padding:28px 30px 8px 30px; color:#0f172a; font-size:15px; line-height:1.5; }
-      .btn { display:inline-block; margin:18px 0; background:var(--primary); color:#fff !important; text-decoration:none; padding:12px 18px; border-radius:6px; font-weight:600; font-size:14px; }
+      .header { background:#0D2650; color:#fff; padding:24px 30px; }
+      .header h1 { margin:0; font-size:20px; font-weight:700; }
+      .header p { margin:6px 0 0; font-size:13px; opacity:.95; }
+      .content { padding:28px 30px 8px 30px; color:#0f172a; font-size:15px; line-height:1.6; }
+      .btn { display:inline-block; margin:18px 0; background:#E87722; color:#fff !important; text-decoration:none; padding:12px 24px; border-radius:6px; font-weight:600; font-size:14px; }
       .small { font-size:12px; color:#64748b; margin-top:28px; }
       .footer { background:#fbfcfd; padding:18px 30px; font-size:12px; color:#475569; border-top:1px solid #edf2f7; }
-      a { color:var(--primary); }
+      a { color:#E87722; }
     </style>
   </head>
   <body>
@@ -22,23 +22,24 @@
       <tr><td align="center">
         <div class="layout">
           <div class="header">
-            <h1>Vielen Dank für Ihre Anfrage</h1>
-            <div style="margin-top:6px; font-size:13px; opacity:.95;">Ihre Bewertung hilft uns weiter</div>
+            <h1>Umzugshelden</h1>
+            <p>Vielen Dank fuer Ihren Auftrag</p>
           </div>
           <div class="content">
             <p>Hallo {{name}},</p>
-            <p>Wir hoffen, dass Ihre Erfahrung mit unserem Hausmeisterservice positiv war. Eine kurze Bewertung unterstützt uns sehr und hilft auch anderen, uns besser zu finden.</p>
-            <p>Klicken Sie einfach auf den folgenden Button und hinterlassen Sie uns Ihr Feedback:</p>
+            <p>wir hoffen, dass Ihr Umzug mit uns reibungslos verlaufen ist. Eine kurze Bewertung hilft uns, unseren Service weiter zu verbessern.</p>
+            <p>Klicken Sie einfach auf den Button und hinterlassen Sie uns Ihr Feedback:</p>
             <p style="text-align:center;">
-              <a class="btn" href="{{reviewLink}}" target="_blank" rel="noopener noreferrer">Jetzt bewerten</a>
+              <a class="btn" href="{{reviewLink}}" target="_blank" rel="noopener noreferrer">Jetzt bewerten &#9733;</a>
             </p>
-            <p>Vielen Dank für Ihre Zeit und Unterstützung!</p>
-            <p class="small">Falls der Button nicht funktioniert, öffnen Sie bitte diesen Link direkt:<br />
+            <p>Vielen Dank fuer Ihr Vertrauen!</p>
+            <p>Mit freundlichen Gruessen,<br />Ihr Umzugshelden-Team</p>
+            <p class="small">Falls der Button nicht funktioniert:<br />
             <a href="{{reviewLink}}" target="_blank" rel="noopener noreferrer">{{reviewLink}}</a></p>
           </div>
           <div class="footer">
-            Umzugshelden · Kontakt: info@umzugshelden.io<br />
-            Diese E‑Mail wurde automatisch versendet.
+            Umzugshelden &middot; Tel: <a href="tel:+4915168567708">+49 151 68567708</a> &middot; <a href="mailto:info@umzugshelden.io">info@umzugshelden.io</a><br />
+            <span style="color:#9aa4b2;">Diese E-Mail wurde automatisch versendet.</span>
           </div>
         </div>
       </td></tr>

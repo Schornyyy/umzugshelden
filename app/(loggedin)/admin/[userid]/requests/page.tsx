@@ -8,8 +8,10 @@ export default async function RequestsAdminPage({
   params: Promise<{ userid: string }>;
 }) {
   const { userid } = await params;
-  // Owner scoping: userid must match request ownerId, we fetch only those.
-  const requests = await listRequestsByOwner(userid);
+  const ownerId = process.env.NEXT_PUBLIC_OWNERID;
+  if (!ownerId)
+    return <p className='p-6 text-red-600'>Owner-ID nicht konfiguriert.</p>;
+  const requests = await listRequestsByOwner(ownerId);
   // Sort by createdAt DESC
   requests.sort((a, b) => b.createdAt - a.createdAt);
 
