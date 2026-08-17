@@ -323,35 +323,43 @@ const TipsSection = () => (
 /* ─── HERO ─── */
 const Hero = () => (
   <section
-    className='relative min-h-[500px] flex items-center'
+    className='relative min-h-[600px] flex items-center'
     style={{
       backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
       backgroundSize: "cover",
       backgroundPosition: "center",
     }}>
     <div className='absolute inset-0 bg-navy/85' />
-    <div className='relative z-10 container mx-auto px-4 py-24 flex flex-col items-center text-center gap-6'>
-      <h1 className='font-sans font-bold text-4xl md:text-6xl text-white leading-tight max-w-4xl'>
-        <span className='text-primary'>Möbel Ab- & Aufbau</span> Service –
-        schnell & sicher
-      </h1>
-      <p className='font-body text-gray-300 text-lg max-w-2xl'>
-        Von IKEA bis zur Einbauküche – wir demontieren und montieren Ihre Möbel
-        professionell, zuverlässig und ohne Kratzer.
-      </p>
-      <div className='flex flex-col sm:flex-row gap-4'>
-        <Link href='#kontakt'>
-          <Button className='font-sans bg-primary hover:bg-primary/90 text-white px-8 py-4 rounded font-semibold text-base'>
-            Kostenloses Angebot anfordern!
-          </Button>
-        </Link>
-        <Link href='#leistungen'>
-          <Button
-            variant='outline'
-            className='font-sans bg-transparent border-white text-white hover:bg-white/10 px-8 py-4 rounded font-semibold text-base'>
-            Leistungen ansehen
-          </Button>
-        </Link>
+    <div className='relative z-10 container mx-auto px-4 py-16'>
+      <div className='grid grid-cols-1 items-center gap-12 lg:grid-cols-2'>
+        <div className='border border-white/10 bg-[#0b1f3a] p-6 shadow-2xl rounded lg:p-8'>
+          <h2 className='mb-3 font-sans text-xl font-semibold text-white'>
+            Möbelmontage anfragen
+          </h2>
+          <p className='mb-5 font-body text-sm text-gray-300'>
+            Fotos Ihrer Möbel helfen uns, Aufwand und Termin schneller einzuschätzen.
+          </p>
+          <ContactForm dark />
+        </div>
+        <div className='flex flex-col gap-6 text-center lg:text-left'>
+          <h1 className='font-sans font-bold text-4xl md:text-6xl text-white leading-tight'>
+            <span className='text-primary'>Möbel Ab- & Aufbau</span> Service –
+            schnell & sicher
+          </h1>
+          <p className='font-body text-gray-300 text-lg'>
+            Von IKEA bis zur Einbauküche – wir demontieren und montieren Ihre Möbel
+            professionell, zuverlässig und ohne Kratzer.
+          </p>
+          <div>
+            <Link href='#leistungen'>
+              <Button
+                variant='outline'
+                className='font-sans bg-transparent border-white text-white hover:bg-white/10 px-8 py-4 rounded font-semibold text-base'>
+                Leistungen ansehen
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   </section>

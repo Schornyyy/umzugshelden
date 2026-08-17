@@ -6,6 +6,7 @@ export interface Request {
     createdAt: number,
     phone: string, 
     message: string,
+    imageUrls: string[],
     notices: RequestNotice[],
 }
 

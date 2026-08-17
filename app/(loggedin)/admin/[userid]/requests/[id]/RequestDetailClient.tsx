@@ -139,6 +139,27 @@ export default function RequestDetailClient({
               {request.message}
             </p>
           </div>
+          {request.imageUrls?.length > 0 && (
+            <div>
+              <span className='font-medium'>Bilder:</span>
+              <div className='mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3'>
+                {request.imageUrls.map((imageUrl, index) => (
+                  <a
+                    key={imageUrl}
+                    href={imageUrl}
+                    target='_blank'
+                    rel='noreferrer'
+                    className='overflow-hidden rounded border bg-muted focus:outline-none focus:ring-2 focus:ring-primary'>
+                    <img
+                      src={imageUrl}
+                      alt={`Bild ${index + 1} zur Anfrage von ${request.name}`}
+                      className='aspect-square w-full object-cover transition-transform hover:scale-105'
+                    />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -19,7 +19,13 @@ const REQUEST_COLLECTION = "requests_umzugshelden";
 // Create a new request scoped to an owner
 export async function createRequest(
 	ownerId: string,
-	data: { name: string; email: string; phone: string; message: string }
+	data: {
+		name: string;
+		email: string;
+		phone: string;
+		message: string;
+		imageUrls?: string[];
+	}
 ): Promise<Request> {
 	const colRef = collection(database, REQUEST_COLLECTION);
 
@@ -30,6 +36,7 @@ export async function createRequest(
 		email: data.email,
 		phone: data.phone,
 		message: data.message,
+		imageUrls: data.imageUrls ?? [],
 		createdAt: Date.now(),
 		notices: [],
 	};
@@ -66,7 +73,7 @@ export async function listRequestsByOwner(ownerId: string): Promise<Request[]> {
 export async function updateRequest(
 	requestId: string,
 	ownerId: string,
-	patch: Partial<Pick<Request, "name" | "email" | "phone" | "message" | "notices">>
+	patch: Partial<Pick<Request, "name" | "email" | "phone" | "message" | "imageUrls" | "notices">>
 ): Promise<Request | null> {
 	const existing = await getRequestById(requestId, ownerId);
 	if (!existing) return null; // not found or owner mismatch
@@ -77,6 +84,7 @@ export async function updateRequest(
 		email: patch.email ?? existing.email,
 		phone: patch.phone ?? existing.phone,
 		message: patch.message ?? existing.message,
+		imageUrls: patch.imageUrls ?? existing.imageUrls ?? [],
 		notices: patch.notices ?? existing.notices,
 	};
 

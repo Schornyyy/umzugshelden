@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import Image from "next/image";
 import ContactForm from "@/components/ContactForm";
+import FAQBlock from "@/components/utils/FAQBlock";
+import { FAQType } from "@/types/utils/FAQType";
 import { CheckIcon, MailIcon, PhoneIcon } from "lucide-react";
 
 function isAllowedCity(cityName: string): boolean {
@@ -28,6 +30,25 @@ export default async function CityServicePage({
 
   if (!isAllowedCity(cityName)) redirect("/");
 
+  const cityFaqs: FAQType[] = [
+    {
+      question: `Welche Leistungen bieten Sie in ${cityName} an?`,
+      answer: `In ${cityName} übernehmen wir Umzüge, Seniorenumzüge, Entrümpelungen, Anstricharbeiten sowie Möbel Ab- und Aufbau. Welche Leistungen sinnvoll sind, klären wir vorab kostenlos mit Ihnen.`,
+    },
+    {
+      question: `Was kostet ein Umzugsservice in ${cityName}?`,
+      answer: `Der Preis hängt vom Umfang, den Zugangswegen, der Entfernung und den gewünschten Zusatzleistungen ab. Nach einer Beratung oder Besichtigung erhalten Sie ein transparentes Festpreisangebot.`,
+    },
+    {
+      question: `Können Sie auch kurzfristig nach ${cityName} kommen?`,
+      answer: `Wir versuchen auch bei kurzfristigen Anfragen einen passenden Termin zu ermöglichen. Teilen Sie uns Ihren Wunschtermin und den Umfang mit, damit wir schnell prüfen können, was möglich ist.`,
+    },
+    {
+      question: `Muss ich für das Angebot schon alles genau wissen?`,
+      answer: `Nein. Für eine erste Einschätzung reichen die wichtigsten Angaben zu Leistung, Termin und Adresse. Fotos und zusätzliche Hinweise im Formular helfen uns, das Angebot noch genauer vorzubereiten.`,
+    },
+  ];
+
   const services = [
     {
       slug: "umzugsservice",
@@ -41,14 +62,28 @@ export default async function CityServicePage({
       name: "Anstricharbeiten",
       description:
         "Streichen, Tapezieren, Schönheitsreparaturen – perfekt für die Wohnungsübergabe.",
-      image: "/images/Umzugsunternhemen_olpe.png",
+      image: "/images/anstricharbeiten.webp",
     },
     {
       slug: "moebel-service",
       name: "Möbel Ab- & Aufbau",
       description:
         "IKEA, Einbauküche, Schrankwände – wir montieren und demontieren schnell und sorgfältig.",
-      image: "/images/glasreinigung.png",
+      image: "/images/möbel aufbau service.webp",
+    },
+    {
+      slug: "senior-umzug",
+      name: "Seniorenumzug",
+      description:
+        "Einfühlsame Umzugshilfe mit Zeit, Sorgfalt und persönlicher Begleitung für Senioren und Angehörige.",
+      image: "/images/senioren_umzüge.webp",
+    },
+    {
+      slug: "entruempelung",
+      name: "Entrümpelung",
+      description:
+        "Wohnungen, Häuser, Keller und Gewerberäume fachgerecht räumen, verwerten und besenrein übergeben.",
+      image: "/images/entrümpelung.webp",
     },
   ];
 
@@ -88,13 +123,54 @@ export default async function CityServicePage({
         </div>
       </section>
 
+      <section className='bg-white py-20'>
+        <div className='container mx-auto px-4'>
+          <div className='grid grid-cols-1 items-start gap-12 lg:grid-cols-2'>
+            <div className='flex flex-col gap-5'>
+              <h2 className='font-sans text-3xl font-bold leading-tight text-navy md:text-4xl'>
+                Ihr Umzugs- und Renovierungsservice in {cityName}
+              </h2>
+              <p className='font-body leading-relaxed text-gray-600'>
+                Ob Wohnungswechsel, Haushaltsauflösung oder die Renovierung vor
+                einer Übergabe: In {cityName} erhalten Sie bei Umzugshelden eine
+                persönliche Planung und ein Team, das die Arbeit zuverlässig
+                erledigt. Wir stimmen den Umfang mit Ihnen ab, berücksichtigen
+                Zugangswege und Termine und machen den Ablauf für Sie planbar.
+              </p>
+              <p className='font-body leading-relaxed text-gray-600'>
+                Sie entscheiden, wie viel Unterstützung Sie benötigen. Vom
+                einzelnen Möbelaufbau bis zum Komplettumzug mit Verpackung,
+                Transport und Aufbau kombinieren wir die passenden Leistungen zu
+                einem klaren Angebot.
+              </p>
+            </div>
+            <div className='border border-primary/20 bg-primary/10 p-6 rounded'>
+              <h3 className='font-sans text-xl font-semibold text-navy'>
+                Kostenlos planen, transparent entscheiden
+              </h3>
+              <p className='mt-3 font-body text-sm leading-relaxed text-gray-600'>
+                Nach Ihrer Anfrage sprechen wir kurz über Ihren Bedarf in
+                {" "}{cityName}. Bei umfangreicheren Aufträgen besichtigen wir
+                die Situation vor Ort, damit im Angebot alle Leistungen,
+                Materialien und Entsorgungskosten nachvollziehbar enthalten sind.
+              </p>
+              <Link href='#kontakt' className='mt-5 inline-block'>
+                <Button className='font-sans bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary/90 rounded'>
+                  Angebot anfordern
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Services */}
       <section className='py-20 bg-white' id='services'>
         <div className='container mx-auto px-4'>
           <h2 className='font-sans font-bold text-3xl md:text-4xl text-navy mb-12'>
             Unsere Leistungen in {cityName}
           </h2>
-          <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8'>
             {services.map((s) => (
               <div
                 key={s.slug}
@@ -122,6 +198,90 @@ export default async function CityServicePage({
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section className='bg-gray-50 py-20'>
+        <div className='container mx-auto px-4'>
+          <div className='mx-auto max-w-3xl text-center'>
+            <h2 className='font-sans text-3xl font-bold text-navy md:text-4xl'>
+              So erhalten Sie Ihr Angebot in {cityName}
+            </h2>
+            <p className='mt-3 font-body text-gray-600'>
+              Ein klarer Ablauf sorgt dafür, dass Aufwand, Termin und Preis von
+              Anfang an zusammenpassen.
+            </p>
+          </div>
+          <ol className='mx-auto mt-10 grid max-w-5xl grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4'>
+            {[
+              {
+                title: "Anfrage senden",
+                text: "Wählen Sie die gewünschte Leistung, Ihren Wunschtermin und geben Sie die wichtigsten Informationen an.",
+              },
+              {
+                title: "Bedarf abstimmen",
+                text: "Wir melden uns zeitnah und klären Umfang, Zugänge, Adressen und mögliche Zusatzleistungen.",
+              },
+              {
+                title: "Festpreis erhalten",
+                text: "Sie erhalten ein transparentes Angebot mit den vereinbarten Leistungen und nachvollziehbaren Kosten.",
+              },
+              {
+                title: "Termin umsetzen",
+                text: "Unser Team kommt vorbereitet nach {cityName} und führt den Auftrag zum abgestimmten Termin durch.",
+              },
+            ].map((step, index) => (
+              <li key={step.title} className='border border-gray-100 bg-white p-6 shadow-sm rounded'>
+                <span className='font-sans text-3xl font-bold text-primary'>
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <h3 className='mt-3 font-sans text-lg font-semibold text-navy'>
+                  {step.title}
+                </h3>
+                <p className='mt-2 font-body text-sm leading-relaxed text-gray-600'>
+                  {step.text}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className='bg-white py-16'>
+        <div className='container mx-auto px-4'>
+          <div className='grid grid-cols-1 gap-12 lg:grid-cols-2'>
+            <div>
+              <h2 className='font-sans text-3xl font-bold text-navy'>
+                Im Einsatz in {cityName} und Umgebung
+              </h2>
+              <p className='mt-4 font-body leading-relaxed text-gray-600'>
+                Als regionales Team im Kreis Olpe planen wir Einsätze in
+                {" "}{cityName} flexibel und berücksichtigen die konkrete
+                Situation vor Ort. Ob enge Treppenhäuser, fehlende Aufzüge,
+                begrenzte Parkmöglichkeiten oder ein fester Übergabetermin: Je
+                mehr wir vorab wissen, desto präziser können wir den Auftrag
+                vorbereiten.
+              </p>
+              <p className='mt-4 font-body leading-relaxed text-gray-600'>
+                Auch Anfragen aus dem nahen Umkreis prüfen wir gern. Fotos,
+                Adressen und Hinweise zu besonderen Gegenständen können direkt
+                über das Formular übermittelt werden.
+              </p>
+            </div>
+            <div className='flex flex-col gap-4'>
+              {[
+                "Termin, Adresse und gewünschten Leistungsumfang nennen",
+                "Stockwerke, Aufzug und Parksituation vorab mitteilen",
+                "Fotos bei Möbelmontage, Entrümpelung oder Schäden hochladen",
+                "Zusatzleistungen wie Verpackung, Entsorgung oder Anstrich direkt angeben",
+              ].map((tip) => (
+                <div key={tip} className='flex gap-3 border border-gray-100 bg-gray-50 p-4 rounded'>
+                  <CheckIcon className='mt-0.5 shrink-0 text-primary' size={20} />
+                  <p className='font-body text-sm leading-relaxed text-gray-700'>{tip}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -173,6 +333,11 @@ export default async function CityServicePage({
           </div>
         </div>
       </section>
+
+      <FAQBlock
+        faqs={cityFaqs}
+        title={`Häufige Fragen zu Umzugshelden in ${cityName}`}
+      />
 
       {/* Contact */}
       <section className='py-16 bg-white' id='kontakt'>
