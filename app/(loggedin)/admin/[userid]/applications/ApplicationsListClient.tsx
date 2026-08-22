@@ -46,31 +46,31 @@ export default function ApplicationsListClient({
   }
 
   return (
-    <div className='flex flex-col gap-6'>
+    <div className='flex flex-col gap-4 md:gap-6'>
       {current.length === 0 ? (
-        <div className='border rounded-md p-10 text-center text-muted-foreground'>
+        <div className='rounded-md border border-slate-200 bg-white p-10 text-center text-muted-foreground shadow-sm'>
           Keine Bewerbungen vorhanden.
         </div>
       ) : (
-        <ul className='grid gap-4 md:grid-cols-2 lg:grid-cols-3'>
+        <ul className='grid gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-3'>
           {current.map((app) => (
             <li
               key={app.id}
-              className='border rounded-md p-4 bg-card/50 hover:bg-card transition-colors'>
+              className='rounded-md border border-slate-200 bg-white shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50/30'>
               <Link
                 href={`/admin/${userid}/applications/${app.id}`}
-                className='flex flex-col gap-2'>
+                className='flex min-h-32 flex-col gap-3 p-4'>
                 <div className='flex items-center justify-between'>
                   <span className='text-xs font-mono text-muted-foreground'>
                     {new Date(app.createdAt).toLocaleDateString("de-DE")}
                   </span>
                   <span
-                    className={`text-xs px-2 py-1 rounded bg-muted font-semibold`}>
+                    className='rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700'>
                     {statusLabel(app.status)}
                   </span>
                 </div>
-                <h3 className='font-semibold text-sm'>{app.name}</h3>
-                <p className='text-xs text-muted-foreground line-clamp-2'>
+                <h3 className='text-base font-semibold'>{app.name}</h3>
+                <p className='mt-auto text-sm text-muted-foreground line-clamp-2'>
                   {app.jobTitel || "(ohne Stellenbezug)"}
                 </p>
               </Link>
@@ -80,21 +80,21 @@ export default function ApplicationsListClient({
       )}
       {/* Pagination Controls */}
       {initialApplications.length > PAGE_SIZE && (
-        <div className='flex items-center justify-between mt-2'>
+        <div className='mt-2 flex items-center justify-between rounded-md border border-slate-200 bg-white p-3 shadow-sm'>
           <div className='text-xs text-muted-foreground'>
             Seite {page} / {totalPages}
           </div>
           <div className='flex gap-2'>
             <Button
               variant='outline'
-              size='sm'
+              className='h-10'
               onClick={prevPage}
               disabled={page === 1}>
               Zurück
             </Button>
             <Button
               variant='outline'
-              size='sm'
+              className='h-10'
               onClick={nextPage}
               disabled={page === totalPages}>
               Weiter
