@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
+import ServiceSchema from "@/components/ServiceSchema";
 import { FAQType } from "@/types/utils/FAQType";
 import {
   CheckIcon,
@@ -165,20 +166,28 @@ const steps = [
 
 const page = () => {
   return (
-    <div className='flex flex-col'>
-      <Hero />
-      <IntroSection />
-      <ServicesSection />
-      <IncludedSection />
-      <ProcessSection />
-      <TipsSection />
-      <WhySection />
-      <FAQBlock
-        faqs={faqs}
-        title='Häufige Fragen zum Möbel Ab- und Aufbauservice'
+    <>
+      <ServiceSchema
+        name='Möbel Ab- und Aufbauservice im Kreis Olpe'
+        serviceType='Möbelmontage und Möbeldemontage'
+        description='Professioneller Möbel Ab- und Aufbauservice im Kreis Olpe für IKEA-Möbel, Küchen, Schrankwände und Büromöbel.'
+        path='/moebel-service'
       />
-      <ContactSection />
-    </div>
+      <div className='flex flex-col'>
+        <Hero />
+        <IntroSection />
+        <ServicesSection />
+        <IncludedSection />
+        <ProcessSection />
+        <TipsSection />
+        <WhySection />
+        <FAQBlock
+          faqs={faqs}
+          title='Häufige Fragen zum Möbel Ab- und Aufbauservice'
+        />
+        <ContactSection />
+      </div>
+    </>
   );
 };
 

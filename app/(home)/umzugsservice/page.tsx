@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
+import ServiceSchema from "@/components/ServiceSchema";
 import { FAQType } from "@/types/utils/FAQType";
 import {
   CheckIcon,
@@ -184,16 +185,24 @@ const included = [
 
 const page = () => {
   return (
-    <div className='flex flex-col'>
-      <Hero />
-      <IntroSection />
-      <ServicesSection />
-      <ProcessSection />
-      <IncludedSection />
-      <WhySection />
-      <FAQBlock faqs={faqs} title='Häufige Fragen zum Umzugsservice' />
-      <ContactSection />
-    </div>
+    <>
+      <ServiceSchema
+        name='Umzugsservice im Kreis Olpe'
+        serviceType='Umzugsservice'
+        description='Professioneller Umzugsservice im Kreis Olpe und 30 km Umkreis: Wohnungsumzug, Firmenumzug, Verpackung, Transport und Möbelmontage zum Festpreis.'
+        path='/umzugsservice'
+      />
+      <div className='flex flex-col'>
+        <Hero />
+        <IntroSection />
+        <ServicesSection />
+        <ProcessSection />
+        <IncludedSection />
+        <WhySection />
+        <FAQBlock faqs={faqs} title='Häufige Fragen zum Umzugsservice' />
+        <ContactSection />
+      </div>
+    </>
   );
 };
 

@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
+import ServiceSchema from "@/components/ServiceSchema";
 import { FAQType } from "@/types/utils/FAQType";
 import {
   CheckIcon,
@@ -181,45 +182,13 @@ const whys = [
 ];
 
 const page = () => {
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    name: "Umzugshelden",
-    url: "https://umzugshelden.de",
-    telephone: "+4915168567708",
-    email: "info@umzugshelden.io",
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: "Olpe",
-      addressRegion: "Nordrhein-Westfalen",
-      addressCountry: "DE",
-    },
-    areaServed: [
-      "Olpe", "Attendorn", "Lennestadt", "Finnentrop",
-      "Kirchhundem", "Drolshagen", "Wenden", "Plettenberg", "Schmallenberg",
-    ],
-    hasOfferCatalog: {
-      "@type": "OfferCatalog",
-      name: "Entrümpelung",
-      itemListElement: [
-        {
-          "@type": "Offer",
-          itemOffered: {
-            "@type": "Service",
-            name: "Entrümpelung Olpe",
-            description:
-              "Professionelle Entrümpelung und Haushaltsauflösung im Kreis Olpe und 30 km Umkreis – fair, schnell und besenrein.",
-          },
-        },
-      ],
-    },
-  };
-
   return (
     <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
+      <ServiceSchema
+        name='Entrümpelung im Kreis Olpe'
+        serviceType='Entrümpelung und Haushaltsauflösung'
+        description='Professionelle Entrümpelung und Haushaltsauflösung im Kreis Olpe mit Wertanrechnung, Entsorgung und besenreiner Übergabe.'
+        path='/entruempelung'
       />
       <div className="flex flex-col">
         <Hero />

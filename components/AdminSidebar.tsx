@@ -48,6 +48,10 @@ const data = {
           title: "Bewerbungen",
           url: "/applications",
         },
+        {
+          title: "Kalkulator",
+          url: "/offer",
+        },
       ],
     },
   ],

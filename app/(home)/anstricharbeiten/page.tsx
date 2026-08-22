@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
+import ServiceSchema from "@/components/ServiceSchema";
 import { FAQType } from "@/types/utils/FAQType";
 import {
   CheckIcon,
@@ -164,20 +165,28 @@ const steps = [
 
 const page = () => {
   return (
-    <div className='flex flex-col'>
-      <Hero />
-      <IntroSection />
-      <SchoenheitsInfoSection />
-      <ServicesSection />
-      <IncludedSection />
-      <ProcessSection />
-      <WhySection />
-      <FAQBlock
-        faqs={faqs}
-        title='Häufige Fragen zu Anstricharbeiten & Wohnungsübergabe'
+    <>
+      <ServiceSchema
+        name='Anstricharbeiten im Kreis Olpe'
+        serviceType='Anstricharbeiten und Schönheitsreparaturen'
+        description='Professionelle Anstricharbeiten, Tapezieren und Schönheitsreparaturen für die Wohnungsübergabe im Kreis Olpe.'
+        path='/anstricharbeiten'
       />
-      <ContactSection />
-    </div>
+      <div className='flex flex-col'>
+        <Hero />
+        <IntroSection />
+        <SchoenheitsInfoSection />
+        <ServicesSection />
+        <IncludedSection />
+        <ProcessSection />
+        <WhySection />
+        <FAQBlock
+          faqs={faqs}
+          title='Häufige Fragen zu Anstricharbeiten & Wohnungsübergabe'
+        />
+        <ContactSection />
+      </div>
+    </>
   );
 };
 

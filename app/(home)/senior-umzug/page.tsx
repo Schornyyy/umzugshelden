@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
+import ServiceSchema from "@/components/ServiceSchema";
 import { FAQType } from "@/types/utils/FAQType";
 import {
   CheckIcon,
@@ -165,55 +166,13 @@ const steps = [
 ];
 
 const page = () => {
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    name: "Umzugshelden",
-    url: "https://umzugshelden.de",
-    telephone: "+4915168567708",
-    email: "info@umzugshelden.io",
-    address: {
-      "@type": "PostalAddress",
-      addressLocality: "Olpe",
-      addressRegion: "Nordrhein-Westfalen",
-      addressCountry: "DE",
-    },
-    areaServed: [
-      "Olpe",
-      "Attendorn",
-      "Lennestadt",
-      "Finnentrop",
-      "Kirchhundem",
-      "Drolshagen",
-      "Wenden",
-      "Plettenberg",
-      "Schmallenberg",
-      "Kreuztal",
-    ],
-    hasOfferCatalog: {
-      "@type": "OfferCatalog",
-      name: "Seniorenumzug",
-      itemListElement: [
-        {
-          "@type": "Offer",
-          itemOffered: {
-            "@type": "Service",
-            name: "Seniorenumzug Olpe",
-            description:
-              "Professioneller und einfühlsamer Umzugsservice für Senioren im Kreis Olpe und 30 km Umkreis.",
-          },
-        },
-      ],
-    },
-  };
-
   return (
     <>
-      <script
-        type='application/ld+json'
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(localBusinessSchema),
-        }}
+      <ServiceSchema
+        name='Seniorenumzug im Kreis Olpe'
+        serviceType='Seniorenumzug'
+        description='Einfühlsamer Seniorenumzug im Kreis Olpe mit Verpackung, Transport, Möbelmontage und persönlicher Begleitung.'
+        path='/senior-umzug'
       />
       <div className='flex flex-col'>
         <Hero />

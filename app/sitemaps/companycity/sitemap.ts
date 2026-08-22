@@ -1,22 +1,40 @@
 
 
-import { cities } from "@/statics/Lists";
+import { cities, getServices } from "@/statics/Lists";
+import { slugify } from "@/utils/slugify";
 import type { MetadataRoute } from "next";
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
+const BASE_URL = "https://umzugshelden.io";
 
+function createEntry(path: string, priority: number): MetadataRoute.Sitemap[number] {
+  const url = `${BASE_URL}${path}`;
 
-  const companyCities = cities.map((city) => ({
-    url: `https://umzugshelden.io/stadt/${city}`,
+  return {
+    url,
     lastModified: new Date(),
-    priority: 0.8,
+    changeFrequency: "monthly",
+    priority,
     alternates: {
       languages: {
-        de: `https://umzugshelden.io/stadt/${city}`,
+        de: url,
       },
     },
-  }))
+  };
+}
 
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const services = getServices();
+  const companyCities = cities.map((city) => {
+    const cityPath = `/stadt/${slugify(city)}`;
+    return createEntry(cityPath, 0.8);
+  });
+  const companyCityServices = cities.flatMap((city) => {
+    const cityPath = `/stadt/${slugify(city)}`;
 
-  return [...companyCities]
+    return services.map((service) =>
+      createEntry(`${cityPath}/${service}`, 0.7),
+    );
+  });
+
+  return [...companyCities, ...companyCityServices];
 }

@@ -3,7 +3,9 @@ export function getServices(): string[] {
   return [
     "umzugsservice",
     "anstricharbeiten",
-    "moebel-service"
+    "moebel-service",
+    "senior-umzug",
+    "entruempelung",
   ];
 }
 

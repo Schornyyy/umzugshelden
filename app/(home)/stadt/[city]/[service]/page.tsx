@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
+import ServiceSchema from "@/components/ServiceSchema";
 import { FAQType } from "@/types/utils/FAQType";
 import { CheckIcon, MailIcon, PhoneIcon } from "lucide-react";
 
@@ -355,9 +356,18 @@ export default async function ServicePage({
     redirect(`/stadt/${encodeURIComponent(slugRaw)}`);
 
   const config = serviceConfig[serviceKey];
+  const path = `/stadt/${encodeURIComponent(slugify(cityName))}/${serviceKey}`;
 
   return (
-    <div className='flex flex-col'>
+    <>
+      <ServiceSchema
+        name={`${config.name} in ${cityName}`}
+        serviceType={config.name}
+        description={withCity(config.description, cityName)}
+        path={path}
+        city={cityName}
+      />
+      <div className='flex flex-col'>
       {/* Hero */}
       <section
         className='relative min-h-[600px] flex items-center'
@@ -566,7 +576,8 @@ export default async function ServicePage({
           </div>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 }
 
