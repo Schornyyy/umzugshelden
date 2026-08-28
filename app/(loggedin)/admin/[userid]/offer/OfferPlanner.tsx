@@ -1,9 +1,19 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import MediathekDialog from "@/components/utils/MediathekDialog";
 import { database } from "@/config/firebase";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
+import type { CrmCustomer } from "@/types/Crm";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -28,11 +38,34 @@ import {
   Warehouse,
   Wrench,
 } from "lucide-react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import ServiceConfigurator from "./ServiceConfigurator";
 
 type PlanningStep = "order" | "site" | "inventory" | "price" | "finish";
 
-type ServiceKey =
+type OfferTab = "conditions" | "calculation";
+
+type CostEstimatePrintOptions = {
+  contactDetails: boolean;
+  siteDetails: boolean;
+  calculationDetails: boolean;
+  packingList: boolean;
+  notes: boolean;
+  photos: boolean;
+};
+
+const defaultCostEstimatePrintOptions: CostEstimatePrintOptions = {
+  contactDetails: true,
+  siteDetails: true,
+  calculationDetails: true,
+  packingList: true,
+  notes: true,
+  photos: false,
+};
+
+export type ServiceKey =
   | "move"
   | "seniorMove"
   | "clearance"
@@ -41,7 +74,7 @@ type ServiceKey =
   | "packing"
   | "storage";
 
-type MoveComplexity = "easy" | "standard" | "difficult";
+export type MoveComplexity = "easy" | "standard" | "difficult";
 
 type Rates = {
   employeeHourlyRate: number;
@@ -86,7 +119,7 @@ type VehicleSelection = {
   quantity: number;
 };
 
-type PlanningDetails = {
+export type PlanningDetails = {
   serviceTypes: ServiceKey[];
   date: string;
   contactName: string;
@@ -109,17 +142,23 @@ type PlanningDetails = {
   dismantlingHours: number;
   specialItemCount: number;
   moveBufferHours: number;
+  careHours: number;
   furnitureLiftRequired: boolean;
   parkingRequired: boolean;
   packingRequired: boolean;
   paintAreaM2: number;
+  ceilingAreaM2: number;
   paintCoats: number;
   repairAreaM2: number;
   furniturePieces: number;
   movingBoxes: number;
+  unpackingBoxes: number;
+  fragileItemCount: number;
   storageVolumeM3: number;
   storageMonths: number;
   disposalVolumeM3: number;
+  clearanceHeavyItems: number;
+  clearanceCredit: number;
   vehicleSelections: VehicleSelection[];
   notes: string;
   rooms: Room[];
@@ -128,6 +167,7 @@ type PlanningDetails = {
 };
 
 type Calculation = {
+  customerId?: string;
   title: string;
   customer: string;
   employees: number;
@@ -146,6 +186,7 @@ type Calculation = {
 type SavedCalculation = Calculation & {
   id: string;
   createdAt: number;
+  grossTotal?: number;
   rates: Rates;
 };
 
@@ -156,6 +197,7 @@ type CalculatorData = {
 };
 
 const storageCollection = "offer_calculators_umzugshelden";
+const crmCollection = "crm_customers_umzugshelden";
 
 const serviceOptions: Array<{
   id: ServiceKey;
@@ -173,7 +215,7 @@ const serviceOptions: Array<{
 ];
 
 const vehicleOptions = [
-  { id: "transporter", name: "Transporter", capacityM3: 12, dailyRate: 79 },
+  { id: "transporter", name: "Sprinter", capacityM3: 12, dailyRate: 120 },
   { id: "truck-3-5t", name: "3,5-t Koffer", capacityM3: 20, dailyRate: 95 },
   { id: "truck-7-5t", name: "7,5-t LKW", capacityM3: 35, dailyRate: 165 },
   { id: "truck-12t", name: "12-t LKW", capacityM3: 50, dailyRate: 235 },
@@ -257,17 +299,23 @@ function createPlanning(): PlanningDetails {
     dismantlingHours: 0,
     specialItemCount: 0,
     moveBufferHours: 0,
+    careHours: 0,
     furnitureLiftRequired: false,
     parkingRequired: false,
     packingRequired: false,
     paintAreaM2: 0,
+    ceilingAreaM2: 0,
     paintCoats: 2,
     repairAreaM2: 0,
     furniturePieces: 0,
     movingBoxes: 0,
+    unpackingBoxes: 0,
+    fragileItemCount: 0,
     storageVolumeM3: 0,
     storageMonths: 1,
     disposalVolumeM3: 0,
+    clearanceHeavyItems: 0,
+    clearanceCredit: 0,
     vehicleSelections: [],
     notes: "",
     rooms: [
@@ -331,6 +379,26 @@ function normalizeCalculation(calculation?: Partial<Calculation>): Calculation {
     ...calculation,
     planning: normalizePlanning(calculation?.planning),
   };
+}
+
+function sanitizeFirestoreValue<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) =>
+      item === undefined ? [] : [sanitizeFirestoreValue(item)]
+    ) as T;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).flatMap(([key, nestedValue]) =>
+        nestedValue === undefined
+          ? []
+          : [[key, sanitizeFirestoreValue(nestedValue)]]
+      )
+    ) as T;
+  }
+
+  return value;
 }
 
 function formatCurrency(value: number) {
@@ -459,6 +527,7 @@ function calculateServiceRecommendation(
         planning.dismantlingHours +
         planning.specialItemCount * 0.75 +
         planning.moveBufferHours +
+        planning.careHours +
         (moveTrips - 1) * 1.5
     );
     labourHours += moveLabourHours;
@@ -486,17 +555,29 @@ function calculateServiceRecommendation(
 
   if (selectedServices.has("clearance")) {
     const clearanceVolume = planning.disposalVolumeM3 || volume;
-    labourHours += Math.max(3, clearanceVolume * 0.45 * accessFactor);
+    labourHours += Math.max(
+      3,
+      clearanceVolume * 0.45 * accessFactor + planning.clearanceHeavyItems * 0.75
+    );
     employees = Math.max(employees, clearanceVolume > 20 ? 3 : 2);
     requiredVehicleVolume = Math.max(requiredVehicleVolume, clearanceVolume);
-    disposalCost += clearanceVolume * rates.disposalRatePerM3;
+    disposalCost += Math.max(
+      0,
+      clearanceVolume * rates.disposalRatePerM3 - planning.clearanceCredit
+    );
+    logisticsCost += planning.parkingRequired ? rates.parkingPermitRate : 0;
     explanations.push(
       `${clearanceVolume.toFixed(1)} m3 Entsorgungsvolumen`
     );
+    if (planning.clearanceCredit > 0) {
+      explanations.push(`${formatCurrency(planning.clearanceCredit)} Wertanrechnung`);
+    }
   }
 
   if (selectedServices.has("painting")) {
-    const paintArea = planning.paintAreaM2 * Math.max(1, planning.paintCoats);
+    const paintArea =
+      (planning.paintAreaM2 + planning.ceilingAreaM2) *
+      Math.max(1, planning.paintCoats);
     labourHours +=
       paintArea * rates.paintLaborHoursPerM2 + planning.repairAreaM2 * 0.35;
     employees = Math.max(employees, paintArea > 100 ? 2 : 1);
@@ -507,15 +588,26 @@ function calculateServiceRecommendation(
   }
 
   if (selectedServices.has("furnitureAssembly")) {
+    const assemblyFactor =
+      planning.moveComplexity === "easy"
+        ? 0.85
+        : planning.moveComplexity === "difficult"
+          ? 1.35
+          : 1;
     labourHours +=
-      (planning.furniturePieces * rates.furnitureAssemblyMinutesPerPiece) / 60;
+      (planning.furniturePieces * rates.furnitureAssemblyMinutesPerPiece * assemblyFactor) /
+        60 +
+      planning.dismantlingHours;
     employees = Math.max(employees, planning.furniturePieces > 8 ? 2 : 1);
     explanations.push(`${planning.furniturePieces} Moebelteile zur Montage`);
   }
 
   if (selectedServices.has("packing")) {
     boxes = planning.movingBoxes || Math.ceil(volume * 10);
-    labourHours += (boxes * rates.packingMinutesPerBox) / 60;
+    labourHours +=
+      ((boxes + planning.unpackingBoxes) * rates.packingMinutesPerBox +
+        planning.fragileItemCount * 5) /
+      60;
     materialCost += boxes * rates.packingBoxRate;
     employees = Math.max(employees, boxes > 40 ? 2 : 1);
     explanations.push(`${boxes} Kartons fuer den Einpackservice`);
@@ -523,7 +615,10 @@ function calculateServiceRecommendation(
 
   if (selectedServices.has("storage")) {
     const storageVolume = planning.storageVolumeM3 || volume;
-    labourHours += Math.max(1, storageVolume * 0.15);
+    labourHours += Math.max(
+      1,
+      storageVolume * 0.15 * accessFactor + (Math.max(1, planning.moveTrips) - 1)
+    );
     requiredVehicleVolume = Math.max(requiredVehicleVolume, storageVolume);
     storageCost +=
       storageVolume *
@@ -681,6 +776,165 @@ function SectionHeading({
   );
 }
 
+type CalculationRow = {
+  label: string;
+  formula: string;
+  value: number;
+};
+
+function getCalculationRows(
+  calculation: Calculation,
+  rates: Rates
+): CalculationRow[] {
+  const pricing = calculatePricing(calculation, rates);
+  const volume = calculateVolume(calculation.planning.rooms);
+  const selectedServices = new Set(calculation.planning.serviceTypes);
+  const materialFormula = calculation.autoEstimate
+    ? [
+        ...(selectedServices.has("painting")
+          ? [`(${calculation.planning.paintAreaM2} m² Wand + ${calculation.planning.ceilingAreaM2} m² Decke) × ${calculation.planning.paintCoats} Anstrich(e) × ${formatCurrency(rates.paintMaterialPerM2)} + ${calculation.planning.repairAreaM2} m² Ausbesserung × ${formatCurrency(2)}`]
+          : []),
+        ...(selectedServices.has("packing")
+          ? [`${calculation.planning.movingBoxes || Math.ceil(volume * 10)} Kartons × ${formatCurrency(rates.packingBoxRate)}`]
+          : []),
+      ].join(" + ")
+    : "Manuell festgelegter Betrag";
+  const clearanceVolume = calculation.planning.disposalVolumeM3 || volume;
+  const storageVolume = calculation.planning.storageVolumeM3 || volume;
+  const logisticsFormula = calculation.autoEstimate
+    ? [
+        ...(calculation.planning.furnitureLiftRequired
+          ? [`${Math.ceil(Math.max(1, calculation.planning.moveTrips) / 2)} Tag(e) Möbellift × ${formatCurrency(rates.furnitureLiftDailyRate)}`]
+          : []),
+        ...(calculation.planning.parkingRequired
+          ? [`Halteverbotszone ${formatCurrency(rates.parkingPermitRate)}`]
+          : []),
+      ].join(" + ")
+    : "Manuell festgelegter Betrag";
+
+  return [
+    {
+      label: "Personal",
+      formula: `${calculation.employees} Mitarbeiter × ${calculation.hoursPerEmployee} Std. × ${formatCurrency(rates.employeeHourlyRate)}`,
+      value: pricing.employeeCost,
+    },
+    ...calculation.planning.vehicleSelections.flatMap((selection) => {
+      const vehicle = vehicleOptions.find(
+        (option) => option.id === selection.vehicleId
+      );
+      if (!vehicle) return [];
+      return [{
+        label: vehicle.name,
+        formula: `${selection.quantity} Fahrzeug(e) × ${calculation.vehicleDays} Tag(e) × ${formatCurrency(vehicle.dailyRate)}`,
+        value: selection.quantity * calculation.vehicleDays * vehicle.dailyRate,
+      }];
+    }),
+    {
+      label: "Fahrtstrecke",
+      formula: `${calculation.kilometers} km × ${formatCurrency(rates.kilometerRate)}`,
+      value: pricing.mileageCost,
+    },
+    {
+      label: "Planungs- & Auftragspauschale",
+      formula: "Festbetrag",
+      value: rates.planningFee,
+    },
+    ...(calculation.materialCost > 0
+      ? [{ label: "Material", formula: materialFormula, value: calculation.materialCost }]
+      : []),
+    ...(calculation.disposalCost > 0
+      ? [{ label: "Entsorgung", formula: calculation.autoEstimate ? `${clearanceVolume} m³ × ${formatCurrency(rates.disposalRatePerM3)}${calculation.planning.clearanceCredit > 0 ? ` - ${formatCurrency(calculation.planning.clearanceCredit)} Wertanrechnung` : ""}` : "Manuell festgelegter Betrag", value: calculation.disposalCost }]
+      : []),
+    ...(calculation.storageCost > 0
+      ? [{ label: "Einlagerung", formula: calculation.autoEstimate ? `${storageVolume} m³ × ${Math.max(1, calculation.planning.storageMonths)} Monat(e) × ${formatCurrency(rates.storageRatePerM3Month)}` : "Manuell festgelegter Betrag", value: calculation.storageCost }]
+      : []),
+    ...(calculation.logisticsCost > 0
+      ? [{ label: "Lift & Halteverbotszone", formula: logisticsFormula, value: calculation.logisticsCost }]
+      : []),
+    ...(calculation.otherCost > 0
+      ? [{ label: "Weitere Kosten", formula: "Manueller Betrag", value: calculation.otherCost }]
+      : []),
+    ...calculation.planning.extraServices.map((service) => ({
+      label: service.name || "Zusatzleistung",
+      formula: `${service.quantity} × ${formatCurrency(service.unitPrice)}`,
+      value: service.quantity * service.unitPrice,
+    })),
+  ];
+}
+
+function CalculationBreakdown({
+  calculation,
+  rates,
+  onPrint,
+}: {
+  calculation: Calculation;
+  rates: Rates;
+  onPrint: () => void;
+}) {
+  const pricing = calculatePricing(calculation, rates);
+  const calculationRows = getCalculationRows(calculation, rates);
+
+  return (
+    <div className='space-y-5'>
+      <div className='flex flex-col justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 sm:flex-row sm:items-center'>
+        <div>
+          <p className='text-sm font-semibold text-slate-950'>Live-Kalkulation</p>
+          <p className='mt-1 text-sm text-slate-600'>
+            Jede Änderung an Konditionen, Personal, Fahrzeugen oder Zusatzleistungen
+            wird hier sofort eingerechnet.
+          </p>
+        </div>
+        <Button type='button' variant='outline' className='shrink-0 bg-white' onClick={onPrint}>
+          <Printer /> Kostenvoranschlag drucken
+        </Button>
+      </div>
+
+      <div className='overflow-hidden rounded-md border border-slate-200'>
+        <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500'>
+          <span>Position und Rechnung</span>
+          <span>Betrag</span>
+        </div>
+        <div className='divide-y divide-slate-200'>
+          {calculationRows.map((row, index) => (
+            <div key={`${row.label}-${index}`} className='grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3'>
+              <div className='min-w-0'>
+                <p className='text-sm font-medium text-slate-950'>{row.label}</p>
+                <p className='mt-0.5 text-xs text-slate-500'>{row.formula}</p>
+              </div>
+              <span className='text-sm font-semibold tabular-nums text-slate-950'>
+                {formatCurrency(row.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className='ml-auto w-full max-w-lg space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4'>
+        <div className='flex items-center justify-between gap-4 text-sm'>
+          <span className='text-slate-600'>Direkte Kosten</span>
+          <strong className='tabular-nums text-slate-950'>{formatCurrency(pricing.directCost)}</strong>
+        </div>
+        <div className='flex items-start justify-between gap-4 text-sm'>
+          <span className='text-slate-600'>Aufschlag ({rates.surchargePercent}% von {formatCurrency(pricing.directCost)})</span>
+          <strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.surcharge)}</strong>
+        </div>
+        <div className='flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-sm'>
+          <span className='font-medium text-slate-700'>Nettosumme</span>
+          <strong className='tabular-nums text-slate-950'>{formatCurrency(pricing.netTotal)}</strong>
+        </div>
+        <div className='flex items-start justify-between gap-4 text-sm'>
+          <span className='text-slate-600'>MwSt. ({rates.vatPercent}% von {formatCurrency(pricing.netTotal)})</span>
+          <strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.vat)}</strong>
+        </div>
+        <div className='flex items-center justify-between gap-4 border-t border-slate-300 pt-3'>
+          <span className='font-semibold text-slate-950'>Angebotspreis brutto</span>
+          <strong className='text-xl tabular-nums text-slate-950'>{formatCurrency(pricing.grossTotal)}</strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function escapePrintHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -691,6 +945,9 @@ function escapePrintHtml(value: string) {
 
 export default function OfferPlanner() {
   const { companyData } = useCompanyData();
+  const searchParams = useSearchParams();
+  const requestedCustomerId = searchParams.get("customerId");
+  const requestedOfferId = searchParams.get("offerId");
   const [rates, setRates] = useState<Rates>(defaultRates);
   const [calculation, setCalculation] = useState<Calculation>(() =>
     createCalculation()
@@ -703,6 +960,10 @@ export default function OfferPlanner() {
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
   const [printError, setPrintError] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState<PlanningStep>("order");
+  const [offerTab, setOfferTab] = useState<OfferTab>("conditions");
+  const [isCostEstimateDialogOpen, setIsCostEstimateDialogOpen] = useState(false);
+  const [costEstimatePrintOptions, setCostEstimatePrintOptions] =
+    useState<CostEstimatePrintOptions>(defaultCostEstimatePrintOptions);
 
   useEffect(() => {
     const companyId = companyData?.id;
@@ -714,17 +975,67 @@ export default function OfferPlanner() {
       try {
         const snapshot = await getDoc(calculatorRef);
         const data = snapshot.data() as Partial<CalculatorData> | undefined;
-        if (active && data) {
-          setRates({ ...defaultRates, ...data.rates });
-          setCalculation(normalizeCalculation(data.calculation));
-          setSavedCalculations(
-            (data.savedCalculations ?? []).map((saved) => ({
-              ...normalizeCalculation(saved),
+        const loadedSavedCalculations = (data?.savedCalculations ?? []).map(
+          (saved) => {
+            const normalized = normalizeCalculation(saved);
+            const savedRates = { ...defaultRates, ...saved.rates };
+
+            return {
+              ...normalized,
               id: saved.id,
               createdAt: saved.createdAt,
-              rates: { ...defaultRates, ...saved.rates },
-            }))
+              grossTotal:
+                saved.grossTotal ?? calculateGrossTotal(normalized, savedRates),
+              rates: savedRates,
+            };
+          }
+        );
+        const requestedOffer = loadedSavedCalculations.find(
+          (saved) =>
+            saved.id === requestedOfferId &&
+            (!requestedCustomerId || saved.customerId === requestedCustomerId)
+        );
+        let nextCalculation = requestedOffer
+          ? normalizeCalculation(requestedOffer)
+          : requestedCustomerId
+            ? createCalculation()
+            : normalizeCalculation(data?.calculation);
+
+        if (requestedCustomerId) {
+          const customerSnapshot = await getDoc(
+            doc(database, crmCollection, requestedCustomerId)
           );
+          const customer = customerSnapshot.data() as CrmCustomer | undefined;
+          if (customer && customer.ownerId === companyId) {
+            const customerAddress = [
+              customer.street,
+              `${customer.postalCode} ${customer.city}`.trim(),
+            ].filter(Boolean).join(", ");
+            nextCalculation = {
+              ...nextCalculation,
+              customerId: customer.id,
+              customer: nextCalculation.customer || customer.company || customer.name,
+              title: requestedOffer
+                ? nextCalculation.title
+                : `Angebot ${customer.company || customer.name}`,
+              planning: {
+                ...nextCalculation.planning,
+                contactName: nextCalculation.planning.contactName || customer.name,
+                contactPhone: nextCalculation.planning.contactPhone || customer.phone,
+                contactEmail: nextCalculation.planning.contactEmail || customer.email,
+                oldAddress: nextCalculation.planning.oldAddress || customerAddress,
+              },
+            };
+          }
+        }
+
+        if (active) {
+          setRates({
+            ...defaultRates,
+            ...(requestedOffer?.rates ?? data?.rates),
+          });
+          setCalculation(nextCalculation);
+          setSavedCalculations(loadedSavedCalculations);
         }
       } catch {
         if (active) setStatus("error");
@@ -737,7 +1048,7 @@ export default function OfferPlanner() {
     return () => {
       active = false;
     };
-  }, [companyData?.id]);
+  }, [companyData?.id, requestedCustomerId, requestedOfferId]);
 
   const volume = calculateVolume(calculation.planning.rooms);
   const recommendation = calculateServiceRecommendation(
@@ -804,9 +1115,6 @@ export default function OfferPlanner() {
     usesMoveInventory ||
     selectedServices.has("clearance") ||
     selectedServices.has("storage");
-  const currentStepIndex = planningSteps.findIndex(
-    (step) => step.id === activeStep
-  );
   const completedSteps = {
     order: Boolean(
       calculation.title.trim() &&
@@ -830,7 +1138,15 @@ export default function OfferPlanner() {
     price: calculation.employees > 0 && calculation.hoursPerEmployee > 0,
     finish: savedCalculations.length > 0,
   };
-  const completeStepCount = Object.values(completedSteps).filter(Boolean).length;
+  const availablePlanningSteps = usesMoveInventory
+    ? planningSteps
+    : planningSteps.filter((step) => step.id !== "inventory");
+  const availableStepIndex = availablePlanningSteps.findIndex(
+    (step) => step.id === activeStep
+  );
+  const completeStepCount = availablePlanningSteps.filter(
+    (step) => completedSteps[step.id]
+  ).length;
 
   function updateRate<Key extends keyof Rates>(key: Key, value: Rates[Key]) {
     setRates((current) => ({ ...current, [key]: value }));
@@ -890,13 +1206,13 @@ export default function OfferPlanner() {
     try {
       await setDoc(
         doc(database, storageCollection, companyId),
-        {
+        sanitizeFirestoreValue({
           ownerId: companyId,
           rates,
           calculation,
           savedCalculations: nextSavedCalculations,
           updatedAt: Date.now(),
-        },
+        }),
         { merge: true }
       );
       setSavedCalculations(nextSavedCalculations);
@@ -925,12 +1241,29 @@ export default function OfferPlanner() {
       rates: { ...rates },
       id: crypto.randomUUID(),
       createdAt: Date.now(),
+      grossTotal: calculateGrossTotal(calculation, rates),
     };
     await persist([savedCalculation, ...savedCalculations]);
   }
 
   function loadCalculation(savedCalculation: SavedCalculation) {
-    setCalculation(normalizeCalculation(savedCalculation));
+    setCalculation((current) => {
+      const loaded = normalizeCalculation(savedCalculation);
+      if (!requestedCustomerId) return loaded;
+
+      return {
+        ...loaded,
+        customerId: requestedCustomerId,
+        customer: current.customer,
+        planning: {
+          ...loaded.planning,
+          contactName: current.planning.contactName,
+          contactPhone: current.planning.contactPhone,
+          contactEmail: current.planning.contactEmail,
+          oldAddress: current.planning.oldAddress,
+        },
+      };
+    });
     setRates({ ...defaultRates, ...savedCalculation.rates });
     setStatus("idle");
   }
@@ -1005,12 +1338,12 @@ export default function OfferPlanner() {
   }
 
   function goToNextStep() {
-    const nextStep = planningSteps[currentStepIndex + 1];
+    const nextStep = availablePlanningSteps[availableStepIndex + 1];
     if (nextStep) setActiveStep(nextStep.id);
   }
 
   function goToPreviousStep() {
-    const previousStep = planningSteps[currentStepIndex - 1];
+    const previousStep = availablePlanningSteps[availableStepIndex - 1];
     if (previousStep) setActiveStep(previousStep.id);
   }
 
@@ -1099,12 +1432,173 @@ export default function OfferPlanner() {
   }
 
   function toggleService(service: ServiceKey) {
-    const selected = calculation.planning.serviceTypes.includes(service);
+    const isSelected = calculation.planning.serviceTypes.includes(service);
     updatePlanning(
       "serviceTypes",
-      selected
-        ? calculation.planning.serviceTypes.filter((item) => item !== service)
-        : [...calculation.planning.serviceTypes, service]
+      isSelected ? [] : [service]
+    );
+    if (!isSelected) setActiveStep("site");
+  }
+
+  function updateCostEstimatePrintOption(
+    option: keyof CostEstimatePrintOptions,
+    checked: boolean
+  ) {
+    setCostEstimatePrintOptions((current) => ({
+      ...current,
+      [option]: checked,
+    }));
+  }
+
+  function printCostEstimate() {
+    setPrintError(null);
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setPrintError(
+        "Das Druckfenster wurde blockiert. Bitte Pop-ups für diese Seite erlauben."
+      );
+      return;
+    }
+
+    const pricing = calculatePricing(calculation, rates);
+    const calculationRows = getCalculationRows(calculation, rates);
+    const rowsHtml = calculationRows
+      .map(
+        (row) => `<tr>
+          <td><strong>${escapePrintHtml(row.label)}</strong>${costEstimatePrintOptions.calculationDetails ? `<span>${escapePrintHtml(row.formula)}</span>` : ""}</td>
+          <td>${formatCurrency(row.value)}</td>
+        </tr>`
+      )
+      .join("");
+    const services = calculation.planning.serviceTypes
+      .map(
+        (service) =>
+          serviceOptions.find((option) => option.id === service)?.label || service
+      )
+      .join(", ");
+    const customer =
+      calculation.customer || calculation.planning.contactName || "Kunde";
+    const createdAt = new Date().toLocaleDateString("de-DE");
+    const contactCardHtml = costEstimatePrintOptions.contactDetails
+      ? `<div class="card"><p class="label">Kunde</p><strong>${escapePrintHtml(customer)}</strong><div class="muted">${escapePrintHtml(calculation.planning.contactPhone || "Telefon nicht angegeben")}<br>${escapePrintHtml(calculation.planning.contactEmail || "E-Mail nicht angegeben")}</div></div>`
+      : "";
+    const siteDetailsHtml = costEstimatePrintOptions.siteDetails
+      ? `<h2>Objekt- und Einsatzdaten</h2>
+        <section class="grid">
+          <div class="card"><p class="label">Auszug / Einsatzort</p><strong>${escapePrintHtml(calculation.planning.oldAddress || "Adresse nicht angegeben")}</strong><div class="muted">Etage: ${escapePrintHtml(calculation.planning.oldFloor || "-")} · Aufzug: ${calculation.planning.oldElevator ? "vorhanden" : "nicht vorhanden"}</div></div>
+          <div class="card"><p class="label">Einzug / Zielort</p><strong>${escapePrintHtml(calculation.planning.newAddress || "Adresse nicht angegeben")}</strong><div class="muted">Etage: ${escapePrintHtml(calculation.planning.newFloor || "-")} · Aufzug: ${calculation.planning.newElevator ? "vorhanden" : "nicht vorhanden"}</div></div>
+        </section>
+        <section class="facts">
+          <div><span>Fahrtstrecke</span><strong>${calculation.kilometers} km</strong></div>
+          <div><span>Trageweg</span><strong>${calculation.planning.carryDistanceM} m</strong></div>
+          <div><span>Halteverbotszone</span><strong>${calculation.planning.parkingRequired ? "Erforderlich" : "Nicht erforderlich"}</strong></div>
+        </section>`
+      : "";
+    const packingListRoomsHtml = calculation.planning.rooms
+      .filter((room) => room.items.length > 0)
+      .map(
+        (room) => `<section class="inventory-room">
+          <h3>${escapePrintHtml(room.name || "Raum")}</h3>
+          <table class="inventory"><thead><tr><th>Gegenstand</th><th>Menge</th><th>Volumen</th></tr></thead><tbody>
+            ${room.items.map((item) => `<tr><td>${escapePrintHtml(item.name || "Gegenstand")}</td><td>${item.quantity}</td><td>${(item.quantity * item.volumeM3).toFixed(2)} m³</td></tr>`).join("")}
+          </tbody></table>
+        </section>`
+      )
+      .join("");
+    const packingListHtml = costEstimatePrintOptions.packingList
+      ? `<h2>Packliste / Inventar</h2><div class="volume-summary"><span>Gesamtvolumen</span><strong>${calculateVolume(calculation.planning.rooms).toFixed(2)} m³</strong></div>${packingListRoomsHtml || '<p class="muted">Es wurden noch keine Gegenstände erfasst.</p>'}`
+      : "";
+    const notesHtml = costEstimatePrintOptions.notes && calculation.planning.notes
+      ? `<div class="notes"><strong>Hinweise zur Ausführung:</strong><br>${escapePrintHtml(calculation.planning.notes).replaceAll("\n", "<br>")}</div>`
+      : "";
+    const photosHtml = costEstimatePrintOptions.photos && calculation.planning.photoUrls.length > 0
+      ? `<section class="photos-section"><h2>Objektfotos</h2><div class="photos">${calculation.planning.photoUrls.map((url, index) => `<img src="${escapePrintHtml(url)}" alt="Objektfoto ${index + 1}" />`).join("")}</div></section>`
+      : "";
+
+    printWindow.document.write(`<!doctype html>
+      <html lang="de"><head><title>Kostenvoranschlag - ${escapePrintHtml(calculation.title || customer)}</title>
+      <style>
+        @page { margin: 15mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: #17315c; font-family: "Poppins", Arial, sans-serif; font-size: 10pt; line-height: 1.45; }
+        .document { max-width: 190mm; margin: 0 auto; }
+        .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 4px solid #E87722; }
+        .logo { width: 142px; height: auto; object-fit: contain; }
+        .document-type { margin: 4px 0 0; color: #E87722; font-size: 8.5pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        h1 { margin: 4px 0 0; color: #0D2650; font-size: 25pt; line-height: 1.12; }
+        .meta { min-width: 155px; border: 1px solid #dbe1ea; padding: 11px 13px; color: #62728c; font-size: 9pt; text-align: right; }
+        .meta strong { display: block; margin-top: 3px; color: #0D2650; font-size: 10.5pt; }
+        .customer, .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .customer { margin: 22px 0; }
+        .customer.single { grid-template-columns: 1fr; }
+        .card { border: 1px solid #dbe1ea; border-radius: 4px; padding: 14px; break-inside: avoid; }
+        .label { margin: 0 0 7px; color: #E87722; font-size: 8pt; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
+        .card strong { color: #0D2650; font-size: 11pt; }
+        .muted { margin-top: 4px; color: #62728c; }
+        h2 { margin: 25px 0 10px; color: #0D2650; font-size: 14pt; }
+        h3 { margin: 0 0 7px; color: #0D2650; font-size: 11pt; }
+        .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+        .facts div { border-top: 2px solid #f2f4f7; padding-top: 8px; }
+        .facts span { display: block; color: #62728c; font-size: 8pt; }
+        .facts strong { display: block; margin-top: 2px; color: #0D2650; }
+        table { width: 100%; border-collapse: collapse; }
+        th { border-bottom: 2px solid #E87722; padding: 8px 7px; color: #0D2650; font-size: 8pt; text-align: left; text-transform: uppercase; }
+        th:last-child { text-align: right; }
+        td { border-bottom: 1px solid #e8edf3; padding: 9px 7px; vertical-align: top; }
+        td strong { display: block; color: #0D2650; }
+        td span { display: block; margin-top: 2px; color: #62728c; font-size: 8.5pt; }
+        td:last-child { width: 34mm; color: #0D2650; font-weight: 700; text-align: right; white-space: nowrap; }
+        .totals { width: 92mm; margin: 16px 0 0 auto; border: 1px solid #dbe1ea; border-radius: 4px; padding: 12px 14px; break-inside: avoid; }
+        .total-row { display: flex; justify-content: space-between; gap: 18px; padding: 4px 0; color: #52647f; }
+        .total-row strong { color: #0D2650; white-space: nowrap; }
+        .total-row.net { margin-top: 5px; border-top: 1px solid #dbe1ea; padding-top: 9px; color: #0D2650; font-weight: 600; }
+        .total-row.gross { margin: 8px -14px -12px; border-radius: 0 0 4px 4px; background: #0D2650; padding: 13px 14px; color: #fff; font-size: 12pt; font-weight: 700; }
+        .total-row.gross strong { color: #fff; font-size: 14pt; }
+        .volume-summary { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; border-radius: 4px; background: #0D2650; padding: 11px 14px; color: #fff; }
+        .volume-summary span { color: #d6e0ef; }
+        .volume-summary strong { font-size: 13pt; }
+        .inventory-room { margin-bottom: 16px; break-inside: avoid; }
+        .inventory th:not(:first-child), .inventory td:not(:first-child) { text-align: right; }
+        .inventory td:nth-child(2) { width: 22mm; }
+        .photos-section { break-before: page; page-break-before: always; }
+        .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .photos img { width: 100%; height: 66mm; border-radius: 3px; object-fit: cover; }
+        .notice { margin-top: 24px; border-left: 4px solid #E87722; background: #fff8f2; padding: 12px 14px; color: #52647f; font-size: 9pt; }
+        .notes { margin-top: 20px; border-left: 4px solid #E87722; background: #fff8f2; padding: 12px 14px; white-space: normal; }
+        .footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 28px; border-top: 1px solid #dbe1ea; padding-top: 11px; color: #62728c; font-size: 8pt; }
+        @media print { .document { max-width: none; } .header, .card, .totals, tr { break-inside: avoid; } }
+      </style></head><body><main class="document">
+        <header class="header">
+          <div><img class="logo" src="${window.location.origin}/images/Umzugshelden.png" alt="Umzugshelden" /><p class="document-type">Kaufmännische Übersicht</p><h1>Kostenvoranschlag</h1></div>
+          <div class="meta">Erstellt am<strong>${createdAt}</strong></div>
+        </header>
+        <section class="customer${costEstimatePrintOptions.contactDetails ? "" : " single"}">
+          ${contactCardHtml}
+          <div class="card"><p class="label">Projekt</p><strong>${escapePrintHtml(calculation.title || "Dienstleistungsauftrag")}</strong><div class="muted">${escapePrintHtml(services || "Leistung noch nicht festgelegt")}<br>Wunschtermin: ${escapePrintHtml(calculation.planning.date || "noch offen")}</div></div>
+        </section>
+        ${siteDetailsHtml}
+        <h2>Leistungen und Kosten</h2>
+        <table><thead><tr><th>Position / Berechnung</th><th>Betrag</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+        <section class="totals">
+          <div class="total-row"><span>Direkte Kosten</span><strong>${formatCurrency(pricing.directCost)}</strong></div>
+          <div class="total-row"><span>Aufschlag (${rates.surchargePercent}%)</span><strong>${formatCurrency(pricing.surcharge)}</strong></div>
+          <div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(pricing.netTotal)}</strong></div>
+          <div class="total-row"><span>MwSt. (${rates.vatPercent}%)</span><strong>${formatCurrency(pricing.vat)}</strong></div>
+          <div class="total-row gross"><span>Gesamtbetrag brutto</span><strong>${formatCurrency(pricing.grossTotal)}</strong></div>
+        </section>
+        ${packingListHtml}
+        ${notesHtml}
+        ${photosHtml}
+        <div class="notice">Dieser Kostenvoranschlag basiert auf den aktuell erfassten Angaben. Änderungen am Leistungsumfang oder an den Bedingungen vor Ort können den Endpreis verändern.</div>
+        <footer class="footer"><span>Umzugshelden · Zuverlässig geplant. Entspannt umgezogen.</span><span>Vorbehaltlich finaler Prüfung und Auftragsbestätigung.</span></footer>
+      </main></body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(
+      () => printWindow.print(),
+      costEstimatePrintOptions.photos && calculation.planning.photoUrls.length > 0
+        ? 750
+        : 250
     );
   }
 
@@ -1218,6 +1712,11 @@ export default function OfferPlanner() {
     <main className='mx-auto w-full max-w-[1440px] pb-28 xl:pb-12'>
       <header className='mb-6 flex flex-col justify-between gap-5 border-b border-slate-200 pb-6 lg:flex-row lg:items-end'>
         <div>
+          {calculation.customerId && (
+            <Button asChild variant='ghost' size='sm' className='mb-2 -ml-3 text-slate-600'>
+              <Link href={`/admin/${companyData?.id}/crm/customers/${calculation.customerId}`}><ArrowLeft /> Zur Kundenakte</Link>
+            </Button>
+          )}
           <p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>Angebote & Vor-Ort-Aufnahme</p>
           <h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>Dienstleistungs-Planer</h1>
           <p className='mt-2 max-w-3xl text-sm leading-6 text-slate-600'>Aufnahme, Ressourcenplanung und Angebot in einem durchgaengigen Ablauf.</p>
@@ -1225,7 +1724,8 @@ export default function OfferPlanner() {
         <div className='flex flex-wrap items-center gap-2 sm:gap-3'>
           {status === "saved" && <span className='flex items-center gap-1.5 text-sm font-medium text-emerald-700'><Check size={16} /> Gespeichert</span>}
           {status === "error" && <span className='text-sm font-medium text-red-600'>Speichern fehlgeschlagen</span>}
-          <Button variant='outline' className='flex-1 sm:flex-none' onClick={printCustomerDocument}><Printer /> Drucken</Button>
+          <Button variant='outline' className='flex-1 sm:flex-none' onClick={printCustomerDocument}><Printer /> Übersicht</Button>
+          <Button variant='outline' className='flex-1 sm:flex-none' onClick={() => setIsCostEstimateDialogOpen(true)}><Printer /> Kostenvoranschlag</Button>
           <Button className='flex-1 sm:flex-none' onClick={() => void persist()} disabled={isSaving}>{isSaving ? <LoaderCircle className='animate-spin' /> : <Save />} Entwurf speichern</Button>
         </div>
       </header>
@@ -1237,6 +1737,46 @@ export default function OfferPlanner() {
           </Button>
         </div>
       )}
+      <Dialog open={isCostEstimateDialogOpen} onOpenChange={setIsCostEstimateDialogOpen}>
+        <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-2xl'>
+          <DialogHeader>
+            <DialogTitle>Kostenvoranschlag drucken</DialogTitle>
+            <DialogDescription>
+              Wähle aus, welche zusätzlichen Informationen im Dokument enthalten sein sollen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='grid gap-3 py-2 sm:grid-cols-2'>
+            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
+              <Checkbox checked={costEstimatePrintOptions.contactDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("contactDetails", checked === true)} />
+              <span><span className='block text-sm font-medium text-slate-950'>Kontaktdaten</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Kunde, Telefon und E-Mail</span></span>
+            </label>
+            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
+              <Checkbox checked={costEstimatePrintOptions.siteDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("siteDetails", checked === true)} />
+              <span><span className='block text-sm font-medium text-slate-950'>Objekt- und Adressdaten</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Auszug, Zielort, Etagen und Laufweg</span></span>
+            </label>
+            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
+              <Checkbox checked={costEstimatePrintOptions.calculationDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("calculationDetails", checked === true)} />
+              <span><span className='block text-sm font-medium text-slate-950'>Genaue Rechenwege</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Mengen, Stunden und Einzelpreise je Position</span></span>
+            </label>
+            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
+              <Checkbox checked={costEstimatePrintOptions.packingList} onCheckedChange={(checked) => updateCostEstimatePrintOption("packingList", checked === true)} />
+              <span><span className='block text-sm font-medium text-slate-950'>Packliste / Inventar</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Räume, Gegenstände, Mengen und Volumen</span></span>
+            </label>
+            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
+              <Checkbox checked={costEstimatePrintOptions.notes} onCheckedChange={(checked) => updateCostEstimatePrintOption("notes", checked === true)} />
+              <span><span className='block text-sm font-medium text-slate-950'>Hinweise</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Erfasste Hinweise zur Ausführung</span></span>
+            </label>
+            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
+              <Checkbox checked={costEstimatePrintOptions.photos} onCheckedChange={(checked) => updateCostEstimatePrintOption("photos", checked === true)} />
+              <span><span className='block text-sm font-medium text-slate-950'>Objektfotos</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Ausgewählte Bilder als Fotoseite</span></span>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button type='button' variant='outline' onClick={() => setIsCostEstimateDialogOpen(false)}>Abbrechen</Button>
+            <Button type='button' onClick={() => { setIsCostEstimateDialogOpen(false); printCostEstimate(); }}><Printer /> Jetzt drucken</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <section className='mb-6 rounded-lg border border-slate-200 bg-white p-3 shadow-sm' aria-label='Planungsschritte'>
         <div className='mb-3 flex items-center justify-between gap-4'>
@@ -1244,11 +1784,11 @@ export default function OfferPlanner() {
             Vor-Ort-Aufnahme: {completeStepCount} von 5 Bereichen vorbereitet
           </p>
           <span className='text-sm text-slate-500'>
-            Schritt {currentStepIndex + 1} von {planningSteps.length}
+            Schritt {availableStepIndex + 1} von {availablePlanningSteps.length}
           </span>
         </div>
         <div className='flex gap-2 overflow-x-auto pb-1'>
-          {planningSteps.map((step) => {
+          {availablePlanningSteps.map((step) => {
             const Icon = step.icon;
             const active = step.id === activeStep;
             const completed = completedSteps[step.id];
@@ -1304,69 +1844,19 @@ export default function OfferPlanner() {
             </div>}
           </section>}
 
-          {activeStep === "site" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
-            <SectionHeading icon={MapPin} title='Objekt, Zugänge & Laufwege' description='Erfasst die Informationen, die Personalbedarf und Aufwand beim Einsatz bestimmen.' />
-            <div className='grid gap-4 sm:grid-cols-2'>
-              <TextField label='Auszugsadresse / Einsatzort' value={calculation.planning.oldAddress} onChange={(value) => updatePlanning("oldAddress", value)} placeholder='Straße, PLZ Ort' />
-              <TextField label='Einzugsadresse / Zielort' value={calculation.planning.newAddress} onChange={(value) => updatePlanning("newAddress", value)} placeholder='Straße, PLZ Ort' />
-              <TextField label='Etage Auszug' value={calculation.planning.oldFloor} onChange={(value) => updatePlanning("oldFloor", value)} placeholder='z. B. 3. OG' />
-              <TextField label='Etage Einzug' value={calculation.planning.newFloor} onChange={(value) => updatePlanning("newFloor", value)} placeholder='z. B. EG' />
-              <NumberField label='Laufweg / Trageweg' value={calculation.planning.carryDistanceM} onChange={(value) => updatePlanning("carryDistanceM", value)} suffix='m' />
-              <NumberField label='Fahrtstrecke gesamt' value={calculation.kilometers} onChange={(value) => updateCalculation("kilometers", value)} suffix='km' step='0.1' />
-            </div>
-            {usesMoveInventory && <div className='mt-5 rounded-lg border border-blue-100 bg-blue-50/60 p-4'>
-              <div className='mb-4 flex items-start gap-3'>
-                <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white'><Car size={19} /></span>
-                <div><p className='text-sm font-semibold text-slate-950'>Umzugs-Check</p><p className='mt-0.5 text-sm text-slate-600'>Diese Angaben machen Personal, Fahrzeuge und Zeitplanung deutlich genauer.</p></div>
-              </div>
-              <div className='grid gap-4 sm:grid-cols-2'>
-                <NumberField label='Trageweg Auszug' value={calculation.planning.oldCarryDistanceM} onChange={(value) => updatePlanning("oldCarryDistanceM", value)} suffix='m' />
-                <NumberField label='Trageweg Einzug' value={calculation.planning.newCarryDistanceM} onChange={(value) => updatePlanning("newCarryDistanceM", value)} suffix='m' />
-                <NumberField label='Etagen Auszug' value={calculation.planning.oldFloorLevel} onChange={(value) => updatePlanning("oldFloorLevel", value)} suffix='OG' />
-                <NumberField label='Etagen Einzug' value={calculation.planning.newFloorLevel} onChange={(value) => updatePlanning("newFloorLevel", value)} suffix='OG' />
-                <NumberField label='Geplante Fahrten' value={calculation.planning.moveTrips} onChange={(value) => updatePlanning("moveTrips", Math.max(1, value))} suffix='Fahrten' />
-                <NumberField label='Wunsch-Teamgroesse' value={calculation.planning.moveCrewPreference} onChange={(value) => updatePlanning("moveCrewPreference", value)} suffix='Pers.' />
-                <NumberField label='Demontage / Montage' value={calculation.planning.dismantlingHours} onChange={(value) => updatePlanning("dismantlingHours", value)} suffix='Std.' step='0.25' />
-                <NumberField label='Spezialgegenstaende' value={calculation.planning.specialItemCount} onChange={(value) => updatePlanning("specialItemCount", value)} suffix='Stk.' />
-              </div>
-              <div className='mt-4'>
-                <p className='mb-2 text-sm font-medium text-slate-700'>Aufwand vor Ort</p>
-                <div className='grid grid-cols-3 gap-2'>
-                  {([
-                    ["easy", "Einfach", "Kurze Wege, guter Zugang"],
-                    ["standard", "Normal", "Typischer Wohnungsumzug"],
-                    ["difficult", "Anspruchsvoll", "Enge Wege oder viele Etagen"],
-                  ] as const).map(([value, label, description]) => <button key={value} type='button' onClick={() => updatePlanning("moveComplexity", value)} aria-pressed={calculation.planning.moveComplexity === value} className={`min-h-20 rounded-md border p-2 text-left transition ${calculation.planning.moveComplexity === value ? "border-blue-500 bg-white ring-1 ring-blue-200" : "border-blue-100 bg-white/70 hover:border-blue-300"}`}><span className='block text-sm font-semibold text-slate-950'>{label}</span><span className='mt-1 block text-[11px] leading-4 text-slate-600'>{description}</span></button>)}
-                </div>
-              </div>
-              <div className='mt-4 grid gap-2 sm:grid-cols-2'>
-                <label className='flex min-h-12 items-center gap-3 rounded-md border border-blue-100 bg-white px-3 text-sm text-slate-700'><input type='checkbox' checked={calculation.planning.furnitureLiftRequired} onChange={(event) => updatePlanning("furnitureLiftRequired", event.target.checked)} className='h-4 w-4 accent-primary' />Moebellift erforderlich</label>
-                <NumberField label='Zeitpuffer' value={calculation.planning.moveBufferHours} onChange={(value) => updatePlanning("moveBufferHours", value)} suffix='Std.' step='0.25' />
-              </div>
-            </div>}
-            {selectedServices.size > 0 && <div className='mt-5 grid gap-4 border-t border-slate-200 pt-5 sm:grid-cols-2'>
-              {selectedServices.has("painting") && <>
-                <NumberField label='Zu streichende Flaeche' value={calculation.planning.paintAreaM2} onChange={(value) => updatePlanning("paintAreaM2", value)} suffix='m2' step='0.5' />
-                <NumberField label='Anstriche' value={calculation.planning.paintCoats} onChange={(value) => updatePlanning("paintCoats", value)} suffix='x' />
-                <NumberField label='Ausbesserungsflaeche' value={calculation.planning.repairAreaM2} onChange={(value) => updatePlanning("repairAreaM2", value)} suffix='m2' step='0.5' />
-              </>}
-              {selectedServices.has("clearance") && <NumberField label='Entsorgungsvolumen' value={calculation.planning.disposalVolumeM3} onChange={(value) => updatePlanning("disposalVolumeM3", value)} suffix='m3' step='0.1' />}
-              {selectedServices.has("furnitureAssembly") && <NumberField label='Moebelteile zur Montage' value={calculation.planning.furniturePieces} onChange={(value) => updatePlanning("furniturePieces", value)} suffix='Teile' />}
-              {selectedServices.has("packing") && <NumberField label='Kartons (falls bekannt)' value={calculation.planning.movingBoxes} onChange={(value) => updatePlanning("movingBoxes", value)} suffix='Stk.' />}
-              {selectedServices.has("storage") && <>
-                <NumberField label='Einlagerungsvolumen' value={calculation.planning.storageVolumeM3} onChange={(value) => updatePlanning("storageVolumeM3", value)} suffix='m3' step='0.1' />
-                <NumberField label='Einlagerungsdauer' value={calculation.planning.storageMonths} onChange={(value) => updatePlanning("storageMonths", value)} suffix='Monate' />
-              </>}
-            </div>}
-            <div className='mt-5 grid gap-2 border-t border-slate-200 pt-5 sm:grid-cols-2'>
-              <label className='flex min-h-11 items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700'><input type='checkbox' checked={calculation.planning.oldElevator} onChange={(event) => updatePlanning("oldElevator", event.target.checked)} className='h-4 w-4 accent-primary' />Aufzug am Auszug</label>
-              <label className='flex min-h-11 items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700'><input type='checkbox' checked={calculation.planning.newElevator} onChange={(event) => updatePlanning("newElevator", event.target.checked)} className='h-4 w-4 accent-primary' />Aufzug am Einzug</label>
-              <label className='flex min-h-11 items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700'><input type='checkbox' checked={calculation.planning.parkingRequired} onChange={(event) => updatePlanning("parkingRequired", event.target.checked)} className='h-4 w-4 accent-primary' />Halteverbotszone nötig</label>
-              <label className='flex min-h-11 items-center gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700'><input type='checkbox' checked={calculation.planning.packingRequired} onChange={(event) => updatePlanning("packingRequired", event.target.checked)} className='h-4 w-4 accent-primary' />Einpackservice nötig</label>
-            </div>
-          </section>}
+          {activeStep === "site" && calculation.planning.serviceTypes[0] && (
+            <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
+              <ServiceConfigurator
+                service={calculation.planning.serviceTypes[0]}
+                planning={calculation.planning}
+                kilometers={calculation.kilometers}
+                onPlanningChange={updatePlanning}
+                onKilometersChange={(value) => updateCalculation("kilometers", value)}
+              />
+            </section>
+          )}
 
-          {activeStep === "inventory" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
+          {activeStep === "inventory" && usesMoveInventory && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
             <SectionHeading icon={Box} title='Volumen berechnen' description='Lege Räume und Gegenstände an. Menge mal Einzelvolumen ergibt das Gesamtvolumen für Fahrzeug und Personal.' />
             <div className='mb-5 flex items-center justify-between rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-950'>
               <span className='text-sm font-medium'>Erfasstes Umzugsvolumen</span><strong className='text-2xl'>{volume.toFixed(2)} m³</strong>
@@ -1405,6 +1895,15 @@ export default function OfferPlanner() {
 
           {activeStep === "price" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
             <SectionHeading icon={Euro} title='Konditionen & Angebot' description='Standardwerte und auftragsspezifische Kosten fließen direkt in den Angebotspreis ein.' />
+            <div className='mb-5 grid grid-cols-2 gap-1 rounded-md bg-slate-100 p-1' role='tablist' aria-label='Angebotsansicht'>
+              <button type='button' role='tab' aria-selected={offerTab === "conditions"} onClick={() => setOfferTab("conditions")} className={`flex min-h-10 items-center justify-center gap-2 rounded px-3 text-sm font-medium transition ${offerTab === "conditions" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600 hover:text-slate-950"}`}>
+                <Euro size={16} /> Konditionen
+              </button>
+              <button type='button' role='tab' aria-selected={offerTab === "calculation"} onClick={() => setOfferTab("calculation")} className={`flex min-h-10 items-center justify-center gap-2 rounded px-3 text-sm font-medium transition ${offerTab === "calculation" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600 hover:text-slate-950"}`}>
+                <Calculator size={16} /> Genaue Rechnung
+              </button>
+            </div>
+            {offerTab === "conditions" ? <>
             <div className='mb-5 rounded-md border border-blue-200 bg-blue-50 p-4'>
               <div className='flex flex-col justify-between gap-3 sm:flex-row sm:items-start'>
                 <div>
@@ -1471,6 +1970,7 @@ export default function OfferPlanner() {
               <div className='mb-3 flex items-center justify-between'><p className='text-sm font-medium text-slate-700'>Zusatzleistungen</p><Button type='button' variant='outline' size='sm' onClick={addExtraService}><PackagePlus /> Zusatzleistung</Button></div>
               <div className='space-y-2'>{calculation.planning.extraServices.map((service) => <div key={service.id} className='grid grid-cols-[minmax(0,1fr)_72px_120px_36px] gap-2'><input value={service.name} onChange={(event) => updateExtraService(service.id, { name: event.target.value })} aria-label='Zusatzleistung' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><input type='number' min='0' value={service.quantity} onChange={(event) => updateExtraService(service.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><div className='relative'><input type='number' min='0' step='0.01' value={service.unitPrice} onChange={(event) => updateExtraService(service.id, { unitPrice: toNumber(event.target.value) })} aria-label='Einzelpreis' className='h-9 w-full rounded-md border border-slate-300 px-2 pr-9 text-sm outline-none focus:border-primary' /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>EUR</span></div><Button type='button' variant='ghost' size='icon' title='Zusatzleistung entfernen' onClick={() => removeExtraService(service.id)}><Trash2 className='text-red-600' /></Button></div>)}</div>
             </div>
+            </> : <CalculationBreakdown calculation={calculation} rates={rates} onPrint={() => setIsCostEstimateDialogOpen(true)} />}
           </section>}
 
           {activeStep === "price" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
@@ -1484,7 +1984,7 @@ export default function OfferPlanner() {
             {savedCalculations.length === 0 ? <p className='py-6 text-center text-sm text-slate-500'>Noch keine Planung gespeichert.</p> : <div className='divide-y divide-slate-200'>{savedCalculations.map((item) => <div key={item.id} className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between'><button type='button' onClick={() => loadCalculation(item)} className='min-w-0 text-left'><p className='truncate font-medium text-slate-950'>{item.title || "Unbenannte Planung"}</p><p className='mt-1 text-sm text-slate-600'>{item.customer || item.planning.contactName || "Ohne Kundenzuordnung"} · {new Date(item.createdAt).toLocaleDateString("de-DE")} · {calculateVolume(item.planning.rooms).toFixed(2)} m³</p></button><div className='flex shrink-0 items-center gap-3'><span className='font-semibold text-slate-950'>{formatCurrency(calculateGrossTotal(item, item.rates))}</span><Button variant='ghost' size='icon' title='Planung löschen' onClick={() => void deleteCalculation(item.id)} disabled={isSaving}><Trash2 className='text-red-600' /></Button></div></div>)}</div>}
           </section>}
           <div className='flex items-center justify-between gap-3 border-t border-slate-200 pt-5'>
-            <Button type='button' variant='outline' onClick={goToPreviousStep} disabled={currentStepIndex === 0}>
+            <Button type='button' variant='outline' onClick={goToPreviousStep} disabled={availableStepIndex === 0}>
               <ArrowLeft /> Zurück
             </Button>
             {activeStep === "finish" ? (
@@ -1493,7 +1993,7 @@ export default function OfferPlanner() {
               </Button>
             ) : (
               <Button type='button' className='min-h-11' onClick={goToNextStep}>
-                Weiter zu {planningSteps[currentStepIndex + 1]?.label} <ArrowRight />
+                Weiter zu {availablePlanningSteps[availableStepIndex + 1]?.label} <ArrowRight />
               </Button>
             )}
           </div>

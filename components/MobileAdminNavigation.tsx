@@ -2,15 +2,15 @@
 
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { ClipboardList, FileText, Inbox, MapPinned } from "lucide-react";
+import { Calculator, ClipboardList, Inbox, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const mobileItems = [
+  { label: "CRM", segment: "/crm", icon: UsersRound, exact: true },
   { label: "Anfragen", segment: "/requests", icon: Inbox },
   { label: "Bewerbungen", segment: "/applications", icon: ClipboardList },
-  { label: "Jobs", segment: "/jobs", icon: FileText },
-  { label: "Städte", segment: "/citys", icon: MapPinned },
+  { label: "Angebote", segment: "/crm/calculator", icon: Calculator },
 ];
 
 export default function MobileAdminNavigation() {
@@ -25,9 +25,9 @@ export default function MobileAdminNavigation() {
     <nav
       aria-label='Admin-Navigation'
       className='fixed inset-x-0 bottom-0 z-40 grid h-[calc(4.75rem+env(safe-area-inset-bottom))] grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] md:hidden'>
-      {mobileItems.map(({ label, segment, icon: Icon }) => {
+      {mobileItems.map(({ label, segment, icon: Icon, exact }) => {
         const href = `/admin/${companyData.id}${segment}`;
-        const isActive = pathname.startsWith(href);
+        const isActive = exact ? pathname === href : pathname.startsWith(href);
 
         return (
           <Link

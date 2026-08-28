@@ -25,6 +25,7 @@ import {
   FileText,
   Inbox,
   MapPinned,
+  UsersRound,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/config/firebase";
@@ -40,6 +41,12 @@ const data = {
       title: "Einstellungen",
       url: "/",
       items: [
+        {
+          title: "CRM",
+          url: "/crm",
+          icon: UsersRound,
+          exact: true,
+        },
         {
           title: "Städte",
           url: "/citys",
@@ -67,7 +74,7 @@ const data = {
         },
         {
           title: "Kalkulator",
-          url: "/offer",
+          url: "/crm/calculator",
           icon: Calculator,
         },
       ],
@@ -114,9 +121,11 @@ export function AdminSideBar({
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
-                      isActive={pathname.startsWith(
-                        `/admin/${companyData?.id}${item.url}`
-                      )}
+                      isActive={
+                        "exact" in item && item.exact
+                          ? pathname === `/admin/${companyData?.id}${item.url}`
+                          : pathname.startsWith(`/admin/${companyData?.id}${item.url}`)
+                      }
                       className='h-11 rounded-md px-3 text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
                       <Link
                         href={`/admin/${companyData?.id}${item.url}`}
