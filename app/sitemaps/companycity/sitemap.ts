@@ -7,18 +7,11 @@ import type { MetadataRoute } from "next";
 const BASE_URL = "https://umzugshelden.io";
 
 function createEntry(path: string, priority: number): MetadataRoute.Sitemap[number] {
-  const url = `${BASE_URL}${path}`;
-
   return {
-    url,
+    url: `${BASE_URL}${path}`,
     lastModified: new Date(),
     changeFrequency: "monthly",
     priority,
-    alternates: {
-      languages: {
-        de: url,
-      },
-    },
   };
 }
 

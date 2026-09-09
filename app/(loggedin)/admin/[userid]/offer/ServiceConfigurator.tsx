@@ -199,16 +199,28 @@ function ClearanceServiceCalculator(props: Omit<ServiceConfiguratorProps, "servi
   const { planning, kilometers, onPlanningChange, onKilometersChange } = props;
   return (
     <div>
-      <ServiceHeader icon={Trash2} title='Entrümpelung kalkulieren' description='Volumen, Zugänglichkeit, schwere Gegenstände, Entsorgung und Wertanrechnung werden getrennt berücksichtigt.' />
+      <ServiceHeader icon={Trash2} title='Entrümpelung kalkulieren' description='Volumen, Sondermüll, Container, Zugänglichkeit und Wertanrechnung werden getrennt berücksichtigt – mit oder ohne Entsorgung.' />
       <AddressFields planning={planning} kilometers={kilometers} onPlanningChange={onPlanningChange} onKilometersChange={onKilometersChange} destination={false} />
       <div className='mt-4 grid gap-4 sm:grid-cols-2'>
         <TextField label='Etage / Bereich' value={planning.oldFloor} onChange={(value) => onPlanningChange("oldFloor", value)} placeholder='z. B. Keller und 2. OG' />
-        <NumberField label='Entsorgungsvolumen' value={planning.disposalVolumeM3} onChange={(value) => onPlanningChange("disposalVolumeM3", value)} suffix='m³' step='0.1' />
+        <NumberField label='Entsorgungsvolumen (Sperrmüll)' value={planning.disposalVolumeM3} onChange={(value) => onPlanningChange("disposalVolumeM3", value)} suffix='m³' step='0.1' />
+        <NumberField label='Sondermüll / Problemstoffe' value={planning.clearanceHazardousVolumeM3} onChange={(value) => onPlanningChange("clearanceHazardousVolumeM3", value)} suffix='m³' step='0.1' />
+        <NumberField label='Container inkl. Stellung' value={planning.clearanceContainerCount} onChange={(value) => onPlanningChange("clearanceContainerCount", value)} suffix='Stk.' />
         <NumberField label='Schwere Gegenstände' value={planning.clearanceHeavyItems} onChange={(value) => onPlanningChange("clearanceHeavyItems", value)} suffix='Stk.' />
         <NumberField label='Wertanrechnung' value={planning.clearanceCredit} onChange={(value) => onPlanningChange("clearanceCredit", value)} suffix='EUR' step='0.01' />
       </div>
       <ComplexitySelector value={planning.moveComplexity} onChange={(value) => onPlanningChange("moveComplexity", value)} />
-      <div className='mt-4 grid gap-2 sm:grid-cols-2'><ToggleField label='Aufzug vorhanden' checked={planning.oldElevator} onChange={(value) => onPlanningChange("oldElevator", value)} /><ToggleField label='Halteverbotszone nötig' checked={planning.parkingRequired} onChange={(value) => onPlanningChange("parkingRequired", value)} /></div>
+      <div className='mt-4 grid gap-2 sm:grid-cols-2'>
+        <ToggleField label='Entsorgung durch uns (inkl. Gebühren)' checked={planning.clearanceDisposalIncluded} onChange={(value) => onPlanningChange("clearanceDisposalIncluded", value)} />
+        <ToggleField label='Besenreine Übergabe' checked={planning.clearanceBroomClean} onChange={(value) => onPlanningChange("clearanceBroomClean", value)} />
+        <ToggleField label='Aufzug vorhanden' checked={planning.oldElevator} onChange={(value) => onPlanningChange("oldElevator", value)} />
+        <ToggleField label='Halteverbotszone nötig' checked={planning.parkingRequired} onChange={(value) => onPlanningChange("parkingRequired", value)} />
+      </div>
+      {!planning.clearanceDisposalIncluded && (
+        <p className='mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900'>
+          Ohne Entsorgung werden nur Arbeitszeit, Anfahrt und ggf. Container berechnet – die Entsorgungsgebühren je m³ entfallen.
+        </p>
+      )}
     </div>
   );
 }

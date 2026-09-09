@@ -8,7 +8,8 @@ const BASE_URL = "https://umzugshelden.io";
 const MAIN_CATEGORIES: { key: string; path: string }[] = [
   { key: "seo", path: "/blog/seo" },
   { key: "webdesign", path: "/blog/webdesign" },
-  { key: "online-marketing", path: "/blog/online-marketing" },
+  { key: "partner", path: "/blog/partner" },
+  { key: "ratgeber", path: "/blog/ratgeber" },
 ];
 
 export const dynamic = "force-dynamic"; // always latest content

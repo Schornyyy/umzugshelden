@@ -14,6 +14,7 @@ import MediathekDialog from "@/components/utils/MediathekDialog";
 import { database } from "@/config/firebase";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type { CrmCustomer } from "@/types/Crm";
+import type { AssistantOfferDraft } from "@/types/OfferAssistant";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import {
   ArrowLeft,
@@ -41,6 +42,7 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import OfferAssistant from "./OfferAssistant";
 import ServiceConfigurator from "./ServiceConfigurator";
 
 type PlanningStep = "order" | "site" | "inventory" | "price" | "finish";
@@ -87,6 +89,8 @@ type Rates = {
   paintLaborHoursPerM2: number;
   furnitureAssemblyMinutesPerPiece: number;
   disposalRatePerM3: number;
+  hazardousDisposalRatePerM3: number;
+  containerRate: number;
   storageRatePerM3Month: number;
   packingBoxRate: number;
   packingMinutesPerBox: number;
@@ -99,6 +103,13 @@ type ServiceLine = {
   name: string;
   quantity: number;
   unitPrice: number;
+};
+
+export type OfferPackage = {
+  id: string;
+  name: string;
+  services: ServiceKey[];
+  discountPercent: number;
 };
 
 type InventoryItem = {
@@ -159,6 +170,10 @@ export type PlanningDetails = {
   disposalVolumeM3: number;
   clearanceHeavyItems: number;
   clearanceCredit: number;
+  clearanceDisposalIncluded: boolean;
+  clearanceHazardousVolumeM3: number;
+  clearanceContainerCount: number;
+  clearanceBroomClean: boolean;
   vehicleSelections: VehicleSelection[];
   notes: string;
   rooms: Room[];
@@ -179,6 +194,8 @@ type Calculation = {
   storageCost: number;
   logisticsCost: number;
   otherCost: number;
+  discountPercent: number;
+  packageName?: string;
   autoEstimate: boolean;
   planning: PlanningDetails;
 };
@@ -194,6 +211,7 @@ type CalculatorData = {
   rates: Rates;
   calculation: Calculation;
   savedCalculations: SavedCalculation[];
+  packages: OfferPackage[];
 };
 
 const storageCollection = "offer_calculators_umzugshelden";
@@ -253,12 +271,35 @@ const defaultRates: Rates = {
   paintLaborHoursPerM2: 0.12,
   furnitureAssemblyMinutesPerPiece: 30,
   disposalRatePerM3: 65,
+  hazardousDisposalRatePerM3: 180,
+  containerRate: 250,
   storageRatePerM3Month: 8,
   packingBoxRate: 2.5,
   packingMinutesPerBox: 5,
   furnitureLiftDailyRate: 280,
   parkingPermitRate: 120,
 };
+
+const defaultPackages: OfferPackage[] = [
+  {
+    id: "komplett",
+    name: "Rundum-Sorglos-Paket",
+    services: ["move", "packing", "furnitureAssembly"],
+    discountPercent: 10,
+  },
+  {
+    id: "umzug-entruempelung",
+    name: "Umzug + Entrümpelung",
+    services: ["move", "clearance"],
+    discountPercent: 8,
+  },
+  {
+    id: "senioren-komplett",
+    name: "Senioren-Komplettpaket",
+    services: ["seniorMove", "packing", "furnitureAssembly"],
+    discountPercent: 10,
+  },
+];
 
 const legacyServiceMap: Record<string, ServiceKey> = {
   Umzug: "move",
@@ -316,6 +357,10 @@ function createPlanning(): PlanningDetails {
     disposalVolumeM3: 0,
     clearanceHeavyItems: 0,
     clearanceCredit: 0,
+    clearanceDisposalIncluded: true,
+    clearanceHazardousVolumeM3: 0,
+    clearanceContainerCount: 0,
+    clearanceBroomClean: false,
     vehicleSelections: [],
     notes: "",
     rooms: [
@@ -343,6 +388,7 @@ function createCalculation(): Calculation {
     storageCost: 0,
     logisticsCost: 0,
     otherCost: 0,
+    discountPercent: 0,
     autoEstimate: true,
     planning: createPlanning(),
   };
@@ -555,20 +601,46 @@ function calculateServiceRecommendation(
 
   if (selectedServices.has("clearance")) {
     const clearanceVolume = planning.disposalVolumeM3 || volume;
-    labourHours += Math.max(
+    const totalClearanceVolume =
+      clearanceVolume + planning.clearanceHazardousVolumeM3;
+    let clearanceHours = Math.max(
       3,
-      clearanceVolume * 0.45 * accessFactor + planning.clearanceHeavyItems * 0.75
+      totalClearanceVolume * 0.45 * accessFactor +
+        planning.clearanceHeavyItems * 0.75
     );
-    employees = Math.max(employees, clearanceVolume > 20 ? 3 : 2);
-    requiredVehicleVolume = Math.max(requiredVehicleVolume, clearanceVolume);
-    disposalCost += Math.max(
-      0,
-      clearanceVolume * rates.disposalRatePerM3 - planning.clearanceCredit
-    );
+    if (planning.clearanceBroomClean) {
+      clearanceHours += Math.max(1, totalClearanceVolume * 0.06);
+    }
+    labourHours += clearanceHours;
+    employees = Math.max(employees, totalClearanceVolume > 20 ? 3 : 2);
+    if (planning.clearanceDisposalIncluded) {
+      requiredVehicleVolume = Math.max(requiredVehicleVolume, totalClearanceVolume);
+    }
+    let clearanceDisposal =
+      planning.clearanceContainerCount * rates.containerRate;
+    if (planning.clearanceDisposalIncluded) {
+      clearanceDisposal +=
+        clearanceVolume * rates.disposalRatePerM3 +
+        planning.clearanceHazardousVolumeM3 * rates.hazardousDisposalRatePerM3;
+    }
+    disposalCost += Math.max(0, clearanceDisposal - planning.clearanceCredit);
     logisticsCost += planning.parkingRequired ? rates.parkingPermitRate : 0;
     explanations.push(
-      `${clearanceVolume.toFixed(1)} m3 Entsorgungsvolumen`
+      planning.clearanceDisposalIncluded
+        ? `${clearanceVolume.toFixed(1)} m3 Entsorgungsvolumen`
+        : `${totalClearanceVolume.toFixed(1)} m3 Entruempelung ohne Entsorgung (nur Arbeitszeit)`
     );
+    if (planning.clearanceDisposalIncluded && planning.clearanceHazardousVolumeM3 > 0) {
+      explanations.push(
+        `${planning.clearanceHazardousVolumeM3.toFixed(1)} m3 Sondermuell / Problemstoffe`
+      );
+    }
+    if (planning.clearanceContainerCount > 0) {
+      explanations.push(`${planning.clearanceContainerCount} Container inkl. Stellung`);
+    }
+    if (planning.clearanceBroomClean) {
+      explanations.push("Besenreine Uebergabe eingeplant");
+    }
     if (planning.clearanceCredit > 0) {
       explanations.push(`${formatCurrency(planning.clearanceCredit)} Wertanrechnung`);
     }
@@ -672,7 +744,13 @@ function calculatePricing(calculation: Calculation, rates: Rates) {
     calculation.otherCost +
     calculateExtraServices(calculation.planning.extraServices);
   const surcharge = directCost * (rates.surchargePercent / 100);
-  const netTotal = directCost + surcharge;
+  const subtotal = directCost + surcharge;
+  const discountPercent = Math.min(
+    100,
+    Math.max(0, calculation.discountPercent ?? 0)
+  );
+  const discount = subtotal * (discountPercent / 100);
+  const netTotal = subtotal - discount;
   const vat = netTotal * (rates.vatPercent / 100);
   return {
     employeeCost:
@@ -682,6 +760,8 @@ function calculatePricing(calculation: Calculation, rates: Rates) {
     extraServiceCost: calculateExtraServices(calculation.planning.extraServices),
     directCost,
     surcharge,
+    discount,
+    discountPercent,
     netTotal,
     vat,
     grossTotal: netTotal + vat,
@@ -801,6 +881,22 @@ function getCalculationRows(
     : "Manuell festgelegter Betrag";
   const clearanceVolume = calculation.planning.disposalVolumeM3 || volume;
   const storageVolume = calculation.planning.storageVolumeM3 || volume;
+  const disposalParts = [
+    ...(calculation.planning.clearanceDisposalIncluded
+      ? [
+          `${clearanceVolume} m³ × ${formatCurrency(rates.disposalRatePerM3)}`,
+          ...(calculation.planning.clearanceHazardousVolumeM3 > 0
+            ? [`${calculation.planning.clearanceHazardousVolumeM3} m³ Sondermüll × ${formatCurrency(rates.hazardousDisposalRatePerM3)}`]
+            : []),
+        ]
+      : []),
+    ...(calculation.planning.clearanceContainerCount > 0
+      ? [`${calculation.planning.clearanceContainerCount} Container × ${formatCurrency(rates.containerRate)}`]
+      : []),
+  ].join(" + ");
+  const disposalFormula = calculation.autoEstimate
+    ? `${disposalParts || "Ohne Entsorgung"}${calculation.planning.clearanceCredit > 0 ? ` - ${formatCurrency(calculation.planning.clearanceCredit)} Wertanrechnung` : ""}`
+    : "Manuell festgelegter Betrag";
   const logisticsFormula = calculation.autoEstimate
     ? [
         ...(calculation.planning.furnitureLiftRequired
@@ -843,7 +939,7 @@ function getCalculationRows(
       ? [{ label: "Material", formula: materialFormula, value: calculation.materialCost }]
       : []),
     ...(calculation.disposalCost > 0
-      ? [{ label: "Entsorgung", formula: calculation.autoEstimate ? `${clearanceVolume} m³ × ${formatCurrency(rates.disposalRatePerM3)}${calculation.planning.clearanceCredit > 0 ? ` - ${formatCurrency(calculation.planning.clearanceCredit)} Wertanrechnung` : ""}` : "Manuell festgelegter Betrag", value: calculation.disposalCost }]
+      ? [{ label: "Entsorgung", formula: disposalFormula, value: calculation.disposalCost }]
       : []),
     ...(calculation.storageCost > 0
       ? [{ label: "Einlagerung", formula: calculation.autoEstimate ? `${storageVolume} m³ × ${Math.max(1, calculation.planning.storageMonths)} Monat(e) × ${formatCurrency(rates.storageRatePerM3Month)}` : "Manuell festgelegter Betrag", value: calculation.storageCost }]
@@ -918,6 +1014,12 @@ function CalculationBreakdown({
           <span className='text-slate-600'>Aufschlag ({rates.surchargePercent}% von {formatCurrency(pricing.directCost)})</span>
           <strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.surcharge)}</strong>
         </div>
+        {pricing.discount > 0 && (
+          <div className='flex items-start justify-between gap-4 text-sm'>
+            <span className='text-slate-600'>Kombi-Rabatt ({pricing.discountPercent}%)</span>
+            <strong className='shrink-0 tabular-nums text-emerald-700'>-{formatCurrency(pricing.discount)}</strong>
+          </div>
+        )}
         <div className='flex items-center justify-between gap-4 border-t border-slate-200 pt-3 text-sm'>
           <span className='font-medium text-slate-700'>Nettosumme</span>
           <strong className='tabular-nums text-slate-950'>{formatCurrency(pricing.netTotal)}</strong>
@@ -955,6 +1057,8 @@ export default function OfferPlanner() {
   const [savedCalculations, setSavedCalculations] = useState<
     SavedCalculation[]
   >([]);
+  const [packages, setPackages] = useState<OfferPackage[]>(defaultPackages);
+  const [newPackageName, setNewPackageName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [status, setStatus] = useState<"idle" | "saved" | "error">("idle");
@@ -1036,6 +1140,7 @@ export default function OfferPlanner() {
           });
           setCalculation(nextCalculation);
           setSavedCalculations(loadedSavedCalculations);
+          if (data?.packages?.length) setPackages(data.packages);
         }
       } catch {
         if (active) setStatus("error");
@@ -1104,6 +1209,7 @@ export default function OfferPlanner() {
     mileageCost,
     extraServiceCost,
     surcharge,
+    discount,
     netTotal,
     vat,
     grossTotal,
@@ -1197,7 +1303,8 @@ export default function OfferPlanner() {
   }
 
   async function persist(
-    nextSavedCalculations: SavedCalculation[] = savedCalculations
+    nextSavedCalculations: SavedCalculation[] = savedCalculations,
+    nextPackages: OfferPackage[] = packages
   ) {
     const companyId = companyData?.id;
     if (!companyId) return false;
@@ -1211,11 +1318,13 @@ export default function OfferPlanner() {
           rates,
           calculation,
           savedCalculations: nextSavedCalculations,
+          packages: nextPackages,
           updatedAt: Date.now(),
         }),
         { merge: true }
       );
       setSavedCalculations(nextSavedCalculations);
+      setPackages(nextPackages);
       setStatus("saved");
       return true;
     } catch {
@@ -1432,12 +1541,141 @@ export default function OfferPlanner() {
   }
 
   function toggleService(service: ServiceKey) {
-    const isSelected = calculation.planning.serviceTypes.includes(service);
-    updatePlanning(
-      "serviceTypes",
-      isSelected ? [] : [service]
+    setCalculation((current) => {
+      const selected = current.planning.serviceTypes.includes(service);
+      const serviceTypes = selected
+        ? current.planning.serviceTypes.filter((item) => item !== service)
+        : [...current.planning.serviceTypes, service];
+      return {
+        ...current,
+        packageName: undefined,
+        planning: { ...current.planning, serviceTypes },
+      };
+    });
+    setStatus("idle");
+  }
+
+  function applyPackage(offerPackage: OfferPackage) {
+    setCalculation((current) => ({
+      ...current,
+      discountPercent: offerPackage.discountPercent,
+      packageName: offerPackage.name,
+      planning: {
+        ...current.planning,
+        serviceTypes: [...offerPackage.services],
+      },
+    }));
+    setStatus("idle");
+  }
+
+  function saveCurrentSelectionAsPackage() {
+    const name = newPackageName.trim();
+    if (!name || calculation.planning.serviceTypes.length === 0) return;
+    setPackages((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        name,
+        services: [...calculation.planning.serviceTypes],
+        discountPercent: calculation.discountPercent,
+      },
+    ]);
+    setNewPackageName("");
+    setStatus("idle");
+  }
+
+  function updatePackage(id: string, patch: Partial<OfferPackage>) {
+    setPackages((current) =>
+      current.map((offerPackage) =>
+        offerPackage.id === id ? { ...offerPackage, ...patch } : offerPackage
+      )
     );
-    if (!isSelected) setActiveStep("site");
+    setStatus("idle");
+  }
+
+  function removePackage(id: string) {
+    setPackages((current) =>
+      current.filter((offerPackage) => offerPackage.id !== id)
+    );
+    setStatus("idle");
+  }
+
+  function applyAssistantDraft(draft: AssistantOfferDraft) {
+    setCalculation((current) => {
+      const planning = { ...current.planning };
+      const assign = <Key extends keyof PlanningDetails>(
+        key: Key,
+        value: PlanningDetails[Key] | undefined | null
+      ) => {
+        if (value === undefined || value === null) return;
+        if (typeof value === "string" && value.trim() === "") return;
+        planning[key] = value;
+      };
+
+      const services = normalizeServiceTypes(draft.services ?? []);
+      if (services.length) planning.serviceTypes = services;
+      assign("contactName", draft.contactName);
+      assign("contactPhone", draft.contactPhone);
+      assign("contactEmail", draft.contactEmail);
+      assign("date", draft.date);
+      assign("oldAddress", draft.oldAddress);
+      assign("newAddress", draft.newAddress);
+      assign("oldFloor", draft.oldFloor);
+      assign("newFloor", draft.newFloor);
+      assign("oldFloorLevel", draft.oldFloorLevel);
+      assign("newFloorLevel", draft.newFloorLevel);
+      assign("oldElevator", draft.oldElevator);
+      assign("newElevator", draft.newElevator);
+      assign("carryDistanceM", draft.carryDistanceM);
+      assign("moveTrips", draft.moveTrips);
+      assign("moveComplexity", draft.moveComplexity);
+      assign("furnitureLiftRequired", draft.furnitureLiftRequired);
+      assign("parkingRequired", draft.parkingRequired);
+      assign("movingBoxes", draft.movingBoxes);
+      assign("unpackingBoxes", draft.unpackingBoxes);
+      assign("furniturePieces", draft.furniturePieces);
+      assign("dismantlingHours", draft.dismantlingHours);
+      assign("paintAreaM2", draft.paintAreaM2);
+      assign("ceilingAreaM2", draft.ceilingAreaM2);
+      assign("paintCoats", draft.paintCoats);
+      assign("disposalVolumeM3", draft.disposalVolumeM3);
+      assign("clearanceHeavyItems", draft.clearanceHeavyItems);
+      assign("clearanceDisposalIncluded", draft.clearanceDisposalIncluded);
+      assign("clearanceHazardousVolumeM3", draft.clearanceHazardousVolumeM3);
+      assign("clearanceContainerCount", draft.clearanceContainerCount);
+      assign("clearanceBroomClean", draft.clearanceBroomClean);
+      assign("storageVolumeM3", draft.storageVolumeM3);
+      assign("storageMonths", draft.storageMonths);
+
+      if (draft.rooms?.length) {
+        planning.rooms = draft.rooms.map((room) => ({
+          id: crypto.randomUUID(),
+          name: room.name || "Raum",
+          items: room.items.map((item) => ({
+            id: crypto.randomUUID(),
+            name: item.name,
+            quantity: item.quantity,
+            volumeM3: item.volumeM3,
+          })),
+        }));
+      }
+      if (draft.notes) {
+        planning.notes = planning.notes
+          ? `${planning.notes}\n${draft.notes}`
+          : draft.notes;
+      }
+
+      return {
+        ...current,
+        title: draft.title || current.title,
+        customer: draft.customer || current.customer,
+        kilometers: draft.kilometers ?? current.kilometers,
+        autoEstimate: true,
+        planning,
+      };
+    });
+    setActiveStep("price");
+    setStatus("idle");
   }
 
   function updateCostEstimatePrintOption(
@@ -1582,6 +1820,7 @@ export default function OfferPlanner() {
         <section class="totals">
           <div class="total-row"><span>Direkte Kosten</span><strong>${formatCurrency(pricing.directCost)}</strong></div>
           <div class="total-row"><span>Aufschlag (${rates.surchargePercent}%)</span><strong>${formatCurrency(pricing.surcharge)}</strong></div>
+          ${pricing.discount > 0 ? `<div class="total-row"><span>Kombi-Rabatt (${pricing.discountPercent}%)</span><strong>-${formatCurrency(pricing.discount)}</strong></div>` : ""}
           <div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(pricing.netTotal)}</strong></div>
           <div class="total-row"><span>MwSt. (${rates.vatPercent}%)</span><strong>${formatCurrency(pricing.vat)}</strong></div>
           <div class="total-row gross"><span>Gesamtbetrag brutto</span><strong>${formatCurrency(pricing.grossTotal)}</strong></div>
@@ -1694,7 +1933,7 @@ export default function OfferPlanner() {
       <h2>Planung vor Ort</h2><section class="grid"><div class="card"><p class="card-label">Auszug / Einsatzort</p><h3>${escapePrintHtml(calculation.planning.oldAddress || "Adresse noch offen")}</h3><div class="muted">Etage: ${escapePrintHtml(calculation.planning.oldFloor || "-")}<br>Aufzug: ${calculation.planning.oldElevator ? "vorhanden" : "nicht vorhanden"}</div></div><div class="card"><p class="card-label">Einzug / Zielort</p><h3>${escapePrintHtml(calculation.planning.newAddress || "Adresse noch offen")}</h3><div class="muted">Etage: ${escapePrintHtml(calculation.planning.newFloor || "-")}<br>Aufzug: ${calculation.planning.newElevator ? "vorhanden" : "nicht vorhanden"}</div></div></section>
       <section class="facts"><div class="fact"><span>Trageweg</span><strong>${calculation.planning.carryDistanceM} m</strong></div><div class="fact"><span>Halteverbotszone</span><strong>${calculation.planning.parkingRequired ? "Erforderlich" : "Nicht erforderlich"}</strong></div><div class="fact"><span>Einpackservice</span><strong>${calculation.planning.packingRequired ? "Vorgesehen" : "Nicht vorgesehen"}</strong></div></section>
       <h2>Volumen & Inventar</h2><div class="volume"><span>Geschätztes Umzugsvolumen</span><strong>${volume.toFixed(2)} m³</strong></div>${roomsHtml || "<p class=\"muted\">Für diesen Auftrag wurde noch kein Inventar erfasst.</p>"}
-      <h2>Ihr Angebot</h2><section class="price-panel"><div><p>Angebotspreis inklusive ${rates.vatPercent}% Mehrwertsteuer</p><strong>${formatCurrency(grossTotal)}</strong></div><div class="price-details">Netto<b>${formatCurrency(netTotal)}</b></div></section>
+      <h2>Ihr Angebot</h2><section class="price-panel"><div><p>Angebotspreis inklusive ${rates.vatPercent}% Mehrwertsteuer${calculation.discountPercent > 0 ? ` · inkl. ${calculation.discountPercent}% Kombi-Rabatt${calculation.packageName ? ` (${escapePrintHtml(calculation.packageName)})` : ""}` : ""}</p><strong>${formatCurrency(grossTotal)}</strong></div><div class="price-details">Netto<b>${formatCurrency(netTotal)}</b></div></section>
       ${calculation.planning.notes ? `<h2>Wichtige Hinweise</h2><div class="note">${escapePrintHtml(calculation.planning.notes).replaceAll("\n", "<br>")}</div>` : ""}
       ${photosHtml ? `<h2>Objektfotos</h2><section class="photos">${photosHtml}</section>` : ""}
       <footer class="footer"><span>Umzugshelden · Zuverlässig geplant. Entspannt umgezogen.</span><span>Alle Angaben vorbehaltlich der finalen Auftragsbestätigung.</span></footer>
@@ -1724,6 +1963,7 @@ export default function OfferPlanner() {
         <div className='flex flex-wrap items-center gap-2 sm:gap-3'>
           {status === "saved" && <span className='flex items-center gap-1.5 text-sm font-medium text-emerald-700'><Check size={16} /> Gespeichert</span>}
           {status === "error" && <span className='text-sm font-medium text-red-600'>Speichern fehlgeschlagen</span>}
+          <OfferAssistant onApply={applyAssistantDraft} />
           <Button variant='outline' className='flex-1 sm:flex-none' onClick={printCustomerDocument}><Printer /> Übersicht</Button>
           <Button variant='outline' className='flex-1 sm:flex-none' onClick={() => setIsCostEstimateDialogOpen(true)}><Printer /> Kostenvoranschlag</Button>
           <Button className='flex-1 sm:flex-none' onClick={() => void persist()} disabled={isSaving}>{isSaving ? <LoaderCircle className='animate-spin' /> : <Save />} Entwurf speichern</Button>
@@ -1820,8 +2060,8 @@ export default function OfferPlanner() {
           {activeStep === "order" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
             <SectionHeading icon={ClipboardList} title='Auftrag & Kunde' description='Die Eckdaten sind auf der Kundenansicht und in der gespeicherten Planung sichtbar.' />
             <div className='mb-6 border-b border-slate-200 pb-5'>
-              <p className='mb-1 text-sm font-semibold text-slate-950'>1. Dienstleistung waehlen</p>
-              <p className='mb-3 text-sm text-slate-600'>Die Auswahl bestimmt Aufnahme, Aufwand und die automatische Preisempfehlung.</p>
+              <p className='mb-1 text-sm font-semibold text-slate-950'>1. Dienstleistungen waehlen</p>
+              <p className='mb-3 text-sm text-slate-600'>Mehrfachauswahl moeglich – kombinierte Leistungen lassen sich als Kombi-Paket mit Rabatt anbieten.</p>
               <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
                 {serviceOptions.map((service) => {
                   const checked = selectedServices.has(service.id);
@@ -1832,6 +2072,37 @@ export default function OfferPlanner() {
                     <span className='mt-1 block text-xs leading-5 text-slate-600'>{service.description}</span></span>
                   </button>;
                 })}
+              </div>
+              <div className='mt-5 rounded-md border border-amber-200 bg-amber-50/60 p-4'>
+                <div className='flex flex-wrap items-center justify-between gap-2'>
+                  <div>
+                    <p className='text-sm font-semibold text-slate-950'>Kombi-Pakete</p>
+                    <p className='mt-0.5 text-sm text-slate-600'>Ein Klick waehlt die enthaltenen Leistungen aus und setzt den Kombi-Rabatt.</p>
+                  </div>
+                  {calculation.packageName && <span className='rounded-full bg-amber-200/70 px-3 py-1 text-xs font-semibold text-amber-900'>{calculation.packageName} aktiv</span>}
+                </div>
+                <div className='mt-3 space-y-2'>
+                  {packages.map((offerPackage) => {
+                    const isActive = calculation.packageName === offerPackage.name;
+                    return (
+                      <div key={offerPackage.id} className={`flex flex-wrap items-center gap-2 rounded-md border bg-white p-2 ${isActive ? "border-amber-400 ring-1 ring-amber-300" : "border-slate-200"}`}>
+                        <input value={offerPackage.name} onChange={(event) => updatePackage(offerPackage.id, { name: event.target.value })} aria-label='Paketname' className='h-9 w-40 min-w-0 flex-1 rounded-md border border-slate-200 px-2 text-sm font-medium text-slate-950 outline-none focus:border-primary' />
+                        <span className='hidden max-w-56 truncate text-xs text-slate-500 lg:block'>{offerPackage.services.map((serviceKey) => serviceOptions.find((option) => option.id === serviceKey)?.label ?? serviceKey).join(" + ")}</span>
+                        <div className='relative'>
+                          <input type='number' min='0' max='100' step='0.5' value={offerPackage.discountPercent} onChange={(event) => updatePackage(offerPackage.id, { discountPercent: Math.min(100, toNumber(event.target.value)) })} aria-label='Kombi-Rabatt' className='h-9 w-20 rounded-md border border-slate-200 px-2 pr-6 text-sm outline-none focus:border-primary' />
+                          <span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>%</span>
+                        </div>
+                        <Button type='button' size='sm' variant={isActive ? 'default' : 'outline'} onClick={() => applyPackage(offerPackage)}>Anwenden</Button>
+                        <Button type='button' variant='ghost' size='icon' title='Paket loeschen' onClick={() => removePackage(offerPackage.id)}><Trash2 className='text-red-600' /></Button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className='mt-3 flex flex-wrap gap-2 border-t border-amber-200 pt-3'>
+                  <input value={newPackageName} onChange={(event) => setNewPackageName(event.target.value)} placeholder='Neues Paket benennen (nutzt aktuelle Auswahl & Rabatt)' className='h-9 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm outline-none focus:border-primary' />
+                  <Button type='button' variant='outline' size='sm' onClick={saveCurrentSelectionAsPackage} disabled={!newPackageName.trim() || selectedServices.size === 0}><PackagePlus /> Als Paket speichern</Button>
+                </div>
+                <p className='mt-2 text-xs text-slate-500'>Pakete werden mit „Entwurf speichern“ dauerhaft gesichert.</p>
               </div>
             </div>
             {selectedServices.size === 0 ? <p className='rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600'>Waehle mindestens eine Dienstleistung, um die passende Aufnahme und Angebotslogik zu starten.</p> : <div className='grid gap-4 sm:grid-cols-2'>
@@ -1844,17 +2115,17 @@ export default function OfferPlanner() {
             </div>}
           </section>}
 
-          {activeStep === "site" && calculation.planning.serviceTypes[0] && (
-            <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
+          {activeStep === "site" && calculation.planning.serviceTypes.map((service) => (
+            <section key={service} className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
               <ServiceConfigurator
-                service={calculation.planning.serviceTypes[0]}
+                service={service}
                 planning={calculation.planning}
                 kilometers={calculation.kilometers}
                 onPlanningChange={updatePlanning}
                 onKilometersChange={(value) => updateCalculation("kilometers", value)}
               />
             </section>
-          )}
+          ))}
 
           {activeStep === "inventory" && usesMoveInventory && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
             <SectionHeading icon={Box} title='Volumen berechnen' description='Lege Räume und Gegenstände an. Menge mal Einzelvolumen ergibt das Gesamtvolumen für Fahrzeug und Personal.' />
@@ -1926,6 +2197,7 @@ export default function OfferPlanner() {
               <NumberField label='Planungs- & Auftragspauschale' value={rates.planningFee} onChange={(value) => updateRate("planningFee", value)} suffix='EUR' step='0.01' />
               <NumberField label='Aufschlag / Gewinnmarge' value={rates.surchargePercent} onChange={(value) => updateRate("surchargePercent", value)} suffix='%' step='0.1' />
               <NumberField label='Mehrwertsteuer' value={rates.vatPercent} onChange={(value) => updateRate("vatPercent", value)} suffix='%' step='0.1' />
+              <NumberField label='Kombi-Rabatt' value={calculation.discountPercent} onChange={(value) => updateCalculation("discountPercent", Math.min(100, value))} suffix='%' step='0.5' />
               <NumberField label='Mitarbeiter' value={calculation.employees} onChange={(value) => updateManualCalculation("employees", value)} suffix='Personen' />
               <NumberField label='Stunden je Mitarbeiter' value={calculation.hoursPerEmployee} onChange={(value) => updateManualCalculation("hoursPerEmployee", value)} suffix='Std.' step='0.25' />
               {needsVehicle && <NumberField label='Fahrzeugtage' value={calculation.vehicleDays} onChange={(value) => updateManualCalculation("vehicleDays", value)} suffix='Tage' step='0.5' />}
@@ -1953,7 +2225,11 @@ export default function OfferPlanner() {
                   <NumberField label='Material je m2 und Anstrich' value={rates.paintMaterialPerM2} onChange={(value) => updateRate("paintMaterialPerM2", value)} suffix='EUR' step='0.01' />
                   <NumberField label='Arbeitszeit je m2 und Anstrich' value={rates.paintLaborHoursPerM2} onChange={(value) => updateRate("paintLaborHoursPerM2", value)} suffix='Std.' step='0.01' />
                 </>}
-                {selectedServices.has("clearance") && <NumberField label='Entsorgung je m3' value={rates.disposalRatePerM3} onChange={(value) => updateRate("disposalRatePerM3", value)} suffix='EUR' step='0.01' />}
+                {selectedServices.has("clearance") && <>
+                  <NumberField label='Entsorgung je m3 (Sperrmuell)' value={rates.disposalRatePerM3} onChange={(value) => updateRate("disposalRatePerM3", value)} suffix='EUR' step='0.01' />
+                  <NumberField label='Sondermuell je m3' value={rates.hazardousDisposalRatePerM3} onChange={(value) => updateRate("hazardousDisposalRatePerM3", value)} suffix='EUR' step='0.01' />
+                  <NumberField label='Container inkl. Stellung' value={rates.containerRate} onChange={(value) => updateRate("containerRate", value)} suffix='EUR / Stk.' step='0.01' />
+                </>}
                 {selectedServices.has("furnitureAssembly") && <NumberField label='Montagezeit je Moebelteil' value={rates.furnitureAssemblyMinutesPerPiece} onChange={(value) => updateRate("furnitureAssemblyMinutesPerPiece", value)} suffix='Min.' step='1' />}
                 {selectedServices.has("packing") && <>
                   <NumberField label='Kartonpreis' value={rates.packingBoxRate} onChange={(value) => updateRate("packingBoxRate", value)} suffix='EUR' step='0.01' />
@@ -2012,6 +2288,7 @@ export default function OfferPlanner() {
             {calculation.storageCost > 0 && <div className='flex items-center justify-between gap-3 text-slate-300'><span>Einlagerung</span><span>{formatCurrency(calculation.storageCost)}</span></div>}
             <div className='flex items-center justify-between gap-3 border-t border-white/15 pt-3 text-slate-300'><span>Pauschale & Extras</span><span>{formatCurrency(rates.planningFee + calculation.materialCost + calculation.disposalCost + calculation.otherCost)}</span></div>
             <div className='flex justify-between gap-4 text-slate-300'><span>Aufschlag</span><span>{formatCurrency(surcharge)}</span></div>
+            {discount > 0 && <div className='flex justify-between gap-4 text-emerald-300'><span>Kombi-Rabatt{calculation.packageName ? ` (${calculation.packageName})` : ""}</span><span>-{formatCurrency(discount)}</span></div>}
             <div className='flex justify-between gap-4 text-slate-300'><span>Netto</span><span>{formatCurrency(netTotal)}</span></div>
             <div className='flex justify-between gap-4 border-t border-white/15 pt-3 font-medium text-white'><span>MwSt.</span><span>{formatCurrency(vat)}</span></div>
           </div>
