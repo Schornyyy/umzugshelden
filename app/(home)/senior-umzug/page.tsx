@@ -38,12 +38,12 @@ export async function generateMetadata() {
       title: "Seniorenumzug Olpe & Umgebung | Umzugshelden",
       description:
         "Einfühlsamer Seniorenumzug im Kreis Olpe und 30 km Umkreis – mit Geduld, Erfahrung und Rundum-Service.",
-      url: "https://umzugshelden.de/senior-umzug",
+      url: "https://umzugshelden.io/senior-umzug",
       type: "website",
       locale: "de_DE",
     },
     alternates: {
-      canonical: "https://umzugshelden.de/senior-umzug",
+      canonical: "https://umzugshelden.io/senior-umzug",
     },
     robots: {
       index: true,

@@ -31,10 +31,10 @@ export async function generateMetadata() {
       title: "Möbel Ab- und Aufbau Service | Umzugshelden",
       description:
         "Möbel abbauen, transportieren und wieder aufbauen – von IKEA bis zur Einbauküche. Erfahrenes Team, Festpreise.",
-      url: "https://umzugshelden.de/moebel-service",
+      url: "https://umzugshelden.io/moebel-service",
     },
     alternates: {
-      canonical: "https://umzugshelden.de/moebel-service",
+      canonical: "https://umzugshelden.io/moebel-service",
     },
   };
 }

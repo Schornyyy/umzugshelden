@@ -40,12 +40,12 @@ export async function generateMetadata() {
       title: "Entrümpelung Olpe & Umgebung | Umzugshelden",
       description:
         "Schnelle, diskrete und günstige Entrümpelung im Kreis Olpe und 30 km Umkreis – mit besenreiner Übergabe.",
-      url: "https://umzugshelden.de/entrümpelung",
+      url: "https://umzugshelden.io/entrümpelung",
       type: "website",
       locale: "de_DE",
     },
     alternates: {
-      canonical: "https://umzugshelden.de/entrümpelung",
+      canonical: "https://umzugshelden.io/entrümpelung",
     },
   };
 }

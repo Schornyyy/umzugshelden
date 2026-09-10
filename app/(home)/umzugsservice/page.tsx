@@ -30,10 +30,10 @@ export async function generateMetadata() {
       title: "Umzugsservice Kreis Olpe | Umzugshelden",
       description:
         "Professioneller Umzugsservice – vom ersten Karton bis zum letzten Möbelstück. Faire Preise, zuverlässiges Team.",
-      url: "https://umzugshelden.de/umzugsservice",
+      url: "https://umzugshelden.io/umzugsservice",
     },
     alternates: {
-      canonical: "https://umzugshelden.de/umzugsservice",
+      canonical: "https://umzugshelden.io/umzugsservice",
     },
   };
 }

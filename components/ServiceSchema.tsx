@@ -26,16 +26,16 @@ export default function ServiceSchema({
   serviceType,
   city,
 }: ServiceSchemaProps) {
-  const url = `https://umzugshelden.de${path}`;
+  const url = `https://umzugshelden.io${path}`;
   const areas = city ? [city] : serviceAreas;
   const schema = {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": ["ProfessionalService", "LocalBusiness"],
-        "@id": "https://umzugshelden.de/#business",
+        "@id": "https://umzugshelden.io/#business",
         name: "Umzugshelden",
-        url: "https://umzugshelden.de",
+        url: "https://umzugshelden.io",
         telephone: "+4915168567708",
         email: "info@umzugshelden.io",
         address: {
@@ -73,7 +73,7 @@ export default function ServiceSchema({
         description,
         url,
         provider: {
-          "@id": "https://umzugshelden.de/#business",
+          "@id": "https://umzugshelden.io/#business",
         },
         areaServed: areas.map((area) => ({
           "@type": "City",

@@ -30,10 +30,10 @@ export async function generateMetadata() {
       title: "Anstricharbeiten für Wohnungsübergabe | Umzugshelden",
       description:
         "Schönheitsreparaturen, Streichen, Tapezieren – wir bereiten Ihre Wohnung optimal für die Übergabe vor.",
-      url: "https://umzugshelden.de/anstricharbeiten",
+      url: "https://umzugshelden.io/anstricharbeiten",
     },
     alternates: {
-      canonical: "https://umzugshelden.de/anstricharbeiten",
+      canonical: "https://umzugshelden.io/anstricharbeiten",
     },
   };
 }

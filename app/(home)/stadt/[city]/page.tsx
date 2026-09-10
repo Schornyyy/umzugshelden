@@ -405,7 +405,7 @@ export async function generateMetadata({
       locale: "de_DE",
     },
     alternates: {
-      canonical: `https://umzugshelden.de/stadt/${encodeURIComponent(slugify(cityName))}`,
+      canonical: `https://umzugshelden.io/stadt/${encodeURIComponent(slugify(cityName))}`,
     },
   };
 }

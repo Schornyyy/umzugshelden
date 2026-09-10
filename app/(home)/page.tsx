@@ -14,7 +14,7 @@ export async function generateMetadata() {
       title: "Umzugshelden — Ihr zuverlässiger Umzugsservice",
       description:
         "Professioneller Umzugsservice – schnelle Reaktionen und faire Preise. Kostenloses Angebot anfordern!",
-      url: "https://umzugshelden.de",
+      url: "https://umzugshelden.io",
       images: [
         {
           url: "/images/Umzugsunternhemen_olpe.png",

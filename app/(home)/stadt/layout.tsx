@@ -17,10 +17,10 @@ export const metadata: Metadata = {
       "Professioneller Umzugsservice im Kreis Olpe und Umgebung — kontaktieren Sie Umzugshelden für ein kostenloses Angebot.",
     type: "website",
     locale: "de_DE",
-    url: "https://umzugshelden.de/stadt",
+    url: "https://umzugshelden.io/stadt",
   },
   alternates: {
-    canonical: "https://umzugshelden.de/stadt",
+    canonical: "https://umzugshelden.io/stadt",
   },
   robots: {
     index: true,
