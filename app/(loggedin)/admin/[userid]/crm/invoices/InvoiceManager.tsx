@@ -20,6 +20,7 @@ import type {
   CrmInvoice,
   CrmInvoiceIssuer,
   CrmInvoiceLine,
+  CrmInvoiceReminder,
   CrmInvoiceSettings,
   CrmInvoiceStatus,
 } from "@/types/Crm";
@@ -35,6 +36,7 @@ import {
 } from "firebase/firestore";
 import {
   AlertTriangle,
+  BellRing,
   Check,
   FilePlus2,
   LoaderCircle,
@@ -150,6 +152,38 @@ const serviceLabels: Record<string, string> = {
   packing: "Einpackservice",
   storage: "Einlagerung",
 };
+
+const reminderLevels = [
+  { level: 1, label: "Zahlungserinnerung", defaultFee: 0, defaultInterest: 0 },
+  { level: 2, label: "1. Mahnung", defaultFee: 5, defaultInterest: 5 },
+  { level: 3, label: "2. Mahnung", defaultFee: 5, defaultInterest: 5 },
+  { level: 4, label: "Letzte Mahnung", defaultFee: 5, defaultInterest: 5 },
+];
+
+type ReminderDraft = {
+  level: number;
+  label: string;
+  issueDate: string;
+  paymentDeadline: string;
+  fee: number;
+  interestRatePercent: number;
+  note: string;
+};
+
+function overdueDaysBetween(dueDate: string, issueDate: string) {
+  const due = new Date(`${dueDate}T12:00:00`).getTime();
+  const issue = new Date(`${issueDate}T12:00:00`).getTime();
+  if (Number.isNaN(due) || Number.isNaN(issue)) return 0;
+  return Math.max(0, Math.round((issue - due) / 86_400_000));
+}
+
+function calculateReminderInterest(
+  gross: number,
+  ratePercent: number,
+  overdueDays: number
+) {
+  return Math.round(gross * (ratePercent / 100) * (overdueDays / 365) * 100) / 100;
+}
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", {
   style: "currency",
@@ -352,6 +386,7 @@ function normalizeInvoice(
     issuer: mergeIssuer(settings.issuer, invoice.issuer),
     sequenceNumber: invoice.sequenceNumber ?? 0,
     taxNote: invoice.taxNote ?? "",
+    reminders: invoice.reminders ?? [],
   };
 
   if (!normalized.finalizedAt && normalized.status !== "draft") {
@@ -573,6 +608,8 @@ export default function InvoiceManager() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [reminderDraft, setReminderDraft] = useState<ReminderDraft | null>(null);
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
 
   useEffect(() => {
     const ownerId = companyData?.id;
@@ -706,6 +743,15 @@ export default function InvoiceManager() {
   const availableStatuses = draftIsFinalized
     ? invoiceStatuses.filter((status) => status.value !== "draft")
     : invoiceStatuses;
+  const reminders = savedInvoice?.reminders ?? [];
+  const nextReminderLevel =
+    reminderLevels[Math.min(reminders.length, reminderLevels.length - 1)];
+  const invoiceOverdueDays = savedInvoice
+    ? overdueDaysBetween(savedInvoice.dueDate, dateInputValue())
+    : 0;
+  const canCreateReminder = Boolean(
+    savedInvoice && isFinalized(savedInvoice) && savedInvoice.status === "sent"
+  );
 
   function updateInvoiceList(next: CrmInvoice) {
     setInvoices((current) =>
@@ -969,6 +1015,218 @@ export default function InvoiceManager() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function openReminderDialog() {
+    if (!canCreateReminder || !savedInvoice) return;
+    const today = dateInputValue();
+    setReminderDraft({
+      level: Math.min(reminders.length, reminderLevels.length - 1) + 1,
+      label: nextReminderLevel.label,
+      issueDate: today,
+      paymentDeadline: addDays(today, 14),
+      fee: nextReminderLevel.defaultFee,
+      interestRatePercent: nextReminderLevel.defaultInterest,
+      note: "",
+    });
+  }
+
+  async function saveReminder() {
+    if (!savedInvoice || !reminderDraft) return;
+    const gross = getTotals(savedInvoice).gross;
+    const overdueDays = overdueDaysBetween(
+      savedInvoice.dueDate,
+      reminderDraft.issueDate
+    );
+    const reminder: CrmInvoiceReminder = {
+      id: crypto.randomUUID(),
+      level: reminderDraft.level,
+      label: reminderDraft.label,
+      issueDate: reminderDraft.issueDate,
+      paymentDeadline: reminderDraft.paymentDeadline,
+      fee: reminderDraft.fee,
+      interestRatePercent: reminderDraft.interestRatePercent,
+      interestAmount: calculateReminderInterest(
+        gross,
+        reminderDraft.interestRatePercent,
+        overdueDays
+      ),
+      overdueDays,
+      note: reminderDraft.note,
+      createdAt: Date.now(),
+    };
+    const nextInvoice: CrmInvoice = {
+      ...savedInvoice,
+      reminders: [...(savedInvoice.reminders ?? []), reminder],
+      updatedAt: Date.now(),
+    };
+    setIsSavingReminder(true);
+    try {
+      await setDoc(
+        doc(database, INVOICE_COLLECTION, nextInvoice.id),
+        sanitizeForFirestore(nextInvoice)
+      );
+      updateInvoiceList(nextInvoice);
+      setReminderDraft(null);
+      setFeedback({ type: "saved", message: `${reminder.label} gespeichert.` });
+      printReminder(nextInvoice, reminder);
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "Mahnung konnte nicht gespeichert werden.",
+      });
+    } finally {
+      setIsSavingReminder(false);
+    }
+  }
+
+  function printReminder(invoice: CrmInvoice, reminder: CrmInvoiceReminder) {
+    const issuer = mergeIssuer(invoice.issuer);
+    const gross = getTotals(invoice).gross;
+    const previousReminders = (invoice.reminders ?? [])
+      .filter((item) => item.createdAt < reminder.createdAt)
+      .sort((left, right) => left.createdAt - right.createdAt);
+    const previousFees = previousReminders.reduce(
+      (total, item) => total + item.fee,
+      0
+    );
+    const totalDue = gross + previousFees + reminder.fee + reminder.interestAmount;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setFeedback({
+        type: "error",
+        message: "Das Druckfenster konnte nicht geöffnet werden.",
+      });
+      return;
+    }
+
+    const senderLine = [
+      issuer.companyName,
+      `${issuer.proprietor} · ${issuer.legalForm}`,
+      issuer.street,
+      `${issuer.postalCode} ${issuer.city}`.trim(),
+      issuer.country,
+    ]
+      .filter((value) => value.trim())
+      .join(" · ");
+    const recipientNames = [invoice.customerCompany, invoice.customerName]
+      .filter((value) => value.trim())
+      .map(safeText)
+      .join("<br>");
+    const taxIdentifiers = [
+      issuer.taxNumber ? `Steuernummer: ${issuer.taxNumber}` : "",
+      issuer.vatId ? `USt-IdNr.: ${issuer.vatId}` : "",
+    ]
+      .filter(Boolean)
+      .map(safeText)
+      .join("<br>");
+
+    const isFirstLevel = reminder.level <= 1;
+    const isFinalLevel = reminder.level >= reminderLevels.length;
+    const priorReminder = previousReminders[previousReminders.length - 1];
+    const priorReference = priorReminder
+      ? `unserer ${priorReminder.label} vom ${formatPrintDate(priorReminder.issueDate)}`
+      : "unserer Zahlungserinnerung";
+    const invoiceReference = `Rechnung Nr. ${invoice.invoiceNumber} vom ${formatPrintDate(invoice.issueDate)}`;
+    const intro = isFirstLevel
+      ? `sicherlich haben Sie unsere ${invoiceReference} übersehen. Wir möchten Sie freundlich daran erinnern, dass der Rechnungsbetrag seit dem ${formatPrintDate(invoice.dueDate)} fällig ist.`
+      : `trotz ${priorReference} konnten wir bis heute keinen Zahlungseingang zu unserer ${invoiceReference} feststellen. Sie befinden sich gemäß § 286 BGB in Zahlungsverzug.`;
+    const demand = isFirstLevel
+      ? `Wir bitten Sie, den offenen Gesamtbetrag von ${currencyFormatter.format(totalDue)} bis spätestens zum ${formatPrintDate(reminder.paymentDeadline)} auf das unten genannte Konto zu überweisen.`
+      : `Wir fordern Sie auf, den offenen Gesamtbetrag von ${currencyFormatter.format(totalDue)} bis spätestens zum ${formatPrintDate(reminder.paymentDeadline)} auf das unten genannte Konto zu überweisen.`;
+    const escalation = isFinalLevel
+      ? `<p><strong>Sollte der Gesamtbetrag nicht bis zum ${safeText(formatPrintDate(reminder.paymentDeadline))} bei uns eingehen, werden wir ohne weitere Ankündigung gerichtliche Schritte einleiten (gerichtliches Mahnverfahren) bzw. die Forderung an ein Inkassounternehmen übergeben. Die dadurch entstehenden weiteren Kosten gehen zu Ihren Lasten.</strong></p>`
+      : "";
+    const interestNote =
+      reminder.interestAmount > 0
+        ? `<p class="small">Die Verzugszinsen wurden mit ${safeText(quantityFormatter.format(reminder.interestRatePercent))} % p. a. für ${safeText(String(reminder.overdueDays))} Tage Verzug seit dem ${safeText(formatPrintDate(invoice.dueDate))} berechnet (§ 288 BGB: bei Verbrauchern 5, bei Unternehmen 9 Prozentpunkte über dem Basiszinssatz).</p>`
+        : "";
+    const noteHtml = reminder.note.trim()
+      ? `<p>${safeMultiline(reminder.note)}</p>`
+      : "";
+
+    const claimRows = [
+      `<tr><td>Hauptforderung aus ${safeText(invoiceReference)}, fällig am ${safeText(formatPrintDate(invoice.dueDate))}</td><td>${safeText(currencyFormatter.format(gross))}</td></tr>`,
+      ...previousReminders
+        .filter((item) => item.fee > 0)
+        .map(
+          (item) =>
+            `<tr><td>Mahngebühr ${safeText(item.label)} vom ${safeText(formatPrintDate(item.issueDate))}</td><td>${safeText(currencyFormatter.format(item.fee))}</td></tr>`
+        ),
+      ...(reminder.fee > 0
+        ? [
+            `<tr><td>Mahngebühr ${safeText(reminder.label)}</td><td>${safeText(currencyFormatter.format(reminder.fee))}</td></tr>`,
+          ]
+        : []),
+      ...(reminder.interestAmount > 0
+        ? [
+            `<tr><td>Verzugszinsen (${safeText(quantityFormatter.format(reminder.interestRatePercent))} % p. a., ${safeText(String(reminder.overdueDays))} Tage)</td><td>${safeText(currencyFormatter.format(reminder.interestAmount))}</td></tr>`,
+          ]
+        : []),
+    ].join("");
+
+    printWindow.document.write(`<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>${safeText(`${reminder.label} zu ${invoice.invoiceNumber}`)}</title>
+  <style>
+    @page{margin:15mm}*{box-sizing:border-box}body{margin:0;color:#172554;font:10pt Arial,sans-serif;line-height:1.5}.document{max-width:190mm;margin:auto}.sender{padding-bottom:5px;border-bottom:1px solid #cbd5e1;color:#475569;font-size:8pt}.header{display:flex;justify-content:space-between;gap:24px;margin-top:22px}.recipient{min-height:42mm}.eyebrow{color:#c45f18;font-size:8pt;font-weight:700;text-transform:uppercase}h1{margin:2px 0 0;font-size:22pt;color:#0f2b54}.meta{display:grid;grid-template-columns:auto auto;gap:4px 18px;align-content:start}.meta span:nth-child(odd){color:#64748b}.meta span:nth-child(even){text-align:right;font-weight:700}.body-text{margin-top:22px}.body-text p{margin:0 0 11px}.claims{width:100%;margin-top:14px;border-collapse:collapse}.claims td{padding:8px 7px;border-bottom:1px solid #e2e8f0}.claims td:last-child{width:36mm;text-align:right;font-weight:700;white-space:nowrap}.total-row{display:flex;justify-content:space-between;gap:16px;margin-top:8px;margin-left:auto;width:96mm;padding:11px;background:#0f2b54;color:#fff;font-size:12pt;font-weight:700}.payment{margin-top:24px;padding:13px 15px;border-left:4px solid #c45f18;background:#fff7ed}.payment-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px}.label{color:#64748b;font-size:8pt;text-transform:uppercase}.small{color:#475569;font-size:8.5pt}.footer{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:34px;padding-top:10px;border-top:1px solid #cbd5e1;color:#475569;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+  </style>
+</head>
+<body>
+  <main class="document">
+    <div class="sender">${safeText(senderLine)}</div>
+    <section class="header">
+      <div class="recipient">
+        <p class="eyebrow">An</p>
+        <strong>${recipientNames}</strong><br>
+        ${safeMultiline(invoice.customerAddress)}
+      </div>
+      <div>
+        <p class="eyebrow">Mahnwesen</p>
+        <h1>${safeText(reminder.label)}</h1>
+      </div>
+    </section>
+    <section class="meta">
+      <span>Datum</span><span>${safeText(formatPrintDate(reminder.issueDate))}</span>
+      <span>Rechnungsnummer</span><span>${safeText(invoice.invoiceNumber)}</span>
+      <span>Rechnungsdatum</span><span>${safeText(formatPrintDate(invoice.issueDate))}</span>
+      <span>Kundennummer</span><span>${safeText(invoice.customerNumber || "")}</span>
+      <span>Ursprüngliche Fälligkeit</span><span>${safeText(formatPrintDate(invoice.dueDate))}</span>
+      <span>Neue Zahlungsfrist</span><span>${safeText(formatPrintDate(reminder.paymentDeadline))}</span>
+    </section>
+    <section class="body-text">
+      <p>Sehr geehrte Damen und Herren,</p>
+      <p>${safeText(intro)}</p>
+      <table class="claims"><tbody>${claimRows}</tbody></table>
+      <div class="total-row"><span>Offener Gesamtbetrag</span><span>${safeText(currencyFormatter.format(totalDue))}</span></div>
+      ${interestNote}
+      <p style="margin-top:14px">${safeText(demand)}</p>
+      ${escalation}
+      ${noteHtml}
+      <p>Sollten Sie die Zahlung zwischenzeitlich bereits veranlasst haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.</p>
+      <p>Mit freundlichen Grüßen<br>${safeText(issuer.proprietor)}<br>${safeText(issuer.companyName)}</p>
+    </section>
+    <section class="payment">
+      <strong>Bankverbindung</strong>
+      <div class="payment-grid">
+        <div><span class="label">Bank</span><br>${safeText(issuer.bankName)}<br><span class="label">Kontoinhaber</span><br>${safeText(issuer.accountHolder)}</div>
+        <div><span class="label">IBAN</span><br>${safeText(issuer.iban)}<br><span class="label">BIC</span><br>${safeText(issuer.bic)}</div>
+      </div>
+      <p class="small" style="margin-bottom:0">Bitte geben Sie bei der Überweisung die Rechnungsnummer ${safeText(invoice.invoiceNumber)} an.</p>
+    </section>
+    <footer class="footer">
+      <div><strong>${safeText(issuer.companyName)}</strong><br>${safeText(issuer.proprietor)}<br>${safeText(issuer.legalForm)}</div>
+      <div>${safeText(issuer.street)}<br>${safeText(`${issuer.postalCode} ${issuer.city}`.trim())}<br>${safeText(issuer.country)}</div>
+      <div>${safeText(issuer.email)}<br>${safeText(issuer.phone)}${taxIdentifiers ? `<br>${taxIdentifiers}` : ""}</div>
+    </footer>
+  </main>
+</body>
+</html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 250);
   }
 
   function printInvoice() {
@@ -1540,6 +1798,79 @@ export default function InvoiceManager() {
                   className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </label>
+
+              {savedInvoice && isFinalized(savedInvoice) && (
+                <div className="mt-6 rounded-md border border-slate-200 p-4">
+                  <div className="mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                        <BellRing size={15} /> Mahnwesen
+                      </h3>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        Zahlungserinnerung und Mahnungen mit Verzugszinsen nach § 288 BGB,
+                        Mahngebühr und neuer Zahlungsfrist – als rechtskonformes Dokument druckbar.
+                      </p>
+                      {savedInvoice.status === "sent" && invoiceOverdueDays > 0 && (
+                        <p className="mt-1 text-xs font-medium text-amber-700">
+                          Fällig seit {invoiceOverdueDays} Tag(en) (
+                          {formatPrintDate(savedInvoice.dueDate)}).
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={openReminderDialog}
+                      disabled={!canCreateReminder}
+                      title={
+                        canCreateReminder
+                          ? undefined
+                          : "Nur für versendete, unbezahlte Rechnungen möglich"
+                      }
+                    >
+                      <Plus /> {nextReminderLevel.label} erstellen
+                    </Button>
+                  </div>
+                  {reminders.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                      Noch keine Mahnung erstellt.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-slate-200">
+                      {reminders.map((reminder) => (
+                        <div
+                          key={reminder.id}
+                          className="flex flex-col justify-between gap-2 py-3 sm:flex-row sm:items-center"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-950">
+                              {reminder.label}
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {formatPrintDate(reminder.issueDate)} · Zahlungsfrist{" "}
+                              {formatPrintDate(reminder.paymentDeadline)} ·{" "}
+                              {reminder.overdueDays} Tage Verzug
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span className="text-xs text-slate-600">
+                              Gebühr {currencyFormatter.format(reminder.fee)} · Zinsen{" "}
+                              {currencyFormatter.format(reminder.interestAmount)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => printReminder(savedInvoice, reminder)}
+                            >
+                              <Printer /> Drucken
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <p className="mt-3 text-xs leading-5 text-slate-500">
                 Die Druck-/PDF-Ausgabe ist keine strukturierte E-Rechnung nach EN 16931.
               </p>
@@ -1555,6 +1886,204 @@ export default function InvoiceManager() {
           )}
         </div>
       </main>
+
+      <Dialog
+        open={Boolean(reminderDraft)}
+        onOpenChange={(open) => {
+          if (!open) setReminderDraft(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Mahnung erstellen</DialogTitle>
+            <DialogDescription>
+              Das Dokument enthält Rechnungsbezug, Fälligkeit, Verzugszinsen nach § 288 BGB
+              und eine neue Zahlungsfrist. Es wird gespeichert und direkt gedruckt.
+            </DialogDescription>
+          </DialogHeader>
+          {reminderDraft && savedInvoice && (() => {
+            const gross = getTotals(savedInvoice).gross;
+            const overdueDays = overdueDaysBetween(
+              savedInvoice.dueDate,
+              reminderDraft.issueDate
+            );
+            const interest = calculateReminderInterest(
+              gross,
+              reminderDraft.interestRatePercent,
+              overdueDays
+            );
+            const previousFees = reminders.reduce(
+              (total, item) => total + item.fee,
+              0
+            );
+            const totalDue = gross + previousFees + reminderDraft.fee + interest;
+            return (
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    Mahnstufe
+                    <select
+                      value={reminderDraft.label}
+                      onChange={(event) => {
+                        const levelInfo =
+                          reminderLevels.find(
+                            (item) => item.label === event.target.value
+                          ) ?? reminderLevels[0];
+                        setReminderDraft({
+                          ...reminderDraft,
+                          level: levelInfo.level,
+                          label: levelInfo.label,
+                          fee: levelInfo.defaultFee,
+                          interestRatePercent: levelInfo.defaultInterest,
+                        });
+                      }}
+                      className={inputClassName}
+                    >
+                      {reminderLevels.map((item) => (
+                        <option key={item.level} value={item.label}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-sm font-medium text-slate-700">
+                    Mahndatum
+                    <input
+                      type="date"
+                      value={reminderDraft.issueDate}
+                      onChange={(event) =>
+                        setReminderDraft({
+                          ...reminderDraft,
+                          issueDate: event.target.value,
+                          paymentDeadline: addDays(event.target.value, 14),
+                        })
+                      }
+                      className={inputClassName}
+                    />
+                  </label>
+                  <label className="text-sm font-medium text-slate-700">
+                    Neue Zahlungsfrist
+                    <input
+                      type="date"
+                      value={reminderDraft.paymentDeadline}
+                      onChange={(event) =>
+                        setReminderDraft({
+                          ...reminderDraft,
+                          paymentDeadline: event.target.value,
+                        })
+                      }
+                      className={inputClassName}
+                    />
+                  </label>
+                  <label className="text-sm font-medium text-slate-700">
+                    Mahngebühr
+                    <div className="relative mt-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={reminderDraft.fee}
+                        onChange={(event) =>
+                          setReminderDraft({
+                            ...reminderDraft,
+                            fee: Math.max(0, Number(event.target.value) || 0),
+                          })
+                        }
+                        className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 text-sm outline-none focus:border-blue-500"
+                      />
+                      <span className="absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">
+                        EUR
+                      </span>
+                    </div>
+                  </label>
+                  <label className="text-sm font-medium text-slate-700">
+                    Verzugszins p. a.
+                    <div className="relative mt-1.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={reminderDraft.interestRatePercent}
+                        onChange={(event) =>
+                          setReminderDraft({
+                            ...reminderDraft,
+                            interestRatePercent: Math.max(
+                              0,
+                              Number(event.target.value) || 0
+                            ),
+                          })
+                        }
+                        className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-8 text-sm outline-none focus:border-blue-500"
+                      />
+                      <span className="absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">
+                        %
+                      </span>
+                    </div>
+                  </label>
+                </div>
+                <p className="rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                  § 288 BGB: Verzugszins bei Verbrauchern 5, bei Unternehmen 9
+                  Prozentpunkte über dem Basiszinssatz. Mahngebühren müssen dem
+                  tatsächlichen Aufwand entsprechen (üblich sind 2,50–5 EUR je Schreiben).
+                </p>
+                <label className="block text-sm font-medium text-slate-700">
+                  Zusätzlicher Hinweis (optional)
+                  <textarea
+                    value={reminderDraft.note}
+                    onChange={(event) =>
+                      setReminderDraft({ ...reminderDraft, note: event.target.value })
+                    }
+                    rows={2}
+                    className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  />
+                </label>
+                <div className="space-y-1.5 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Hauptforderung</span>
+                    <strong>{currencyFormatter.format(gross)}</strong>
+                  </div>
+                  {previousFees > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Bisherige Mahngebühren</span>
+                      <strong>{currencyFormatter.format(previousFees)}</strong>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Mahngebühr</span>
+                    <strong>{currencyFormatter.format(reminderDraft.fee)}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">
+                      Verzugszinsen ({overdueDays} Tage Verzug)
+                    </span>
+                    <strong>{currencyFormatter.format(interest)}</strong>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-300 pt-2">
+                    <span className="font-semibold">Gesamtforderung</span>
+                    <strong>{currencyFormatter.format(totalDue)}</strong>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReminderDraft(null)}>
+              Abbrechen
+            </Button>
+            <Button
+              onClick={() => void saveReminder()}
+              disabled={isSavingReminder || !reminderDraft}
+            >
+              {isSavingReminder ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <Printer />
+              )}
+              Speichern & Drucken
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <DialogContent className="max-h-[90vh] max-w-[calc(100vw-2rem)] overflow-y-auto sm:max-w-3xl">

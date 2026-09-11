@@ -80,6 +80,20 @@ export interface CrmInvoiceSettings {
   updatedAt: number;
 }
 
+export interface CrmInvoiceReminder {
+  id: string;
+  level: number;
+  label: string;
+  issueDate: string;
+  paymentDeadline: string;
+  fee: number;
+  interestRatePercent: number;
+  interestAmount: number;
+  overdueDays: number;
+  note: string;
+  createdAt: number;
+}
+
 export interface CrmInvoice {
   id: string;
   ownerId: string;
@@ -101,6 +115,7 @@ export interface CrmInvoice {
   taxNote?: string;
   issuer?: CrmInvoiceIssuer;
   notes: string;
+  reminders?: CrmInvoiceReminder[];
   finalizedAt?: number;
   createdAt: number;
   updatedAt: number;

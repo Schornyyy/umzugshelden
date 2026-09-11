@@ -87,6 +87,8 @@ type Rates = {
   vatPercent: number;
   paintMaterialPerM2: number;
   paintLaborHoursPerM2: number;
+  plasterMaterialPerM2: number;
+  plasterLaborHoursPerM2: number;
   furnitureAssemblyMinutesPerPiece: number;
   disposalRatePerM3: number;
   hazardousDisposalRatePerM3: number;
@@ -104,6 +106,27 @@ type ServiceLine = {
   quantity: number;
   unitPrice: number;
 };
+
+export type PaintingRates = Pick<
+  Rates,
+  "paintMaterialPerM2" | "plasterMaterialPerM2"
+>;
+
+export type PaintMaterialLine = {
+  id: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  liters: number;
+  coverageM2PerLiter: number;
+};
+
+// Gebinde mit Liter- und Ergiebigkeitsangabe fließen als EUR/m² in den Flächenpreis ein statt als Pauschale.
+export function paintMaterialPerM2Price(item: PaintMaterialLine) {
+  return item.liters > 0 && item.coverageM2PerLiter > 0
+    ? item.unitPrice / (item.liters * item.coverageM2PerLiter)
+    : 0;
+}
 
 export type OfferPackage = {
   id: string;
@@ -161,6 +184,8 @@ export type PlanningDetails = {
   ceilingAreaM2: number;
   paintCoats: number;
   repairAreaM2: number;
+  plasterAreaM2: number;
+  paintMaterials: PaintMaterialLine[];
   furniturePieces: number;
   movingBoxes: number;
   unpackingBoxes: number;
@@ -196,6 +221,7 @@ type Calculation = {
   otherCost: number;
   discountPercent: number;
   packageName?: string;
+  positionLabels: Record<string, string>;
   autoEstimate: boolean;
   planning: PlanningDetails;
 };
@@ -269,6 +295,8 @@ const defaultRates: Rates = {
   vatPercent: 19,
   paintMaterialPerM2: 4.5,
   paintLaborHoursPerM2: 0.12,
+  plasterMaterialPerM2: 3.5,
+  plasterLaborHoursPerM2: 0.35,
   furnitureAssemblyMinutesPerPiece: 30,
   disposalRatePerM3: 65,
   hazardousDisposalRatePerM3: 180,
@@ -348,6 +376,8 @@ function createPlanning(): PlanningDetails {
     ceilingAreaM2: 0,
     paintCoats: 2,
     repairAreaM2: 0,
+    plasterAreaM2: 0,
+    paintMaterials: [],
     furniturePieces: 0,
     movingBoxes: 0,
     unpackingBoxes: 0,
@@ -389,6 +419,7 @@ function createCalculation(): Calculation {
     logisticsCost: 0,
     otherCost: 0,
     discountPercent: 0,
+    positionLabels: {},
     autoEstimate: true,
     planning: createPlanning(),
   };
@@ -413,6 +444,11 @@ function normalizePlanning(planning?: Partial<PlanningDetails>): PlanningDetails
     serviceTypes: normalizeServiceTypes(planning?.serviceTypes),
     rooms: planning?.rooms ?? fallback.rooms,
     extraServices: planning?.extraServices ?? [],
+    paintMaterials: (planning?.paintMaterials ?? []).map((item) => ({
+      ...item,
+      liters: item.liters ?? 0,
+      coverageM2PerLiter: item.coverageM2PerLiter ?? 0,
+    })),
     photoUrls: planning?.photoUrls ?? [],
     vehicleSelections: planning?.vehicleSelections ?? [],
   };
@@ -423,6 +459,7 @@ function normalizeCalculation(calculation?: Partial<Calculation>): Calculation {
   return {
     ...fallback,
     ...calculation,
+    positionLabels: calculation?.positionLabels ?? {},
     planning: normalizePlanning(calculation?.planning),
   };
 }
@@ -512,6 +549,15 @@ function calculateVehicleCost(
   }, 0);
 }
 
+type ServiceCostShare = {
+  service: ServiceKey;
+  labourHours: number;
+  materialCost: number;
+  disposalCost: number;
+  storageCost: number;
+  logisticsCost: number;
+};
+
 type ServiceRecommendation = {
   employees: number;
   hoursPerEmployee: number;
@@ -523,6 +569,7 @@ type ServiceRecommendation = {
   logisticsCost: number;
   boxes: number;
   explanations: string[];
+  serviceShares: ServiceCostShare[];
 };
 
 function calculateServiceRecommendation(
@@ -555,6 +602,7 @@ function calculateServiceRecommendation(
   const accessFactor =
     complexityFactor * (1 + floorFactor + Math.min(totalCarryDistance / 100, 0.5));
   const explanations: string[] = [];
+  const serviceShares: ServiceCostShare[] = [];
   let labourHours = 0;
   let employees = 1;
   let requiredVehicleVolume = 0;
@@ -584,10 +632,19 @@ function calculateServiceRecommendation(
       planning.moveCrewPreference
     );
     requiredVehicleVolume = Math.max(requiredVehicleVolume, volume / moveTrips);
-    logisticsCost += planning.furnitureLiftRequired
-      ? rates.furnitureLiftDailyRate * Math.ceil(moveTrips / 2)
-      : 0;
-    logisticsCost += planning.parkingRequired ? rates.parkingPermitRate : 0;
+    const moveLogistics =
+      (planning.furnitureLiftRequired
+        ? rates.furnitureLiftDailyRate * Math.ceil(moveTrips / 2)
+        : 0) + (planning.parkingRequired ? rates.parkingPermitRate : 0);
+    logisticsCost += moveLogistics;
+    serviceShares.push({
+      service: selectedServices.has("seniorMove") ? "seniorMove" : "move",
+      labourHours: moveLabourHours,
+      materialCost: 0,
+      disposalCost: 0,
+      storageCost: 0,
+      logisticsCost: moveLogistics,
+    });
     explanations.push(
       `${volume.toFixed(1)} m3, ${moveTrips} Fahrt(en), ${totalCarryDistance} m Gesamttrageweg`
     );
@@ -623,8 +680,23 @@ function calculateServiceRecommendation(
         clearanceVolume * rates.disposalRatePerM3 +
         planning.clearanceHazardousVolumeM3 * rates.hazardousDisposalRatePerM3;
     }
-    disposalCost += Math.max(0, clearanceDisposal - planning.clearanceCredit);
-    logisticsCost += planning.parkingRequired ? rates.parkingPermitRate : 0;
+    const clearanceDisposalCost = Math.max(
+      0,
+      clearanceDisposal - planning.clearanceCredit
+    );
+    disposalCost += clearanceDisposalCost;
+    const clearanceLogistics = planning.parkingRequired
+      ? rates.parkingPermitRate
+      : 0;
+    logisticsCost += clearanceLogistics;
+    serviceShares.push({
+      service: "clearance",
+      labourHours: clearanceHours,
+      materialCost: 0,
+      disposalCost: clearanceDisposalCost,
+      storageCost: 0,
+      logisticsCost: clearanceLogistics,
+    });
     explanations.push(
       planning.clearanceDisposalIncluded
         ? `${clearanceVolume.toFixed(1)} m3 Entsorgungsvolumen`
@@ -650,13 +722,45 @@ function calculateServiceRecommendation(
     const paintArea =
       (planning.paintAreaM2 + planning.ceilingAreaM2) *
       Math.max(1, planning.paintCoats);
-    labourHours +=
-      paintArea * rates.paintLaborHoursPerM2 + planning.repairAreaM2 * 0.35;
+    const plasterRepairArea = planning.repairAreaM2 + planning.plasterAreaM2;
+    const paintingHours =
+      paintArea * rates.paintLaborHoursPerM2 +
+      plasterRepairArea * rates.plasterLaborHoursPerM2;
+    labourHours += paintingHours;
     employees = Math.max(employees, paintArea > 100 ? 2 : 1);
-    materialCost += paintArea * rates.paintMaterialPerM2 + planning.repairAreaM2 * 2;
+    const paintMaterialListCost = planning.paintMaterials.reduce(
+      (total, item) =>
+        paintMaterialPerM2Price(item) > 0
+          ? total
+          : total + item.quantity * item.unitPrice,
+      0
+    );
+    const paintingMaterial =
+      paintArea * rates.paintMaterialPerM2 +
+      plasterRepairArea * rates.plasterMaterialPerM2 +
+      paintMaterialListCost;
+    materialCost += paintingMaterial;
+    serviceShares.push({
+      service: "painting",
+      labourHours: paintingHours,
+      materialCost: paintingMaterial,
+      disposalCost: 0,
+      storageCost: 0,
+      logisticsCost: 0,
+    });
     explanations.push(
       `${planning.paintAreaM2.toFixed(0)} m2 Flaeche mit ${planning.paintCoats} Anstrich(en)`
     );
+    if (plasterRepairArea > 0) {
+      explanations.push(
+        `${plasterRepairArea.toFixed(1)} m2 Spachtel- und Ausbesserungsarbeiten`
+      );
+    }
+    if (paintMaterialListCost > 0) {
+      explanations.push(
+        `${formatCurrency(paintMaterialListCost)} Material laut Materialliste`
+      );
+    }
   }
 
   if (selectedServices.has("furnitureAssembly")) {
@@ -666,36 +770,65 @@ function calculateServiceRecommendation(
         : planning.moveComplexity === "difficult"
           ? 1.35
           : 1;
-    labourHours +=
+    const assemblyHours =
       (planning.furniturePieces * rates.furnitureAssemblyMinutesPerPiece * assemblyFactor) /
         60 +
       planning.dismantlingHours;
+    labourHours += assemblyHours;
     employees = Math.max(employees, planning.furniturePieces > 8 ? 2 : 1);
+    serviceShares.push({
+      service: "furnitureAssembly",
+      labourHours: assemblyHours,
+      materialCost: 0,
+      disposalCost: 0,
+      storageCost: 0,
+      logisticsCost: 0,
+    });
     explanations.push(`${planning.furniturePieces} Moebelteile zur Montage`);
   }
 
   if (selectedServices.has("packing")) {
     boxes = planning.movingBoxes || Math.ceil(volume * 10);
-    labourHours +=
+    const packingHours =
       ((boxes + planning.unpackingBoxes) * rates.packingMinutesPerBox +
         planning.fragileItemCount * 5) /
       60;
-    materialCost += boxes * rates.packingBoxRate;
+    labourHours += packingHours;
+    const packingMaterial = boxes * rates.packingBoxRate;
+    materialCost += packingMaterial;
     employees = Math.max(employees, boxes > 40 ? 2 : 1);
+    serviceShares.push({
+      service: "packing",
+      labourHours: packingHours,
+      materialCost: packingMaterial,
+      disposalCost: 0,
+      storageCost: 0,
+      logisticsCost: 0,
+    });
     explanations.push(`${boxes} Kartons fuer den Einpackservice`);
   }
 
   if (selectedServices.has("storage")) {
     const storageVolume = planning.storageVolumeM3 || volume;
-    labourHours += Math.max(
+    const storageHours = Math.max(
       1,
       storageVolume * 0.15 * accessFactor + (Math.max(1, planning.moveTrips) - 1)
     );
+    labourHours += storageHours;
     requiredVehicleVolume = Math.max(requiredVehicleVolume, storageVolume);
-    storageCost +=
+    const storageMonthlyCost =
       storageVolume *
       Math.max(1, planning.storageMonths) *
       rates.storageRatePerM3Month;
+    storageCost += storageMonthlyCost;
+    serviceShares.push({
+      service: "storage",
+      labourHours: storageHours,
+      materialCost: 0,
+      disposalCost: 0,
+      storageCost: storageMonthlyCost,
+      logisticsCost: 0,
+    });
     explanations.push(
       `${storageVolume.toFixed(1)} m3 Einlagerung fuer ${Math.max(1, planning.storageMonths)} Monat(e)`
     );
@@ -722,6 +855,7 @@ function calculateServiceRecommendation(
     logisticsCost: Math.round(logisticsCost * 100) / 100,
     boxes,
     explanations,
+    serviceShares,
   };
 }
 
@@ -857,6 +991,7 @@ function SectionHeading({
 }
 
 type CalculationRow = {
+  id: string;
   label: string;
   formula: string;
   value: number;
@@ -869,10 +1004,83 @@ function getCalculationRows(
   const pricing = calculatePricing(calculation, rates);
   const volume = calculateVolume(calculation.planning.rooms);
   const selectedServices = new Set(calculation.planning.serviceTypes);
+  const recommendation = calculateServiceRecommendation(calculation, rates, volume);
+  const positionLabels = calculation.positionLabels ?? {};
+  const resolveLabel = (id: string, fallback: string) =>
+    positionLabels[id] ?? fallback;
+  const useServiceRows =
+    calculation.autoEstimate && recommendation.serviceShares.length > 0;
+  const totalLabourHours = recommendation.serviceShares.reduce(
+    (total, share) => total + share.labourHours,
+    0
+  );
+  const shareTotals = recommendation.serviceShares.reduce(
+    (totals, share) => ({
+      material: totals.material + share.materialCost,
+      disposal: totals.disposal + share.disposalCost,
+      storage: totals.storage + share.storageCost,
+      logistics: totals.logistics + share.logisticsCost,
+    }),
+    { material: 0, disposal: 0, storage: 0, logistics: 0 }
+  );
+  const serviceRows: CalculationRow[] = recommendation.serviceShares.map(
+    (share) => {
+      const personalPart =
+        totalLabourHours > 0
+          ? pricing.employeeCost * (share.labourHours / totalLabourHours)
+          : 0;
+      const materialPart =
+        shareTotals.material > 0
+          ? calculation.materialCost * (share.materialCost / shareTotals.material)
+          : 0;
+      const disposalPart =
+        shareTotals.disposal > 0
+          ? calculation.disposalCost * (share.disposalCost / shareTotals.disposal)
+          : 0;
+      const storagePart =
+        shareTotals.storage > 0
+          ? calculation.storageCost * (share.storageCost / shareTotals.storage)
+          : 0;
+      const logisticsPart =
+        shareTotals.logistics > 0
+          ? calculation.logisticsCost *
+            (share.logisticsCost / shareTotals.logistics)
+          : 0;
+      const id = `service:${share.service}`;
+      return {
+        id,
+        label: resolveLabel(
+          id,
+          serviceOptions.find((option) => option.id === share.service)?.label ??
+            share.service
+        ),
+        formula: [
+          `${share.labourHours.toFixed(1)} Std. Arbeitszeit (${formatCurrency(personalPart)})`,
+          ...(materialPart > 0 ? [`Material ${formatCurrency(materialPart)}`] : []),
+          ...(disposalPart > 0 ? [`Entsorgung ${formatCurrency(disposalPart)}`] : []),
+          ...(storagePart > 0 ? [`Lagerkosten ${formatCurrency(storagePart)}`] : []),
+          ...(logisticsPart > 0
+            ? [`Lift/Halteverbotszone ${formatCurrency(logisticsPart)}`]
+            : []),
+        ].join(" + "),
+        value:
+          personalPart + materialPart + disposalPart + storagePart + logisticsPart,
+      };
+    }
+  );
+  const paintMaterialListCost = calculation.planning.paintMaterials.reduce(
+    (total, item) =>
+      paintMaterialPerM2Price(item) > 0
+        ? total
+        : total + item.quantity * item.unitPrice,
+    0
+  );
   const materialFormula = calculation.autoEstimate
     ? [
         ...(selectedServices.has("painting")
-          ? [`(${calculation.planning.paintAreaM2} m² Wand + ${calculation.planning.ceilingAreaM2} m² Decke) × ${calculation.planning.paintCoats} Anstrich(e) × ${formatCurrency(rates.paintMaterialPerM2)} + ${calculation.planning.repairAreaM2} m² Ausbesserung × ${formatCurrency(2)}`]
+          ? [
+              `(${calculation.planning.paintAreaM2} m² Wand + ${calculation.planning.ceilingAreaM2} m² Decke) × ${calculation.planning.paintCoats} Anstrich(e) × ${formatCurrency(rates.paintMaterialPerM2)} + ${calculation.planning.repairAreaM2 + calculation.planning.plasterAreaM2} m² Spachtel/Ausbesserung × ${formatCurrency(rates.plasterMaterialPerM2)}${paintMaterialListCost > 0 ? ` + Materialliste ${formatCurrency(paintMaterialListCost)}` : ""}`,
+            ]
           : []),
         ...(selectedServices.has("packing")
           ? [`${calculation.planning.movingBoxes || Math.ceil(volume * 10)} Kartons × ${formatCurrency(rates.packingBoxRate)}`]
@@ -909,48 +1117,57 @@ function getCalculationRows(
     : "Manuell festgelegter Betrag";
 
   return [
-    {
-      label: "Personal",
-      formula: `${calculation.employees} Mitarbeiter × ${calculation.hoursPerEmployee} Std. × ${formatCurrency(rates.employeeHourlyRate)}`,
-      value: pricing.employeeCost,
-    },
+    ...(useServiceRows
+      ? serviceRows
+      : [
+          {
+            id: "personal",
+            label: resolveLabel("personal", "Personal"),
+            formula: `${calculation.employees} Mitarbeiter × ${calculation.hoursPerEmployee} Std. × ${formatCurrency(rates.employeeHourlyRate)}`,
+            value: pricing.employeeCost,
+          },
+        ]),
     ...calculation.planning.vehicleSelections.flatMap((selection) => {
       const vehicle = vehicleOptions.find(
         (option) => option.id === selection.vehicleId
       );
       if (!vehicle) return [];
       return [{
-        label: vehicle.name,
+        id: `vehicle:${vehicle.id}`,
+        label: resolveLabel(`vehicle:${vehicle.id}`, vehicle.name),
         formula: `${selection.quantity} Fahrzeug(e) × ${calculation.vehicleDays} Tag(e) × ${formatCurrency(vehicle.dailyRate)}`,
         value: selection.quantity * calculation.vehicleDays * vehicle.dailyRate,
       }];
     }),
     {
-      label: "Fahrtstrecke",
+      id: "mileage",
+      label: resolveLabel("mileage", "Fahrtstrecke"),
       formula: `${calculation.kilometers} km × ${formatCurrency(rates.kilometerRate)}`,
       value: pricing.mileageCost,
     },
     {
-      label: "Planungs- & Auftragspauschale",
+      id: "planningFee",
+      label: resolveLabel("planningFee", "Planungs- & Auftragspauschale"),
       formula: "Festbetrag",
       value: rates.planningFee,
     },
-    ...(calculation.materialCost > 0
-      ? [{ label: "Material", formula: materialFormula, value: calculation.materialCost }]
+    ...(!useServiceRows && calculation.materialCost > 0
+      ? [{ id: "material", label: resolveLabel("material", "Material"), formula: materialFormula, value: calculation.materialCost }]
       : []),
-    ...(calculation.disposalCost > 0
-      ? [{ label: "Entsorgung", formula: disposalFormula, value: calculation.disposalCost }]
+    ...(!useServiceRows && calculation.disposalCost > 0
+      ? [{ id: "disposal", label: resolveLabel("disposal", "Entsorgung"), formula: disposalFormula, value: calculation.disposalCost }]
       : []),
-    ...(calculation.storageCost > 0
-      ? [{ label: "Einlagerung", formula: calculation.autoEstimate ? `${storageVolume} m³ × ${Math.max(1, calculation.planning.storageMonths)} Monat(e) × ${formatCurrency(rates.storageRatePerM3Month)}` : "Manuell festgelegter Betrag", value: calculation.storageCost }]
+    ...(!useServiceRows && calculation.storageCost > 0
+      ? [{ id: "storage", label: resolveLabel("storage", "Einlagerung"), formula: calculation.autoEstimate ? `${storageVolume} m³ × ${Math.max(1, calculation.planning.storageMonths)} Monat(e) × ${formatCurrency(rates.storageRatePerM3Month)}` : "Manuell festgelegter Betrag", value: calculation.storageCost }]
       : []),
-    ...(calculation.logisticsCost > 0
-      ? [{ label: "Lift & Halteverbotszone", formula: logisticsFormula, value: calculation.logisticsCost }]
+    ...(!useServiceRows && calculation.logisticsCost > 0
+      ? [{ id: "logistics", label: resolveLabel("logistics", "Lift & Halteverbotszone"), formula: logisticsFormula, value: calculation.logisticsCost }]
       : []),
     ...(calculation.otherCost > 0
-      ? [{ label: "Weitere Kosten", formula: "Manueller Betrag", value: calculation.otherCost }]
+      ? [{ id: "other", label: resolveLabel("other", "Weitere Kosten"), formula: "Manueller Betrag", value: calculation.otherCost }]
       : []),
     ...calculation.planning.extraServices.map((service) => ({
+      id: `extra:${service.id}`,
       label: service.name || "Zusatzleistung",
       formula: `${service.quantity} × ${formatCurrency(service.unitPrice)}`,
       value: service.quantity * service.unitPrice,
@@ -962,10 +1179,12 @@ function CalculationBreakdown({
   calculation,
   rates,
   onPrint,
+  onRenamePosition,
 }: {
   calculation: Calculation;
   rates: Rates;
   onPrint: () => void;
+  onRenamePosition: (id: string, label: string) => void;
 }) {
   const pricing = calculatePricing(calculation, rates);
   const calculationRows = getCalculationRows(calculation, rates);
@@ -977,7 +1196,8 @@ function CalculationBreakdown({
           <p className='text-sm font-semibold text-slate-950'>Live-Kalkulation</p>
           <p className='mt-1 text-sm text-slate-600'>
             Jede Änderung an Konditionen, Personal, Fahrzeugen oder Zusatzleistungen
-            wird hier sofort eingerechnet.
+            wird hier sofort eingerechnet. Positionsnamen lassen sich direkt
+            bearbeiten und erscheinen so auch im gedruckten Angebot.
           </p>
         </div>
         <Button type='button' variant='outline' className='shrink-0 bg-white' onClick={onPrint}>
@@ -991,10 +1211,15 @@ function CalculationBreakdown({
           <span>Betrag</span>
         </div>
         <div className='divide-y divide-slate-200'>
-          {calculationRows.map((row, index) => (
-            <div key={`${row.label}-${index}`} className='grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3'>
+          {calculationRows.map((row) => (
+            <div key={row.id} className='grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 px-4 py-3'>
               <div className='min-w-0'>
-                <p className='text-sm font-medium text-slate-950'>{row.label}</p>
+                <input
+                  value={row.label}
+                  onChange={(event) => onRenamePosition(row.id, event.target.value)}
+                  aria-label='Positionsname'
+                  className='-mx-1 w-full max-w-sm rounded border border-transparent bg-transparent px-1 text-sm font-medium text-slate-950 outline-none transition hover:border-slate-300 focus:border-primary focus:bg-white'
+                />
                 <p className='mt-0.5 text-xs text-slate-500'>{row.formula}</p>
               </div>
               <span className='text-sm font-semibold tabular-nums text-slate-950'>
@@ -1065,6 +1290,7 @@ export default function OfferPlanner() {
   const [printError, setPrintError] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState<PlanningStep>("order");
   const [offerTab, setOfferTab] = useState<OfferTab>("conditions");
+  const [activeServiceTab, setActiveServiceTab] = useState<ServiceKey | null>(null);
   const [isCostEstimateDialogOpen, setIsCostEstimateDialogOpen] = useState(false);
   const [costEstimatePrintOptions, setCostEstimatePrintOptions] =
     useState<CostEstimatePrintOptions>(defaultCostEstimatePrintOptions);
@@ -1215,6 +1441,10 @@ export default function OfferPlanner() {
     grossTotal,
   } = calculatePricing(calculation, rates);
   const selectedServices = new Set(calculation.planning.serviceTypes);
+  const activeSiteService =
+    activeServiceTab && calculation.planning.serviceTypes.includes(activeServiceTab)
+      ? activeServiceTab
+      : calculation.planning.serviceTypes[0];
   const usesMoveInventory =
     selectedServices.has("move") || selectedServices.has("seniorMove");
   const needsVehicle =
@@ -1247,12 +1477,42 @@ export default function OfferPlanner() {
   const availablePlanningSteps = usesMoveInventory
     ? planningSteps
     : planningSteps.filter((step) => step.id !== "inventory");
-  const availableStepIndex = availablePlanningSteps.findIndex(
-    (step) => step.id === activeStep
+  type NavStep = {
+    key: string;
+    stepId: PlanningStep;
+    service?: ServiceKey;
+    label: string;
+    icon: typeof ClipboardList;
+    completed: boolean;
+  };
+  const navSteps: NavStep[] = availablePlanningSteps.flatMap((step): NavStep[] => {
+    if (step.id !== "site" || calculation.planning.serviceTypes.length === 0) {
+      return [{
+        key: step.id,
+        stepId: step.id,
+        label: step.label,
+        icon: step.icon,
+        completed: completedSteps[step.id],
+      }];
+    }
+    return calculation.planning.serviceTypes.map((service) => {
+      const option = serviceOptions.find((item) => item.id === service);
+      return {
+        key: `site:${service}`,
+        stepId: "site" as PlanningStep,
+        service,
+        label: option?.label ?? service,
+        icon: option?.icon ?? MapPin,
+        completed: completedSteps.site,
+      };
+    });
+  });
+  const activeNavIndex = navSteps.findIndex((step) =>
+    step.service
+      ? activeStep === "site" && step.service === activeSiteService
+      : step.stepId === activeStep
   );
-  const completeStepCount = availablePlanningSteps.filter(
-    (step) => completedSteps[step.id]
-  ).length;
+  const completeStepCount = navSteps.filter((step) => step.completed).length;
 
   function updateRate<Key extends keyof Rates>(key: Key, value: Rates[Key]) {
     setRates((current) => ({ ...current, [key]: value }));
@@ -1345,6 +1605,7 @@ export default function OfferPlanner() {
           items: [...room.items],
         })),
         extraServices: [...calculation.planning.extraServices],
+        paintMaterials: [...calculation.planning.paintMaterials],
         photoUrls: [...calculation.planning.photoUrls],
       },
       rates: { ...rates },
@@ -1446,14 +1707,19 @@ export default function OfferPlanner() {
     );
   }
 
+  function goToNavStep(step: NavStep) {
+    setActiveStep(step.stepId);
+    if (step.service) setActiveServiceTab(step.service);
+  }
+
   function goToNextStep() {
-    const nextStep = availablePlanningSteps[availableStepIndex + 1];
-    if (nextStep) setActiveStep(nextStep.id);
+    const nextStep = navSteps[activeNavIndex + 1];
+    if (nextStep) goToNavStep(nextStep);
   }
 
   function goToPreviousStep() {
-    const previousStep = availablePlanningSteps[availableStepIndex - 1];
-    if (previousStep) setActiveStep(previousStep.id);
+    const previousStep = navSteps[activeNavIndex - 1];
+    if (previousStep) goToNavStep(previousStep);
   }
 
   function updateInventoryItem(
@@ -1508,6 +1774,18 @@ export default function OfferPlanner() {
       "extraServices",
       calculation.planning.extraServices.filter((service) => service.id !== id)
     );
+  }
+
+  function renamePosition(id: string, label: string) {
+    if (id.startsWith("extra:")) {
+      updateExtraService(id.slice("extra:".length), { name: label });
+      return;
+    }
+    setCalculation((current) => ({
+      ...current,
+      positionLabels: { ...current.positionLabels, [id]: label },
+    }));
+    setStatus("idle");
   }
 
   function updateVehicleSelection(vehicleId: string, quantity: number) {
@@ -2021,22 +2299,22 @@ export default function OfferPlanner() {
       <section className='mb-6 rounded-lg border border-slate-200 bg-white p-3 shadow-sm' aria-label='Planungsschritte'>
         <div className='mb-3 flex items-center justify-between gap-4'>
           <p className='text-sm font-medium text-slate-700'>
-            Vor-Ort-Aufnahme: {completeStepCount} von 5 Bereichen vorbereitet
+            Vor-Ort-Aufnahme: {completeStepCount} von {navSteps.length} Bereichen vorbereitet
           </p>
           <span className='text-sm text-slate-500'>
-            Schritt {availableStepIndex + 1} von {availablePlanningSteps.length}
+            Schritt {activeNavIndex + 1} von {navSteps.length}
           </span>
         </div>
         <div className='flex gap-2 overflow-x-auto pb-1'>
-          {availablePlanningSteps.map((step) => {
+          {navSteps.map((step, index) => {
             const Icon = step.icon;
-            const active = step.id === activeStep;
-            const completed = completedSteps[step.id];
+            const active = index === activeNavIndex;
+            const completed = step.completed;
             return (
               <button
-                key={step.id}
+                key={step.key}
                 type='button'
-                onClick={() => setActiveStep(step.id)}
+                onClick={() => goToNavStep(step)}
                 className={`flex min-w-32 shrink-0 items-center gap-2 rounded-md border px-3 py-3 text-left text-sm font-medium transition ${
                   active
                     ? "border-primary bg-primary text-primary-foreground shadow-sm"
@@ -2045,7 +2323,7 @@ export default function OfferPlanner() {
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                 }`}>
                 <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${active ? "bg-white/20" : completed ? "bg-emerald-600 text-white" : "bg-slate-100"}`}>
-                  {completed && !active ? <Check size={14} /> : step.shortLabel}
+                  {completed && !active ? <Check size={14} /> : index + 1}
                 </span>
                 <Icon size={16} />
                 {step.label}
@@ -2115,15 +2393,26 @@ export default function OfferPlanner() {
             </div>}
           </section>}
 
-          {activeStep === "site" && calculation.planning.serviceTypes.map((service) => (
-            <section key={service} className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
-              <ServiceConfigurator
-                service={service}
-                planning={calculation.planning}
-                kilometers={calculation.kilometers}
-                onPlanningChange={updatePlanning}
-                onKilometersChange={(value) => updateCalculation("kilometers", value)}
-              />
+          {activeStep === "site" && (calculation.planning.serviceTypes.length === 0 ? (
+            <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
+              <p className='rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600'>Wähle zuerst im Schritt „Auftrag“ mindestens eine Dienstleistung aus – für jede Auswahl erscheint oben ein eigener Schritt.</p>
+            </section>
+          ) : (
+            <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
+              {activeSiteService && (
+                <ServiceConfigurator
+                  service={activeSiteService}
+                  planning={calculation.planning}
+                  kilometers={calculation.kilometers}
+                  paintingRates={{
+                    paintMaterialPerM2: rates.paintMaterialPerM2,
+                    plasterMaterialPerM2: rates.plasterMaterialPerM2,
+                  }}
+                  onPaintingRateChange={updateRate}
+                  onPlanningChange={updatePlanning}
+                  onKilometersChange={(value) => updateCalculation("kilometers", value)}
+                />
+              )}
             </section>
           ))}
 
@@ -2246,7 +2535,7 @@ export default function OfferPlanner() {
               <div className='mb-3 flex items-center justify-between'><p className='text-sm font-medium text-slate-700'>Zusatzleistungen</p><Button type='button' variant='outline' size='sm' onClick={addExtraService}><PackagePlus /> Zusatzleistung</Button></div>
               <div className='space-y-2'>{calculation.planning.extraServices.map((service) => <div key={service.id} className='grid grid-cols-[minmax(0,1fr)_72px_120px_36px] gap-2'><input value={service.name} onChange={(event) => updateExtraService(service.id, { name: event.target.value })} aria-label='Zusatzleistung' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><input type='number' min='0' value={service.quantity} onChange={(event) => updateExtraService(service.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><div className='relative'><input type='number' min='0' step='0.01' value={service.unitPrice} onChange={(event) => updateExtraService(service.id, { unitPrice: toNumber(event.target.value) })} aria-label='Einzelpreis' className='h-9 w-full rounded-md border border-slate-300 px-2 pr-9 text-sm outline-none focus:border-primary' /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>EUR</span></div><Button type='button' variant='ghost' size='icon' title='Zusatzleistung entfernen' onClick={() => removeExtraService(service.id)}><Trash2 className='text-red-600' /></Button></div>)}</div>
             </div>
-            </> : <CalculationBreakdown calculation={calculation} rates={rates} onPrint={() => setIsCostEstimateDialogOpen(true)} />}
+            </> : <CalculationBreakdown calculation={calculation} rates={rates} onPrint={() => setIsCostEstimateDialogOpen(true)} onRenamePosition={renamePosition} />}
           </section>}
 
           {activeStep === "price" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
@@ -2260,7 +2549,7 @@ export default function OfferPlanner() {
             {savedCalculations.length === 0 ? <p className='py-6 text-center text-sm text-slate-500'>Noch keine Planung gespeichert.</p> : <div className='divide-y divide-slate-200'>{savedCalculations.map((item) => <div key={item.id} className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between'><button type='button' onClick={() => loadCalculation(item)} className='min-w-0 text-left'><p className='truncate font-medium text-slate-950'>{item.title || "Unbenannte Planung"}</p><p className='mt-1 text-sm text-slate-600'>{item.customer || item.planning.contactName || "Ohne Kundenzuordnung"} · {new Date(item.createdAt).toLocaleDateString("de-DE")} · {calculateVolume(item.planning.rooms).toFixed(2)} m³</p></button><div className='flex shrink-0 items-center gap-3'><span className='font-semibold text-slate-950'>{formatCurrency(calculateGrossTotal(item, item.rates))}</span><Button variant='ghost' size='icon' title='Planung löschen' onClick={() => void deleteCalculation(item.id)} disabled={isSaving}><Trash2 className='text-red-600' /></Button></div></div>)}</div>}
           </section>}
           <div className='flex items-center justify-between gap-3 border-t border-slate-200 pt-5'>
-            <Button type='button' variant='outline' onClick={goToPreviousStep} disabled={availableStepIndex === 0}>
+            <Button type='button' variant='outline' onClick={goToPreviousStep} disabled={activeNavIndex <= 0}>
               <ArrowLeft /> Zurück
             </Button>
             {activeStep === "finish" ? (
@@ -2269,7 +2558,7 @@ export default function OfferPlanner() {
               </Button>
             ) : (
               <Button type='button' className='min-h-11' onClick={goToNextStep}>
-                Weiter zu {availablePlanningSteps[availableStepIndex + 1]?.label} <ArrowRight />
+                Weiter zu {navSteps[activeNavIndex + 1]?.label} <ArrowRight />
               </Button>
             )}
           </div>

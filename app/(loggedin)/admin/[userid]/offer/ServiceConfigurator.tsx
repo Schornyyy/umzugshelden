@@ -12,14 +12,22 @@ import {
 } from "lucide-react";
 import type {
   MoveComplexity,
+  PaintingRates,
+  PaintMaterialLine,
   PlanningDetails,
   ServiceKey,
 } from "./OfferPlanner";
+import { paintMaterialPerM2Price } from "./OfferPlanner";
 
 type ServiceConfiguratorProps = {
   service: ServiceKey;
   planning: PlanningDetails;
   kilometers: number;
+  paintingRates: PaintingRates;
+  onPaintingRateChange: <Key extends keyof PaintingRates>(
+    key: Key,
+    value: PaintingRates[Key]
+  ) => void;
   onPlanningChange: <Key extends keyof PlanningDetails>(
     key: Key,
     value: PlanningDetails[Key]
@@ -127,7 +135,10 @@ function AddressFields({
   onPlanningChange,
   onKilometersChange,
   destination = true,
-}: Omit<ServiceConfiguratorProps, "service"> & { destination?: boolean }) {
+}: Pick<
+  ServiceConfiguratorProps,
+  "planning" | "kilometers" | "onPlanningChange" | "onKilometersChange"
+> & { destination?: boolean }) {
   return (
     <div className='grid gap-4 sm:grid-cols-2'>
       <TextField label={destination ? "Auszugsadresse / Einsatzort" : "Einsatzort"} value={planning.oldAddress} onChange={(value) => onPlanningChange("oldAddress", value)} placeholder='Straße, PLZ Ort' />
@@ -225,17 +236,162 @@ function ClearanceServiceCalculator(props: Omit<ServiceConfiguratorProps, "servi
   );
 }
 
+const currencyFormatter = new Intl.NumberFormat("de-DE", {
+  style: "currency",
+  currency: "EUR",
+});
+
+const commonPaintMaterials = [
+  { name: "Wandfarbe weiß (12,5 l)", unitPrice: 45, liters: 12.5, coverageM2PerLiter: 7 },
+  { name: "Grundierung / Tiefengrund (10 l)", unitPrice: 25, liters: 10, coverageM2PerLiter: 10 },
+  { name: "Spachtelmasse (25 kg)", unitPrice: 18, liters: 0, coverageM2PerLiter: 0 },
+  { name: "Abdeckvlies (50 m²)", unitPrice: 22, liters: 0, coverageM2PerLiter: 0 },
+  { name: "Malerkrepp / Abklebeband", unitPrice: 6, liters: 0, coverageM2PerLiter: 0 },
+  { name: "Rollen & Pinsel-Set", unitPrice: 15, liters: 0, coverageM2PerLiter: 0 },
+];
+
 function PaintingServiceCalculator(props: Omit<ServiceConfiguratorProps, "service">) {
-  const { planning, kilometers, onPlanningChange, onKilometersChange } = props;
+  const {
+    planning,
+    kilometers,
+    onPlanningChange,
+    onKilometersChange,
+    paintingRates,
+    onPaintingRateChange,
+  } = props;
+  const paintArea =
+    (planning.paintAreaM2 + planning.ceilingAreaM2) *
+    Math.max(1, planning.paintCoats);
+  const plasterRepairArea = planning.repairAreaM2 + planning.plasterAreaM2;
+  const areaMaterialCost =
+    paintArea * paintingRates.paintMaterialPerM2 +
+    plasterRepairArea * paintingRates.plasterMaterialPerM2;
+  const ratePerM2FromList = planning.paintMaterials.reduce(
+    (total, item) => total + paintMaterialPerM2Price(item),
+    0
+  );
+  const materialListCost = planning.paintMaterials.reduce(
+    (total, item) =>
+      paintMaterialPerM2Price(item) > 0
+        ? total
+        : total + item.quantity * item.unitPrice,
+    0
+  );
+
+  function applyMaterials(next: PaintMaterialLine[]) {
+    onPlanningChange("paintMaterials", next);
+    const rate = next.reduce(
+      (total, item) => total + paintMaterialPerM2Price(item),
+      0
+    );
+    if (rate > 0) {
+      onPaintingRateChange("paintMaterialPerM2", Math.round(rate * 100) / 100);
+    }
+  }
+
+  function addMaterial(item?: {
+    name: string;
+    unitPrice: number;
+    liters: number;
+    coverageM2PerLiter: number;
+  }) {
+    applyMaterials([
+      ...planning.paintMaterials,
+      {
+        id: crypto.randomUUID(),
+        name: item?.name ?? "Material",
+        quantity: 1,
+        unitPrice: item?.unitPrice ?? 0,
+        liters: item?.liters ?? 0,
+        coverageM2PerLiter: item?.coverageM2PerLiter ?? 0,
+      },
+    ]);
+  }
+
+  function updateMaterial(id: string, patch: Partial<PaintMaterialLine>) {
+    applyMaterials(
+      planning.paintMaterials.map((item) =>
+        item.id === id ? { ...item, ...patch } : item
+      )
+    );
+  }
+
+  function removeMaterial(id: string) {
+    applyMaterials(planning.paintMaterials.filter((item) => item.id !== id));
+  }
+
   return (
     <div>
-      <ServiceHeader icon={Paintbrush} title='Malerarbeiten kalkulieren' description='Wand- und Deckenflächen, Anstriche, Ausbesserungen und Anfahrt werden separat berechnet.' />
+      <ServiceHeader icon={Paintbrush} title='Malerarbeiten kalkulieren' description='Flächen, Anstriche, Spachtel- und Ausbesserungsarbeiten sowie die komplette Materialplanung mit Preisen – nur die Personalkosten laufen über die Konditionen.' />
       <AddressFields planning={planning} kilometers={kilometers} onPlanningChange={onPlanningChange} onKilometersChange={onKilometersChange} destination={false} />
-      <div className='mt-4 grid gap-4 sm:grid-cols-2'>
-        <NumberField label='Wandfläche' value={planning.paintAreaM2} onChange={(value) => onPlanningChange("paintAreaM2", value)} suffix='m²' step='0.5' />
-        <NumberField label='Deckenfläche' value={planning.ceilingAreaM2} onChange={(value) => onPlanningChange("ceilingAreaM2", value)} suffix='m²' step='0.5' />
-        <NumberField label='Anstriche' value={planning.paintCoats} onChange={(value) => onPlanningChange("paintCoats", Math.max(1, value))} suffix='x' />
-        <NumberField label='Ausbesserungsfläche' value={planning.repairAreaM2} onChange={(value) => onPlanningChange("repairAreaM2", value)} suffix='m²' step='0.5' />
+      <div className='mt-5 border-t border-slate-200 pt-4'>
+        <p className='mb-3 text-sm font-semibold text-slate-950'>Flächen & Arbeiten</p>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <NumberField label='Wandfläche' value={planning.paintAreaM2} onChange={(value) => onPlanningChange("paintAreaM2", value)} suffix='m²' step='0.5' />
+          <NumberField label='Deckenfläche' value={planning.ceilingAreaM2} onChange={(value) => onPlanningChange("ceilingAreaM2", value)} suffix='m²' step='0.5' />
+          <NumberField label='Anstriche' value={planning.paintCoats} onChange={(value) => onPlanningChange("paintCoats", Math.max(1, value))} suffix='x' />
+          <NumberField label='Ausbesserungsarbeiten' value={planning.repairAreaM2} onChange={(value) => onPlanningChange("repairAreaM2", value)} suffix='m²' step='0.5' />
+          <NumberField label='Spachtelarbeiten' value={planning.plasterAreaM2} onChange={(value) => onPlanningChange("plasterAreaM2", value)} suffix='m²' step='0.5' />
+        </div>
+      </div>
+      <div className='mt-5 border-t border-slate-200 pt-4'>
+        <p className='mb-1 text-sm font-semibold text-slate-950'>Materialpreise je m²</p>
+        <p className='mb-3 text-sm text-slate-600'>Der Farbpreis je m² wird automatisch aus der Materialliste berechnet, sobald dort Gebinde mit Liter- und Ergiebigkeitsangabe eingetragen sind – er lässt sich hier auch manuell übersteuern.</p>
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <NumberField label='Farbe & Material je m² und Anstrich' value={paintingRates.paintMaterialPerM2} onChange={(value) => onPaintingRateChange("paintMaterialPerM2", value)} suffix='EUR' step='0.01' />
+          <NumberField label='Spachtel-/Ausbesserungsmaterial je m²' value={paintingRates.plasterMaterialPerM2} onChange={(value) => onPaintingRateChange("plasterMaterialPerM2", value)} suffix='EUR' step='0.01' />
+        </div>
+      </div>
+      <div className='mt-5 border-t border-slate-200 pt-4'>
+        <div className='mb-1 flex items-center justify-between gap-2'>
+          <p className='text-sm font-semibold text-slate-950'>Materialliste</p>
+          <button type='button' onClick={() => addMaterial()} className='flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-blue-300 hover:text-blue-700'>
+            <PackagePlus size={15} /> Material
+          </button>
+        </div>
+        <p className='mb-3 text-sm text-slate-600'>Gebinde mit Liter- und Ergiebigkeitsangabe (m²/l) fließen automatisch als Preis je m² in die Flächenberechnung ein. Material ohne Literangabe wird pauschal mit Menge × Einzelpreis übernommen.</p>
+        <div className='mb-1 hidden grid-cols-[minmax(0,1fr)_56px_64px_64px_96px_36px] gap-2 text-[11px] font-medium uppercase tracking-wide text-slate-500 sm:grid'>
+          <span>Material</span><span>Menge</span><span>Liter</span><span>m²/l</span><span>Preis</span><span />
+        </div>
+        <div className='space-y-2'>
+          {planning.paintMaterials.map((item) => {
+            const perM2 = paintMaterialPerM2Price(item);
+            return (
+              <div key={item.id}>
+                <div className='grid grid-cols-[minmax(0,1fr)_44px_52px_52px_84px_32px] gap-1.5 sm:grid-cols-[minmax(0,1fr)_56px_64px_64px_96px_36px] sm:gap-2'>
+                  <input value={item.name} onChange={(event) => updateMaterial(item.id, { name: event.target.value })} aria-label='Material' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500' />
+                  <input type='number' min='0' value={item.quantity} onChange={(event) => updateMaterial(item.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500' />
+                  <input type='number' min='0' step='0.5' value={item.liters} onChange={(event) => updateMaterial(item.id, { liters: toNumber(event.target.value) })} aria-label='Gebindegröße in Litern' title='Gebindegröße in Litern' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500' />
+                  <input type='number' min='0' step='0.5' value={item.coverageM2PerLiter} onChange={(event) => updateMaterial(item.id, { coverageM2PerLiter: toNumber(event.target.value) })} aria-label='Ergiebigkeit in m² pro Liter' title='Ergiebigkeit in m² pro Liter' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-blue-500' />
+                  <div className='relative'>
+                    <input type='number' min='0' step='0.01' value={item.unitPrice} onChange={(event) => updateMaterial(item.id, { unitPrice: toNumber(event.target.value) })} aria-label='Preis je Gebinde' className='h-9 w-full rounded-md border border-slate-300 px-2 pr-9 text-sm outline-none focus:border-blue-500' />
+                    <span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>EUR</span>
+                  </div>
+                  <button type='button' title='Material entfernen' onClick={() => removeMaterial(item.id)} className='flex h-9 w-8 items-center justify-center rounded-md text-red-600 transition hover:bg-red-50 sm:w-9'><Trash2 size={16} /></button>
+                </div>
+                {perM2 > 0 && (
+                  <p className='mt-1 text-xs text-emerald-700'>
+                    {item.liters} l × {item.coverageM2PerLiter} m²/l = {(item.liters * item.coverageM2PerLiter).toFixed(0)} m² Reichweite → {currencyFormatter.format(perM2)}/m² (automatisch übernommen)
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className='mt-3 flex flex-wrap items-center gap-2'>
+          <span className='text-xs text-slate-500'>Schnell hinzufügen:</span>
+          {commonPaintMaterials.map((item) => (
+            <button key={item.name} type='button' onClick={() => addMaterial(item)} className='rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 transition hover:border-blue-400 hover:text-blue-700'>{item.name}</button>
+          ))}
+        </div>
+        <div className='mt-4 space-y-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm'>
+          {ratePerM2FromList > 0 && (
+            <div className='flex items-center justify-between gap-4'><span className='text-slate-600'>Farbpreis aus Materialliste</span><strong className='tabular-nums text-slate-950'>{currencyFormatter.format(ratePerM2FromList)}/m²</strong></div>
+          )}
+          <div className='flex items-center justify-between gap-4'><span className='text-slate-600'>Material aus Flächen ({paintArea.toFixed(1)} m² Anstrich + {plasterRepairArea.toFixed(1)} m² Spachtel/Ausbesserung)</span><strong className='tabular-nums text-slate-950'>{currencyFormatter.format(areaMaterialCost)}</strong></div>
+          <div className='flex items-center justify-between gap-4'><span className='text-slate-600'>Materialliste (Pauschalmaterial ohne Literangabe)</span><strong className='tabular-nums text-slate-950'>{currencyFormatter.format(materialListCost)}</strong></div>
+          <div className='flex items-center justify-between gap-4 border-t border-slate-200 pt-2'><span className='font-medium text-slate-700'>Material gesamt (ohne Personal)</span><strong className='tabular-nums text-slate-950'>{currencyFormatter.format(areaMaterialCost + materialListCost)}</strong></div>
+        </div>
       </div>
     </div>
   );
