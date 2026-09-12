@@ -4,6 +4,9 @@ type ServiceSchemaProps = {
   path: string;
   serviceType: string;
   city?: string;
+  image?: string;
+  alternateNames?: readonly string[];
+  offers?: readonly string[];
 };
 
 const serviceAreas = [
@@ -25,8 +28,14 @@ export default function ServiceSchema({
   path,
   serviceType,
   city,
+  image,
+  alternateNames,
+  offers,
 }: ServiceSchemaProps) {
   const url = `https://umzugshelden.io${path}`;
+  const imageUrl = image
+    ? new URL(image, "https://umzugshelden.io").toString()
+    : undefined;
   const areas = city ? [city] : serviceAreas;
   const schema = {
     "@context": "https://schema.org",
@@ -69,9 +78,11 @@ export default function ServiceSchema({
         "@type": "Service",
         "@id": `${url}#service`,
         name,
+        alternateName: alternateNames,
         serviceType,
         description,
         url,
+        image: imageUrl,
         provider: {
           "@id": "https://umzugshelden.io/#business",
         },
@@ -79,6 +90,19 @@ export default function ServiceSchema({
           "@type": "City",
           name: area,
         })),
+        hasOfferCatalog: offers?.length
+          ? {
+              "@type": "OfferCatalog",
+              name: `${serviceType} Leistungen`,
+              itemListElement: offers.map((offer) => ({
+                "@type": "Offer",
+                itemOffered: {
+                  "@type": "Service",
+                  name: offer,
+                },
+              })),
+            }
+          : undefined,
       },
     ],
   };

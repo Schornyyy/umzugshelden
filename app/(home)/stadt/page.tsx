@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { cities } from "@/statics/Lists";
+import { cities, SERVICE_RADIUS_KM } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 
 const Page = () => {
@@ -98,7 +98,7 @@ const Page = () => {
             <p>
               Die <strong className="text-navy">Umzugshelden</strong> sind Ihr
               zuverl�ssiger Partner f�r Umz�ge, Anstricharbeiten und
-              M�belmontage im Kreis Olpe und einem Umkreis von 25 km.
+              M�belmontage im Kreis Olpe und einem Umkreis von {SERVICE_RADIUS_KM} km.
               Egal ob Olpe, Attendorn, Drolshagen oder Siegen � wir sind
               schnell und zuverl�ssig vor Ort.
             </p>

@@ -8,6 +8,7 @@ import {
 import { slugify, deslugify } from "@/utils/slugify";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import Image from "next/image";
 import ContactForm from "@/components/ContactForm";
 import FAQBlock from "@/components/utils/FAQBlock";
 import ServiceSchema from "@/components/ServiceSchema";
@@ -365,6 +366,294 @@ const serviceConfig = {
 
 type ServiceKey = keyof typeof serviceConfig;
 
+type SeoContent = {
+  primaryKeyword: string;
+  keywordVariants: readonly string[];
+  image: string;
+  imageAlt: string;
+  overviewHeading: string;
+  overviewText: readonly [string, string];
+  useCasesHeading: string;
+  useCases: readonly { title: string; text: string }[];
+  priceHeading: string;
+  priceText: string;
+  priceFactors: readonly string[];
+  additionalFaqs: readonly { question: string; answer: string }[];
+};
+
+const seoContent: Record<ServiceKey, SeoContent> = {
+  umzugsservice: {
+    primaryKeyword: "Umzugsunternehmen",
+    keywordVariants: [
+      "Umzug",
+      "Umzugsfirma",
+      "Umzugsservice",
+      "Privatumzug",
+      "Firmenumzug",
+      "Umzugskosten",
+    ],
+    image: "/images/Umzugsunternhemen_olpe.png",
+    imageAlt: "Umzugsunternehmen für einen professionellen Umzug in {city}",
+    overviewHeading: "Umzugsunternehmen in {city} für Privat- und Firmenumzüge",
+    overviewText: [
+      "Sie suchen ein zuverlässiges Umzugsunternehmen in {city}? Wir organisieren private Umzüge, Firmenumzüge und Wohnungswechsel mit einem festen Ansprechpartner. Nach der Besichtigung planen wir Personal, Fahrzeug, Verpackungsmaterial und Montage passend zu Ihrem Umzug.",
+      "Unser Umzugsservice in {city} kann einzelne Arbeiten oder den kompletten Ablauf übernehmen: Kartons liefern, Hausrat verpacken, Möbel abbauen, sicher transportieren und am Ziel wieder aufbauen. Dadurch bleiben Termine, Zuständigkeiten und Umzugskosten für Sie nachvollziehbar.",
+    ],
+    useCasesHeading: "Umzüge in {city} passend zu Ihrer Situation",
+    useCases: [
+      {
+        title: "Privatumzug und Wohnungswechsel",
+        text: "Für Wohnungen und Häuser planen wir Tragewege, Etagen, Halteflächen, Möbelvolumen und den gewünschten Umzugstermin im Voraus.",
+      },
+      {
+        title: "Firmen- und Büroumzug",
+        text: "Arbeitsplätze, Akten und Büromöbel ziehen strukturiert um, damit Ausfallzeiten und Unterbrechungen möglichst kurz bleiben.",
+      },
+      {
+        title: "Nahumzug und Fernumzug",
+        text: "Ob innerhalb von {city} oder überregional: Wir koordinieren Beladung, Transport, Entladung und Zusatzleistungen aus einer Hand.",
+      },
+    ],
+    priceHeading: "Was kostet ein Umzug in {city}?",
+    priceText:
+      "Seriöse Umzugskosten richten sich nach dem tatsächlichen Aufwand. Deshalb klären wir die wichtigsten Eckdaten vorab und erstellen ein nachvollziehbares Festpreisangebot statt einer unklaren Pauschalschätzung.",
+    priceFactors: [
+      "Wohnungsgröße und Menge des Umzugsguts",
+      "Entfernung, Etagen, Aufzug und Tragewege",
+      "Möbelabbau, Möbelaufbau und Verpackungsservice",
+      "Halteverbotszone, Sondertransporte und Wunschtermin",
+    ],
+    additionalFaqs: [
+      {
+        question: "Bieten Sie auch komplette Umzüge in {city} an?",
+        answer:
+          "Ja. Sie können Transport, Verpackung, Möbelmontage und weitere abgestimmte Leistungen als Komplettumzug beauftragen oder nur einzelne Arbeiten auswählen.",
+      },
+      {
+        question: "Wie erhalte ich ein Festpreisangebot für meinen Umzug?",
+        answer:
+          "Senden Sie uns die wichtigsten Angaben zu Adressen, Wohnungsgröße, Etagen, Termin und gewünschten Zusatzleistungen. Bei Bedarf vereinbaren wir eine kostenlose Besichtigung in {city}.",
+      },
+    ],
+  },
+  anstricharbeiten: {
+    primaryKeyword: "Anstricharbeiten",
+    keywordVariants: [
+      "Malerarbeiten",
+      "Wohnung streichen",
+      "Renovierung",
+      "Tapezierarbeiten",
+      "Schönheitsreparaturen",
+      "Wohnungsübergabe",
+    ],
+    image: "/images/anstricharbeiten.webp",
+    imageAlt: "Professionelle Anstricharbeiten und Malerarbeiten in {city}",
+    overviewHeading: "Anstricharbeiten und Malerarbeiten in {city}",
+    overviewText: [
+      "Für Anstricharbeiten in {city} übernehmen wir die Vorbereitung und Ausführung von Wänden und Decken. Dazu gehören je nach Zustand Abkleben, Spachteln, Schleifen, Grundieren und ein gleichmäßiger Anstrich mit abgestimmten Materialien.",
+      "Besonders bei Auszug, Einzug oder Wohnungsübergabe ist ein verlässlicher Fertigstellungstermin wichtig. Wir stimmen die Malerarbeiten in {city} mit Ihrem Zeitplan ab und führen Material sowie vereinbarte Nebenarbeiten transparent im Angebot auf.",
+    ],
+    useCasesHeading: "Renovierung in {city} für Wohnung, Haus und Gewerbe",
+    useCases: [
+      {
+        title: "Wohnung streichen bei Auszug",
+        text: "Wir beseitigen übliche Gebrauchsspuren und bereiten Wände und Decken für eine ordentliche Wohnungsübergabe vor.",
+      },
+      {
+        title: "Renovierung vor dem Einzug",
+        text: "Leere Räume lassen sich effizient streichen, tapezieren und in der gewünschten Farbgestaltung fertigstellen.",
+      },
+      {
+        title: "Büro- und Gewerberäume",
+        text: "Anstriche für kleinere Gewerbeflächen planen wir so, dass Termine und betriebliche Abläufe berücksichtigt werden.",
+      },
+    ],
+    priceHeading: "Kosten für Anstricharbeiten in {city}",
+    priceText:
+      "Die Kosten für Malerarbeiten hängen nicht nur von der Quadratmeterzahl ab. Untergrund, gewünschte Farbe, Abdeckaufwand und notwendige Vorarbeiten entscheiden darüber, wie viel Material und Arbeitszeit benötigt werden.",
+    priceFactors: [
+      "Größe und Anzahl der zu streichenden Flächen",
+      "Zustand von Wänden, Decken und Untergrund",
+      "Spachtel-, Schleif-, Grundier- und Tapezierarbeiten",
+      "Materialqualität, Farbauswahl und Fertigstellungstermin",
+    ],
+    additionalFaqs: [
+      {
+        question: "Streichen Sie komplette Wohnungen in {city}?",
+        answer:
+          "Ja. Wir übernehmen einzelne Räume ebenso wie komplette Wohnungen oder Häuser und stimmen den Leistungsumfang vor Beginn eindeutig mit Ihnen ab.",
+      },
+      {
+        question: "Sind Malerarbeiten vor einer Wohnungsübergabe möglich?",
+        answer:
+          "Ja. Teilen Sie uns den Übergabetermin möglichst früh mit. Wir prüfen den Zustand, planen notwendige Vorarbeiten und richten die Fertigstellung danach aus.",
+      },
+    ],
+  },
+  "moebel-service": {
+    primaryKeyword: "Möbelmontage",
+    keywordVariants: [
+      "Möbelaufbau",
+      "Möbelabbau",
+      "Montageservice",
+      "IKEA Montageservice",
+      "Schrank aufbauen",
+      "Küchenmontage",
+    ],
+    image: "/images/möbel aufbau service.webp",
+    imageAlt: "Möbelmontage und Möbelaufbau in {city}",
+    overviewHeading: "Möbelmontage und Möbelaufbau in {city}",
+    overviewText: [
+      "Unser Montageservice in {city} unterstützt Sie beim fachgerechten Aufbau und Abbau von Schränken, Betten, Regalen, Büromöbeln und vielen gängigen Möbelsystemen. Werkzeug und benötigtes Montagematerial stimmen wir vor dem Termin mit Ihnen ab.",
+      "Wenn die Möbelmontage Teil eines Umzugs ist, koordinieren wir Demontage, sicheren Transport und Wiederaufbau in einem Ablauf. Auch einzelne Montageaufträge in {city} sind möglich, etwa nach einer Möbellieferung oder bei einer neuen Raumaufteilung.",
+    ],
+    useCasesHeading: "Montageservice in {city} für unterschiedliche Möbel",
+    useCases: [
+      {
+        title: "Schränke, Betten und Regale",
+        text: "Wir montieren gängige Möbel sorgfältig, richten Bauteile aus und kontrollieren Stabilität und Funktion.",
+      },
+      {
+        title: "IKEA- und Systemmöbel",
+        text: "Modulare Möbel und größere Kombinationen werden nach Anleitung oder anhand der vorhandenen Bauteile aufgebaut.",
+      },
+      {
+        title: "Büromöbel und Umzugsmontage",
+        text: "Schreibtische, Regale und Schränke demontieren wir für den Transport und bauen sie am neuen Standort wieder auf.",
+      },
+    ],
+    priceHeading: "Kosten für Möbelmontage in {city}",
+    priceText:
+      "Für ein passendes Angebot benötigen wir Informationen zu Art, Anzahl und Zustand der Möbel. Fotos, Produktlinks oder Montageanleitungen helfen dabei, Arbeitszeit und benötigte Werkzeuge realistisch zu kalkulieren.",
+    priceFactors: [
+      "Anzahl, Größe und Bauart der Möbel",
+      "Vorhandene Anleitung und Vollständigkeit der Beschläge",
+      "Abbau, Transport und Wiederaufbau",
+      "Wandbefestigung, Anpassungen und Zugänglichkeit",
+    ],
+    additionalFaqs: [
+      {
+        question: "Bieten Sie Möbelaufbau als einzelnen Auftrag in {city} an?",
+        answer:
+          "Ja. Unser Montageservice kann unabhängig von einem Umzug gebucht werden. Senden Sie uns dafür am besten Fotos oder Produktinformationen der Möbel.",
+      },
+      {
+        question: "Können große Schränke für einen Umzug abgebaut werden?",
+        answer:
+          "Ja. Wir demontieren geeignete Schränke transportsicher und bauen sie am Zielort nach Absprache wieder auf.",
+      },
+    ],
+  },
+  "senior-umzug": {
+    primaryKeyword: "Seniorenumzug",
+    keywordVariants: [
+      "Umzug im Alter",
+      "Seniorenumzugsservice",
+      "Umzug ins Pflegeheim",
+      "Umzug ins betreute Wohnen",
+      "Umzugshilfe für Senioren",
+      "Haushaltsverkleinerung",
+    ],
+    image: "/images/senioren_umzüge.webp",
+    imageAlt: "Persönlich begleiteter Seniorenumzug in {city}",
+    overviewHeading: "Seniorenumzug in {city} mit persönlicher Begleitung",
+    overviewText: [
+      "Ein Seniorenumzug in {city} erfordert neben guter Logistik vor allem Ruhe, klare Absprachen und Rücksicht auf persönliche Bedürfnisse. Wir planen den Wohnungswechsel gemeinsam mit der umziehenden Person, Angehörigen oder einer betreuenden Einrichtung.",
+      "Unser Seniorenumzugsservice kann Verpackung, Möbelabbau, Transport, Aufbau und das Einräumen im neuen Zuhause verbinden. Bei einem Umzug ins Pflegeheim oder betreute Wohnen in {city} berücksichtigen wir Zeitfenster, Raumplanung und wichtige Erinnerungsstücke besonders sorgfältig.",
+    ],
+    useCasesHeading: "Umzugshilfe für Senioren in {city}",
+    useCases: [
+      {
+        title: "Umzug ins betreute Wohnen",
+        text: "Wir stimmen Möbel, Platzbedarf und Termin mit Bewohnern, Angehörigen und der neuen Einrichtung ab.",
+      },
+      {
+        title: "Umzug ins Pflegeheim",
+        text: "Persönliche Gegenstände werden sorgfältig ausgewählt, verpackt und im neuen Zimmer nach Wunsch eingerichtet.",
+      },
+      {
+        title: "Wohnung verkleinern",
+        text: "Beim Wechsel in ein kleineres Zuhause verbinden wir Umzug, Möbelmontage und auf Wunsch die geordnete Haushaltsauflösung.",
+      },
+    ],
+    priceHeading: "Kosten für einen Seniorenumzug in {city}",
+    priceText:
+      "Der Preis richtet sich nach Haushaltsumfang und gewünschter Unterstützung. Ein persönliches Gespräch oder eine Besichtigung schafft Klarheit darüber, welche Möbel mitziehen und welche zusätzlichen Arbeiten sinnvoll sind.",
+    priceFactors: [
+      "Umfang des Hausrats und Größe des neuen Zuhauses",
+      "Einpacken, Auspacken und Einräumen",
+      "Möbelmontage und Koordination mit der Einrichtung",
+      "Entrümpelung oder Haushaltsauflösung als Ergänzung",
+    ],
+    additionalFaqs: [
+      {
+        question: "Können Angehörige den Seniorenumzug aus der Ferne organisieren?",
+        answer:
+          "Ja. Wir vereinbaren einen festen Ansprechpartner und stimmen Besichtigung, Leistungsumfang und Termine telefonisch oder digital mit den Angehörigen ab.",
+      },
+      {
+        question: "Richten Sie das neue Zuhause in {city} auch ein?",
+        answer:
+          "Nach Absprache bauen wir Möbel auf, stellen sie nach Plan und helfen beim Auspacken, damit wichtige Dinge direkt erreichbar sind.",
+      },
+    ],
+  },
+  entruempelung: {
+    primaryKeyword: "Entrümpelung",
+    keywordVariants: [
+      "Entrümpelungsfirma",
+      "Haushaltsauflösung",
+      "Wohnungsauflösung",
+      "Kellerentrümpelung",
+      "Hausentrümpelung",
+      "besenreine Räumung",
+    ],
+    image: "/images/entrümpelung.webp",
+    imageAlt: "Entrümpelung und Haushaltsauflösung in {city}",
+    overviewHeading: "Entrümpelung und Haushaltsauflösung in {city}",
+    overviewText: [
+      "Als Entrümpelungsfirma für {city} räumen wir Wohnungen, Häuser, Keller, Dachböden, Garagen und kleinere Gewerbeflächen. Vor Beginn klären wir, was erhalten, verwertet, gespendet oder fachgerecht entsorgt werden soll.",
+      "Bei einer Haushaltsauflösung in {city} erhalten Sie nach der Besichtigung ein transparentes Angebot inklusive der vereinbarten Räumungs- und Entsorgungsleistungen. Verwertbare Gegenstände können nach Prüfung angerechnet werden; auf Wunsch übergeben wir die Räume besenrein.",
+    ],
+    useCasesHeading: "Räumungen in {city} für jeden Umfang",
+    useCases: [
+      {
+        title: "Wohnungs- und Hausentrümpelung",
+        text: "Von einzelnen Räumen bis zum vollständigen Objekt planen wir Personal, Fahrzeuge und Entsorgungswege passend zum Umfang.",
+      },
+      {
+        title: "Haushalts- und Nachlassauflösung",
+        text: "In sensiblen Situationen arbeiten wir diskret und halten wichtige Dokumente oder Erinnerungsstücke gesondert zurück.",
+      },
+      {
+        title: "Keller, Garage und Gewerbe",
+        text: "Auch Nebenräume, Lager und kleinere Gewerbeflächen werden strukturiert geräumt und vereinbarungsgemäß übergeben.",
+      },
+    ],
+    priceHeading: "Was kostet eine Entrümpelung in {city}?",
+    priceText:
+      "Eine belastbare Kalkulation berücksichtigt Menge, Materialarten, Zugänglichkeit und Entsorgungskosten. Nach einer Besichtigung können wir den Aufwand einschätzen und ein verbindliches Angebot für die Räumung erstellen.",
+    priceFactors: [
+      "Menge und Art des zu räumenden Hausrats",
+      "Etagen, Laufwege, Aufzug und Parksituation",
+      "Entsorgungsgebühren und besondere Materialien",
+      "Wertanrechnung und gewünschter Übergabezustand",
+    ],
+    additionalFaqs: [
+      {
+        question: "Übernehmen Sie komplette Haushaltsauflösungen in {city}?",
+        answer:
+          "Ja. Wir räumen den vereinbarten Hausrat, berücksichtigen verwertbare Gegenstände und übergeben Wohnung oder Haus auf Wunsch besenrein.",
+      },
+      {
+        question: "Kann eine Entrümpelung kurzfristig durchgeführt werden?",
+        answer:
+          "Bei dringenden Übergabe- oder Verkaufsterminen prüfen wir kurzfristige Kapazitäten. Fotos und vollständige Angaben helfen uns bei einer schnellen Einschätzung.",
+      },
+    ],
+  },
+};
+
 function withCity(text: string, cityName: string) {
   return text.replaceAll("{city}", cityName);
 }
@@ -486,6 +775,7 @@ export default async function ServicePage({
     redirect(`/stadt/${encodeURIComponent(slugRaw)}`);
 
   const config = serviceConfig[serviceKey];
+  const seo = seoContent[serviceKey];
   const path = `/stadt/${encodeURIComponent(slugify(cityName))}/${serviceKey}`;
 
   const seed = hashSeed(`${slugify(cityName).toLowerCase()}-${serviceKey}`);
@@ -496,7 +786,11 @@ export default async function ServicePage({
   const features = rotateArr(config.features, seed, 3);
   const tips = rotateArr(config.tips, seed, 4);
   const benefits = rotateArr(config.benefits, seed, 5);
-  const faqs = rotateArr(config.faqs, seed, 6);
+  const faqs = rotateArr(
+    [...config.faqs, ...seo.additionalFaqs],
+    seed,
+    6,
+  );
 
   const citySlug = slugify(cityName);
   const nearbyCities = getNearbyCities(cityName);
@@ -537,6 +831,11 @@ export default async function ServicePage({
         description={withCity(config.description, cityName)}
         path={path}
         city={cityName}
+        image={seo.image}
+        alternateNames={seo.keywordVariants.map(
+          (keyword) => `${keyword} ${cityName}`,
+        )}
+        offers={config.features}
       />
       <script
         type='application/ld+json'
@@ -545,12 +844,15 @@ export default async function ServicePage({
       <div className='flex flex-col'>
         {/* Hero */}
         <section
-          className='relative min-h-[600px] flex items-center'
-          style={{
-            backgroundImage: "url('/images/Umzugsunternehmen_Olpe.png')",
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}>
+          className='relative min-h-[600px] flex items-center overflow-hidden'>
+          <Image
+            src={seo.image}
+            alt={withCity(seo.imageAlt, cityName)}
+            fill
+            priority
+            sizes='100vw'
+            className='object-cover'
+          />
           <div className='absolute inset-0 bg-navy/85' />
           <div className='relative z-10 container mx-auto px-4 py-16'>
             <nav
@@ -588,11 +890,11 @@ export default async function ServicePage({
               </div>
               <div className='flex flex-col gap-6 text-center lg:text-left'>
                 <h1 className='font-sans font-bold text-4xl md:text-6xl text-white leading-tight'>
-                  <span className='text-primary'>{config.title}</span> in{" "}
+                  <span className='text-primary'>{seo.primaryKeyword}</span> in{" "}
                   {cityName}
                 </h1>
                 <p className='font-body text-gray-300 text-lg'>
-                  {config.description}
+                  {config.title}: {config.description}
                 </p>
                 <div>
                   <Link
@@ -617,6 +919,38 @@ export default async function ServicePage({
             <p className='mt-5 font-body text-lg leading-relaxed text-gray-600'>
               {intro}
             </p>
+          </div>
+        </section>
+
+        <section className='bg-gray-50 py-20'>
+          <div className='container mx-auto grid max-w-6xl grid-cols-1 items-center gap-10 px-4 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16'>
+            <div className='relative aspect-[4/3] overflow-hidden rounded-md shadow-lg'>
+              <Image
+                src='/images/Umzugsunternehmen_Olpe.png'
+                alt={`${seo.primaryKeyword} in ${cityName} mit den Umzugshelden`}
+                fill
+                sizes='(max-width: 1024px) 100vw, 45vw'
+                className='object-cover'
+              />
+            </div>
+            <div>
+              <p className='font-sans text-sm font-semibold uppercase text-primary'>
+                Persönlich vor Ort in {cityName}
+              </p>
+              <h2 className='mt-3 font-sans text-3xl font-bold leading-tight text-navy md:text-4xl'>
+                {withCity(seo.overviewHeading, cityName)}
+              </h2>
+              <div className='mt-6 space-y-4 font-body leading-relaxed text-gray-600'>
+                {seo.overviewText.map((paragraph) => (
+                  <p key={paragraph}>{withCity(paragraph, cityName)}</p>
+                ))}
+              </div>
+              <Link
+                href='#kontakt'
+                className='mt-7 inline-flex font-sans font-semibold text-primary hover:underline'>
+                Leistung kostenlos anfragen
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -665,6 +999,36 @@ export default async function ServicePage({
                   />
                   <p className='font-sans font-semibold text-navy'>{feature}</p>
                 </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className='bg-white py-20'>
+          <div className='container mx-auto max-w-6xl px-4'>
+            <div className='max-w-3xl'>
+              <p className='font-sans text-sm font-semibold uppercase text-primary'>
+                Für private und gewerbliche Aufträge
+              </p>
+              <h2 className='mt-3 font-sans text-3xl font-bold text-navy md:text-4xl'>
+                {withCity(seo.useCasesHeading, cityName)}
+              </h2>
+            </div>
+            <div className='mt-10 grid grid-cols-1 gap-8 md:grid-cols-3'>
+              {seo.useCases.map((useCase, index) => (
+                <article
+                  key={useCase.title}
+                  className='border-t-4 border-primary bg-gray-50 p-6'>
+                  <span className='font-sans text-sm font-bold text-primary'>
+                    0{index + 1}
+                  </span>
+                  <h3 className='mt-3 font-sans text-xl font-semibold text-navy'>
+                    {useCase.title}
+                  </h3>
+                  <p className='mt-3 font-body text-sm leading-relaxed text-gray-600'>
+                    {withCity(useCase.text, cityName)}
+                  </p>
+                </article>
               ))}
             </div>
           </div>
@@ -720,6 +1084,48 @@ export default async function ServicePage({
                 </li>
               ))}
             </ol>
+          </div>
+        </section>
+
+        <section className='bg-[#eef3f7] py-20'>
+          <div className='container mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 lg:grid-cols-2 lg:items-center'>
+            <div>
+              <p className='font-sans text-sm font-semibold uppercase text-primary'>
+                Transparent kalkuliert
+              </p>
+              <h2 className='mt-3 font-sans text-3xl font-bold text-navy md:text-4xl'>
+                {withCity(seo.priceHeading, cityName)}
+              </h2>
+              <p className='mt-5 font-body leading-relaxed text-gray-600'>
+                {withCity(seo.priceText, cityName)}
+              </p>
+              <ul className='mt-7 space-y-4'>
+                {seo.priceFactors.map((factor) => (
+                  <li key={factor} className='flex items-start gap-3'>
+                    <CheckIcon
+                      className='mt-0.5 shrink-0 text-primary'
+                      size={20}
+                    />
+                    <span className='font-body text-gray-700'>{factor}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className='bg-white p-7 shadow-sm'>
+              <h3 className='font-sans text-2xl font-semibold text-navy'>
+                Kostenlos und unverbindlich kalkulieren lassen
+              </h3>
+              <p className='mt-3 font-body leading-relaxed text-gray-600'>
+                Beschreiben Sie Ihren Auftrag in {cityName}. Wir prüfen die
+                Angaben und melden uns mit den nächsten Schritten für ein
+                passendes Angebot.
+              </p>
+              <Link href='#kontakt'>
+                <Button className='mt-6 rounded bg-primary px-6 py-3 font-sans font-semibold text-white hover:bg-primary/90'>
+                  Angebot anfordern
+                </Button>
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -870,24 +1276,31 @@ export async function generateMetadata({
   }
 
   const config = serviceConfig[serviceKey];
+  const seo = seoContent[serviceKey];
   const seed = hashSeed(`${slugify(cityName).toLowerCase()}-${serviceKey}`);
   const titleVariants = [
-    `${config.name} ${cityName} ▷ Professionell & günstig | Umzugshelden`,
-    `${config.name} ${cityName} ✓ Zuverlässig zum Festpreis | Umzugshelden`,
-    `${config.name} in ${cityName} ▷ Jetzt kostenlos anfragen | Umzugshelden`,
+    `${seo.primaryKeyword} ${cityName} | Professionell zum Festpreis`,
+    `${seo.primaryKeyword} in ${cityName} | Umzugshelden`,
+    `${config.name} ${cityName} | Kostenloses Angebot anfordern`,
   ];
   const descriptionVariants = [
-    `${config.name} in ${cityName}: ${config.description} Jetzt kostenlos anfragen!`,
-    `${config.name} in ${cityName} gesucht? ${config.description} Unverbindliches Angebot sichern!`,
-    `Ihr Partner für ${config.name} in ${cityName}. ${config.description} Kostenlos & schnell anfragen!`,
+    `${seo.primaryKeyword} in ${cityName}: ${config.description} Persönlich beraten lassen und kostenloses Festpreisangebot anfordern.`,
+    `${seo.primaryKeyword} ${cityName} gesucht? ${config.description} Jetzt unverbindlich bei den Umzugshelden anfragen.`,
+    `Ihr regionaler Partner für ${seo.primaryKeyword} in ${cityName}. Klare Planung, feste Ansprechpartner und transparentes Angebot.`,
   ];
+  const socialImage = new URL(
+    seo.image,
+    "https://umzugshelden.io",
+  ).toString();
   return {
     title: pick(titleVariants, seed, 9),
     description: pick(descriptionVariants, seed, 10),
     keywords: [
-      `${config.name} ${cityName}`,
-      `${config.name.toLowerCase()} ${cityName}`,
-      `Umzugsunternehmen ${cityName}`,
+      `${seo.primaryKeyword} ${cityName}`,
+      ...seo.keywordVariants.flatMap((keyword) => [
+        `${keyword} ${cityName}`,
+        `${keyword} in ${cityName}`,
+      ]),
       `Umzugshelden ${cityName}`,
     ],
     robots: {
@@ -902,17 +1315,24 @@ export async function generateMetadata({
       },
     },
     openGraph: {
-      title: `${config.name} ${cityName} | Umzugshelden`,
+      title: `${seo.primaryKeyword} ${cityName} | Umzugshelden`,
       description: pick(descriptionVariants, seed, 10),
       type: "website",
       locale: "de_DE",
       siteName: "Umzugshelden",
       url: `https://umzugshelden.io/stadt/${encodeURIComponent(slugify(cityName))}/${serviceKey}`,
+      images: [
+        {
+          url: socialImage,
+          alt: withCity(seo.imageAlt, cityName),
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${config.name} ${cityName} | Umzugshelden`,
+      title: `${seo.primaryKeyword} ${cityName} | Umzugshelden`,
       description: pick(descriptionVariants, seed, 10),
+      images: [socialImage],
     },
     alternates: {
       canonical: `https://umzugshelden.io/stadt/${encodeURIComponent(slugify(cityName))}/${serviceKey}`,
