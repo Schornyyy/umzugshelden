@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://umzugshelden.io";
+const BASE_URL = "https://www.umzugshelden.io";
 
 type Freq = MetadataRoute.Sitemap[number]["changeFrequency"];
 

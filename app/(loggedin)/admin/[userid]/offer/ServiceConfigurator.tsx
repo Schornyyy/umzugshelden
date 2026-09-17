@@ -18,6 +18,7 @@ import type {
   ServiceKey,
 } from "./OfferPlanner";
 import { paintMaterialPerM2Price } from "./OfferPlanner";
+import { calculatePaintingMaterialRequirements } from "./paintingMaterialRequirements";
 
 type ServiceConfiguratorProps = {
   service: ServiceKey;
@@ -241,6 +242,10 @@ const currencyFormatter = new Intl.NumberFormat("de-DE", {
   currency: "EUR",
 });
 
+const materialQuantityFormatter = new Intl.NumberFormat("de-DE", {
+  maximumFractionDigits: 1,
+});
+
 const commonPaintMaterials = [
   { name: "Wandfarbe weiß (12,5 l)", unitPrice: 45, liters: 12.5, coverageM2PerLiter: 7 },
   { name: "Grundierung / Tiefengrund (10 l)", unitPrice: 25, liters: 10, coverageM2PerLiter: 10 },
@@ -277,6 +282,13 @@ function PaintingServiceCalculator(props: Omit<ServiceConfiguratorProps, "servic
         : total + item.quantity * item.unitPrice,
     0
   );
+  const materialRequirements = calculatePaintingMaterialRequirements({
+    wallAreaM2: planning.paintAreaM2,
+    ceilingAreaM2: planning.ceilingAreaM2,
+    coats: planning.paintCoats,
+    repairAreaM2: planning.repairAreaM2,
+    plasterAreaM2: planning.plasterAreaM2,
+  });
 
   function applyMaterials(next: PaintMaterialLine[]) {
     onPlanningChange("paintMaterials", next);
@@ -334,6 +346,47 @@ function PaintingServiceCalculator(props: Omit<ServiceConfiguratorProps, "servic
           <NumberField label='Spachtelarbeiten' value={planning.plasterAreaM2} onChange={(value) => onPlanningChange("plasterAreaM2", value)} suffix='m²' step='0.5' />
         </div>
       </div>
+      {materialRequirements.length > 0 && (
+        <div className='mt-5 border-t border-slate-200 pt-4'>
+          <div className='mb-3 flex items-start gap-3'>
+            <span className='flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'>
+              <Box size={17} />
+            </span>
+            <div>
+              <p className='text-sm font-semibold text-slate-950'>Automatischer Materialbedarf</p>
+              <p className='mt-1 text-sm leading-5 text-slate-600'>
+                Mit 10 % Reserve. Die Schutzfläche entspricht der Deckenfläche;
+                ohne Deckenangabe werden 25 % der Wandfläche angesetzt.
+              </p>
+            </div>
+          </div>
+          <div className='overflow-hidden rounded-md border border-slate-200'>
+            <div className='hidden grid-cols-[minmax(0,1fr)_110px_150px] gap-3 bg-slate-50 px-3 py-2 text-[11px] font-medium uppercase text-slate-500 sm:grid'>
+              <span>Material</span>
+              <span>Bedarf</span>
+              <span>Einkaufen</span>
+            </div>
+            <div className='divide-y divide-slate-200'>
+              {materialRequirements.map((item) => (
+                <div key={item.id} className='grid gap-1 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_110px_150px] sm:items-center sm:gap-3'>
+                  <div className='min-w-0'>
+                    <p className='text-sm font-medium text-slate-950'>{item.name}</p>
+                    <p className='mt-0.5 text-xs text-slate-500'>{item.basis}</p>
+                  </div>
+                  <p className='text-sm tabular-nums text-slate-700'>
+                    <span className='mr-1 text-xs text-slate-500 sm:hidden'>Bedarf:</span>
+                    {materialQuantityFormatter.format(item.requiredAmount)} {item.requiredUnit}
+                  </p>
+                  <p className='text-sm font-semibold tabular-nums text-slate-950'>
+                    <span className='mr-1 text-xs font-normal text-slate-500 sm:hidden'>Einkaufen:</span>
+                    {item.packageQuantity} × {item.packageLabel}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className='mt-5 border-t border-slate-200 pt-4'>
         <p className='mb-1 text-sm font-semibold text-slate-950'>Materialpreise je m²</p>
         <p className='mb-3 text-sm text-slate-600'>Der Farbpreis je m² wird automatisch aus der Materialliste berechnet, sobald dort Gebinde mit Liter- und Ergiebigkeitsangabe eingetragen sind – er lässt sich hier auch manuell übersteuern.</p>

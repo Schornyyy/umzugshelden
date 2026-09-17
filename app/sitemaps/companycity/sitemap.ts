@@ -4,7 +4,7 @@ import { cities, getServices } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://umzugshelden.io";
+const BASE_URL = "https://www.umzugshelden.io";
 
 function createEntry(path: string, priority: number): MetadataRoute.Sitemap[number] {
   return {

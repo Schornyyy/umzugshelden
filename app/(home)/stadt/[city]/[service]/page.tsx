@@ -21,6 +21,14 @@ function isAllowedCity(cityName: string): boolean {
   );
 }
 
+function getCanonicalCityName(cityName: string): string {
+  return (
+    rawCities.find(
+      (city) => slugify(city).toLowerCase() === slugify(cityName).toLowerCase(),
+    ) ?? cityName
+  );
+}
+
 const serviceConfig = {
   umzugsservice: {
     name: "Umzugsservice",
@@ -765,7 +773,7 @@ export default async function ServicePage({
   try {
     decoded = decodeURIComponent(slugRaw);
   } catch {}
-  const cityName = deslugify(decoded);
+  const cityName = getCanonicalCityName(deslugify(decoded));
 
   const serviceKey = service.trim().toLowerCase() as ServiceKey;
 
@@ -879,7 +887,7 @@ export default async function ServicePage({
               </ol>
             </nav>
             <div className='grid grid-cols-1 items-center gap-12 lg:grid-cols-2'>
-              <div className='border border-white/10 bg-[#0b1f3a] p-6 shadow-2xl rounded lg:p-8'>
+              <div className='order-2 rounded border border-white/10 bg-[#0b1f3a] p-6 shadow-2xl lg:order-1 lg:p-8'>
                 <h2 className='mb-3 font-sans text-xl font-semibold text-white'>
                   Angebot für {config.name} anfordern
                 </h2>
@@ -888,8 +896,8 @@ export default async function ServicePage({
                 </p>
                 <ContactForm dark />
               </div>
-              <div className='flex flex-col gap-6 text-center lg:text-left'>
-                <h1 className='font-sans font-bold text-4xl md:text-6xl text-white leading-tight'>
+              <div className='order-1 flex flex-col gap-6 text-center lg:order-2 lg:text-left'>
+                <h1 className='break-words font-sans text-4xl font-bold leading-tight text-white md:text-5xl'>
                   <span className='text-primary'>{seo.primaryKeyword}</span> in{" "}
                   {cityName}
                 </h1>
@@ -1268,7 +1276,7 @@ export async function generateMetadata({
   try {
     decoded = decodeURIComponent(slugRaw);
   } catch {}
-  const cityName = deslugify(decoded);
+  const cityName = getCanonicalCityName(deslugify(decoded));
   const serviceKey = service.trim().toLowerCase() as ServiceKey;
 
   if (!isAllowedCity(cityName) || !(serviceKey in serviceConfig)) {

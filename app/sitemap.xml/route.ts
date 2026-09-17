@@ -1,4 +1,4 @@
-const BASE_URL = "https://umzugshelden.io";
+const BASE_URL = "https://www.umzugshelden.io";
 
 const SITEMAPS = ["static", "blog", "companycity"] as const;
 
