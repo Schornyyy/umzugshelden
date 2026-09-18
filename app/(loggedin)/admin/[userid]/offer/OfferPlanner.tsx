@@ -30,6 +30,7 @@ import {
   ImagePlus,
   LoaderCircle,
   MapPin,
+  PackageCheck,
   PackagePlus,
   Paintbrush,
   Printer,
@@ -38,12 +39,29 @@ import {
   Users,
   Warehouse,
   Wrench,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import OfferAssistant from "./OfferAssistant";
 import ServiceConfigurator from "./ServiceConfigurator";
+import {
+  calculateMaterials,
+  calculatePackagedMaterial,
+  defaultMaterialCatalog,
+  normalizeMaterialCatalog,
+  sumMaterialNetTotal,
+  type CalculatedMaterial,
+  type MaterialCatalogItem,
+} from "./materialCatalog";
+import {
+  calculatePaintColorAreas,
+  calculatePaintLiters,
+  type PaintColorPlan,
+  type PaintSurfaceCondition,
+} from "./paintColorPlanning";
+import type { RoofSlopeType } from "./paintingAreaCalculation";
 
 type PlanningStep = "order" | "site" | "inventory" | "price" | "finish";
 
@@ -87,6 +105,8 @@ type Rates = {
   vatPercent: number;
   paintMaterialPerM2: number;
   paintLaborHoursPerM2: number;
+  wallpaperLaborHoursPerM2: number;
+  wallpaperRemovalHoursPerM2: number;
   plasterMaterialPerM2: number;
   plasterLaborHoursPerM2: number;
   furnitureAssemblyMinutesPerPiece: number;
@@ -180,11 +200,32 @@ export type PlanningDetails = {
   furnitureLiftRequired: boolean;
   parkingRequired: boolean;
   packingRequired: boolean;
+  livingAreaM2: number;
+  paintingRoomCount: number;
+  roomHeightM: number;
+  openingDeductionPercent: number;
+  paintAreaAutoCalculate: boolean;
+  roofSlopeType: RoofSlopeType;
+  slopedRoomCount: number;
+  kneeWallHeightM: number;
+  roofPitchDegrees: number;
   paintAreaM2: number;
   ceilingAreaM2: number;
   paintCoats: number;
+  paintSurfaceCondition: PaintSurfaceCondition;
+  paintReservePercent: number;
+  paintColors: PaintColorPlan[];
   repairAreaM2: number;
   plasterAreaM2: number;
+  wallpaperEnabled: boolean;
+  wallpaperAreaMode: "allWalls" | "custom";
+  wallpaperAreaM2: number;
+  wallpaperRollWidthM: number;
+  wallpaperRollLengthM: number;
+  wallpaperWastePercent: number;
+  wallpaperRollPrice: number;
+  removeOldWallpaper: boolean;
+  paintWallpaper: boolean;
   paintMaterials: PaintMaterialLine[];
   furniturePieces: number;
   movingBoxes: number;
@@ -238,6 +279,7 @@ type CalculatorData = {
   calculation: Calculation;
   savedCalculations: SavedCalculation[];
   packages: OfferPackage[];
+  materialCatalog: MaterialCatalogItem[];
 };
 
 const storageCollection = "offer_calculators_umzugshelden";
@@ -295,6 +337,8 @@ const defaultRates: Rates = {
   vatPercent: 19,
   paintMaterialPerM2: 4.5,
   paintLaborHoursPerM2: 0.12,
+  wallpaperLaborHoursPerM2: 0.18,
+  wallpaperRemovalHoursPerM2: 0.08,
   plasterMaterialPerM2: 3.5,
   plasterLaborHoursPerM2: 0.35,
   furnitureAssemblyMinutesPerPiece: 30,
@@ -372,11 +416,42 @@ function createPlanning(): PlanningDetails {
     furnitureLiftRequired: false,
     parkingRequired: false,
     packingRequired: false,
+    livingAreaM2: 0,
+    paintingRoomCount: 1,
+    roomHeightM: 2.5,
+    openingDeductionPercent: 10,
+    paintAreaAutoCalculate: true,
+    roofSlopeType: "none",
+    slopedRoomCount: 0,
+    kneeWallHeightM: 1,
+    roofPitchDegrees: 35,
     paintAreaM2: 0,
     ceilingAreaM2: 0,
     paintCoats: 2,
+    paintSurfaceCondition: "normal",
+    paintReservePercent: 10,
+    paintColors: [
+      {
+        id: crypto.randomUUID(),
+        name: "Weiß",
+        hexColor: "#f8fafc",
+        areaMode: "remaining",
+        areaM2: 0,
+        coats: 2,
+        materialId: "paint",
+      },
+    ],
     repairAreaM2: 0,
     plasterAreaM2: 0,
+    wallpaperEnabled: false,
+    wallpaperAreaMode: "allWalls",
+    wallpaperAreaM2: 0,
+    wallpaperRollWidthM: 0.53,
+    wallpaperRollLengthM: 10.05,
+    wallpaperWastePercent: 10,
+    wallpaperRollPrice: 25,
+    removeOldWallpaper: false,
+    paintWallpaper: true,
     paintMaterials: [],
     furniturePieces: 0,
     movingBoxes: 0,
@@ -438,12 +513,43 @@ function normalizeServiceTypes(serviceTypes: unknown): ServiceKey[] {
 
 function normalizePlanning(planning?: Partial<PlanningDetails>): PlanningDetails {
   const fallback = createPlanning();
+  const surfaceConditions = new Set<PaintSurfaceCondition>([
+    "smooth",
+    "normal",
+    "absorbent",
+  ]);
   return {
     ...fallback,
     ...planning,
     serviceTypes: normalizeServiceTypes(planning?.serviceTypes),
     rooms: planning?.rooms ?? fallback.rooms,
     extraServices: planning?.extraServices ?? [],
+    paintSurfaceCondition: surfaceConditions.has(
+      planning?.paintSurfaceCondition as PaintSurfaceCondition
+    )
+      ? (planning?.paintSurfaceCondition as PaintSurfaceCondition)
+      : fallback.paintSurfaceCondition,
+    paintReservePercent: Math.min(
+      50,
+      Math.max(0, planning?.paintReservePercent ?? fallback.paintReservePercent)
+    ),
+    paintColors:
+      planning?.paintColors?.length
+        ? planning.paintColors.map((color, index) => ({
+            id: color.id || crypto.randomUUID(),
+            name: color.name || `Farbe ${index + 1}`,
+            hexColor: /^#[0-9a-f]{6}$/i.test(color.hexColor)
+              ? color.hexColor
+              : "#f8fafc",
+            areaMode: color.areaMode === "custom" ? "custom" : "remaining",
+            areaM2: Math.max(0, color.areaM2 ?? 0),
+            coats: Math.max(1, Math.round(color.coats ?? planning.paintCoats ?? 2)),
+            materialId: color.materialId ?? "paint",
+          }))
+        : fallback.paintColors.map((color) => ({
+            ...color,
+            coats: Math.max(1, Math.round(planning?.paintCoats ?? color.coats)),
+          })),
     paintMaterials: (planning?.paintMaterials ?? []).map((item) => ({
       ...item,
       liters: item.liters ?? 0,
@@ -568,6 +674,7 @@ type ServiceRecommendation = {
   storageCost: number;
   logisticsCost: number;
   boxes: number;
+  materials: CalculatedMaterial[];
   explanations: string[];
   serviceShares: ServiceCostShare[];
 };
@@ -575,7 +682,8 @@ type ServiceRecommendation = {
 function calculateServiceRecommendation(
   calculation: Calculation,
   rates: Rates,
-  volume: number
+  volume: number,
+  materialCatalog: MaterialCatalogItem[]
 ): ServiceRecommendation {
   const { planning } = calculation;
   const hasService = planning.serviceTypes.length > 0;
@@ -611,6 +719,7 @@ function calculateServiceRecommendation(
   let storageCost = 0;
   let logisticsCost = 0;
   let boxes = planning.movingBoxes;
+  const materials: CalculatedMaterial[] = [];
 
   if (selectedServices.has("move") || selectedServices.has("seniorMove")) {
     const seniorFactor = selectedServices.has("seniorMove") ? 1.2 : 1;
@@ -719,26 +828,93 @@ function calculateServiceRecommendation(
   }
 
   if (selectedServices.has("painting")) {
-    const paintArea =
-      (planning.paintAreaM2 + planning.ceilingAreaM2) *
-      Math.max(1, planning.paintCoats);
-    const plasterRepairArea = planning.repairAreaM2 + planning.plasterAreaM2;
-    const paintingHours =
-      paintArea * rates.paintLaborHoursPerM2 +
-      plasterRepairArea * rates.plasterLaborHoursPerM2;
-    labourHours += paintingHours;
-    employees = Math.max(employees, paintArea > 100 ? 2 : 1);
-    const paintMaterialListCost = planning.paintMaterials.reduce(
-      (total, item) =>
-        paintMaterialPerM2Price(item) > 0
-          ? total
-          : total + item.quantity * item.unitPrice,
+    const wallpaperAreaM2 = planning.wallpaperEnabled
+      ? planning.wallpaperAreaMode === "allWalls"
+        ? planning.paintAreaM2
+        : planning.wallpaperAreaM2
+      : 0;
+    const paintedWallAreaM2 = Math.max(
+      0,
+      planning.paintAreaM2 -
+        (planning.wallpaperEnabled && !planning.paintWallpaper
+          ? wallpaperAreaM2
+          : 0)
+    );
+    const totalPaintAreaM2 = paintedWallAreaM2 + planning.ceilingAreaM2;
+    const calculatedPaintColors = calculatePaintColorAreas(
+      planning.paintColors,
+      totalPaintAreaM2
+    );
+    const paintArea = calculatedPaintColors.reduce(
+      (total, color) => total + color.coatedAreaM2,
       0
     );
-    const paintingMaterial =
-      paintArea * rates.paintMaterialPerM2 +
-      plasterRepairArea * rates.plasterMaterialPerM2 +
-      paintMaterialListCost;
+    const plasterRepairArea = planning.repairAreaM2 + planning.plasterAreaM2;
+    const wallpaperHours =
+      wallpaperAreaM2 * rates.wallpaperLaborHoursPerM2 +
+      (planning.removeOldWallpaper
+        ? wallpaperAreaM2 * rates.wallpaperRemovalHoursPerM2
+        : 0);
+    const paintingHours =
+      paintArea * rates.paintLaborHoursPerM2 +
+      plasterRepairArea * rates.plasterLaborHoursPerM2 +
+      wallpaperHours;
+    labourHours += paintingHours;
+    employees = Math.max(
+      employees,
+      paintArea + wallpaperAreaM2 > 100 ? 2 : 1
+    );
+    const wallPaintMaterials = materialCatalog.filter(
+      (item) =>
+        item.enabled &&
+        item.service === "painting" &&
+        item.materialType === "wallPaint"
+    );
+    const colorMaterials = calculatedPaintColors.flatMap((color) => {
+      const material =
+        wallPaintMaterials.find((item) => item.id === color.materialId) ??
+        wallPaintMaterials[0];
+      if (!material || color.coatedAreaM2 <= 0) return [];
+
+      const packagedMaterial = calculatePackagedMaterial(
+        material,
+        calculatePaintLiters(
+          color.coatedAreaM2,
+          planning.paintSurfaceCondition,
+          planning.paintReservePercent
+        ),
+        {
+          id: `paint-color:${color.id}`,
+          name: `${material.name} · ${color.name}`,
+          basisAmount: color.coatedAreaM2,
+        }
+      );
+      return packagedMaterial ? [packagedMaterial] : [];
+    });
+    const automaticPaintingMaterials = calculateMaterials(
+      materialCatalog.filter((item) => item.materialType !== "wallPaint"),
+      {
+        coatedAreaM2: paintArea,
+        surfaceAreaM2: paintedWallAreaM2 + planning.ceilingAreaM2,
+        protectionAreaM2:
+          planning.ceilingAreaM2 > 0
+            ? planning.ceilingAreaM2
+            : paintedWallAreaM2 * 0.25,
+        repairAreaM2: plasterRepairArea,
+        wallpaperAreaM2:
+          wallpaperAreaM2 *
+          (1 + Math.min(100, planning.wallpaperWastePercent) / 100),
+        packingBoxCount: 0,
+        fixed: 1,
+      },
+      "painting"
+    );
+    const paintingMaterials = [
+      ...colorMaterials,
+      ...automaticPaintingMaterials,
+    ];
+    const paintingMaterial = sumMaterialNetTotal(paintingMaterials);
+    materials.push(...paintingMaterials);
     materialCost += paintingMaterial;
     serviceShares.push({
       service: "painting",
@@ -749,16 +925,19 @@ function calculateServiceRecommendation(
       logisticsCost: 0,
     });
     explanations.push(
-      `${planning.paintAreaM2.toFixed(0)} m2 Flaeche mit ${planning.paintCoats} Anstrich(en)`
+      `${planning.paintAreaM2.toFixed(0)} m2 Wand und ${planning.ceilingAreaM2.toFixed(0)} m2 Decke, ${calculatedPaintColors.length} Farbton/Farbtöne`
     );
+    if (wallpaperAreaM2 > 0) {
+      const wallpaperPackages = paintingMaterials
+        .filter((item) => item.calculationBasis === "wallpaperAreaM2")
+        .reduce((total, item) => total + item.packageQuantity, 0);
+      explanations.push(
+        `${wallpaperAreaM2.toFixed(1)} m2 Tapete, ${wallpaperPackages} Gebinde laut Preisliste${planning.removeOldWallpaper ? ", inklusive Alt-Tapete entfernen" : ""}`
+      );
+    }
     if (plasterRepairArea > 0) {
       explanations.push(
         `${plasterRepairArea.toFixed(1)} m2 Spachtel- und Ausbesserungsarbeiten`
-      );
-    }
-    if (paintMaterialListCost > 0) {
-      explanations.push(
-        `${formatCurrency(paintMaterialListCost)} Material laut Materialliste`
       );
     }
   }
@@ -794,7 +973,21 @@ function calculateServiceRecommendation(
         planning.fragileItemCount * 5) /
       60;
     labourHours += packingHours;
-    const packingMaterial = boxes * rates.packingBoxRate;
+    const packingMaterials = calculateMaterials(
+      materialCatalog,
+      {
+        coatedAreaM2: 0,
+        surfaceAreaM2: 0,
+        protectionAreaM2: 0,
+        repairAreaM2: 0,
+        wallpaperAreaM2: 0,
+        packingBoxCount: boxes,
+        fixed: 1,
+      },
+      "packing"
+    );
+    const packingMaterial = sumMaterialNetTotal(packingMaterials);
+    materials.push(...packingMaterials);
     materialCost += packingMaterial;
     employees = Math.max(employees, boxes > 40 ? 2 : 1);
     serviceShares.push({
@@ -854,6 +1047,7 @@ function calculateServiceRecommendation(
     storageCost: Math.round(storageCost * 100) / 100,
     logisticsCost: Math.round(logisticsCost * 100) / 100,
     boxes,
+    materials,
     explanations,
     serviceShares,
   };
@@ -999,12 +1193,17 @@ type CalculationRow = {
 
 function getCalculationRows(
   calculation: Calculation,
-  rates: Rates
+  rates: Rates,
+  materialCatalog: MaterialCatalogItem[]
 ): CalculationRow[] {
   const pricing = calculatePricing(calculation, rates);
   const volume = calculateVolume(calculation.planning.rooms);
-  const selectedServices = new Set(calculation.planning.serviceTypes);
-  const recommendation = calculateServiceRecommendation(calculation, rates, volume);
+  const recommendation = calculateServiceRecommendation(
+    calculation,
+    rates,
+    volume,
+    materialCatalog
+  );
   const positionLabels = calculation.positionLabels ?? {};
   const resolveLabel = (id: string, fallback: string) =>
     positionLabels[id] ?? fallback;
@@ -1068,24 +1267,15 @@ function getCalculationRows(
       };
     }
   );
-  const paintMaterialListCost = calculation.planning.paintMaterials.reduce(
-    (total, item) =>
-      paintMaterialPerM2Price(item) > 0
-        ? total
-        : total + item.quantity * item.unitPrice,
-    0
-  );
   const materialFormula = calculation.autoEstimate
-    ? [
-        ...(selectedServices.has("painting")
-          ? [
-              `(${calculation.planning.paintAreaM2} m² Wand + ${calculation.planning.ceilingAreaM2} m² Decke) × ${calculation.planning.paintCoats} Anstrich(e) × ${formatCurrency(rates.paintMaterialPerM2)} + ${calculation.planning.repairAreaM2 + calculation.planning.plasterAreaM2} m² Spachtel/Ausbesserung × ${formatCurrency(rates.plasterMaterialPerM2)}${paintMaterialListCost > 0 ? ` + Materialliste ${formatCurrency(paintMaterialListCost)}` : ""}`,
-            ]
-          : []),
-        ...(selectedServices.has("packing")
-          ? [`${calculation.planning.movingBoxes || Math.ceil(volume * 10)} Kartons × ${formatCurrency(rates.packingBoxRate)}`]
-          : []),
-      ].join(" + ")
+    ? recommendation.materials.length > 0
+      ? recommendation.materials
+          .map(
+            (item) =>
+              `${item.packageQuantity} × ${item.packageLabel} ${item.name} (${formatCurrency(item.netTotal)} netto)`
+          )
+          .join(" + ")
+      : "Kein Materialbedarf"
     : "Manuell festgelegter Betrag";
   const clearanceVolume = calculation.planning.disposalVolumeM3 || volume;
   const storageVolume = calculation.planning.storageVolumeM3 || volume;
@@ -1178,16 +1368,28 @@ function getCalculationRows(
 function CalculationBreakdown({
   calculation,
   rates,
+  materialCatalog,
   onPrint,
   onRenamePosition,
 }: {
   calculation: Calculation;
   rates: Rates;
+  materialCatalog: MaterialCatalogItem[];
   onPrint: () => void;
   onRenamePosition: (id: string, label: string) => void;
 }) {
   const pricing = calculatePricing(calculation, rates);
-  const calculationRows = getCalculationRows(calculation, rates);
+  const recommendation = calculateServiceRecommendation(
+    calculation,
+    rates,
+    calculateVolume(calculation.planning.rooms),
+    materialCatalog
+  );
+  const calculationRows = getCalculationRows(
+    calculation,
+    rates,
+    materialCatalog
+  );
 
   return (
     <div className='space-y-5'>
@@ -1204,6 +1406,29 @@ function CalculationBreakdown({
           <Printer /> Kostenvoranschlag drucken
         </Button>
       </div>
+
+      {recommendation.materials.length > 0 && (
+        <div className='overflow-hidden rounded-md border border-emerald-200'>
+          <div className='flex items-center justify-between gap-4 bg-emerald-50 px-4 py-3'>
+            <div>
+              <p className='text-sm font-semibold text-emerald-950'>Materialbedarf aus Preisliste</p>
+              <p className='mt-0.5 text-xs text-emerald-800'>Volle Gebinde und Nettopreise</p>
+            </div>
+            <strong className='tabular-nums text-emerald-950'>{formatCurrency(sumMaterialNetTotal(recommendation.materials))} netto</strong>
+          </div>
+          <div className='divide-y divide-emerald-100'>
+            {recommendation.materials.map((item) => (
+              <div key={item.id} className='grid grid-cols-[minmax(0,1fr)_auto] gap-4 px-4 py-3 text-sm'>
+                <div>
+                  <p className='font-medium text-slate-950'>{item.name}</p>
+                  <p className='mt-0.5 text-xs text-slate-500'>{item.requiredAmount} {item.unit} Bedarf · {item.packageQuantity} × {item.packageLabel}</p>
+                </div>
+                <span className='font-semibold tabular-nums text-slate-950'>{formatCurrency(item.netTotal)} netto</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className='overflow-hidden rounded-md border border-slate-200'>
         <div className='grid grid-cols-[minmax(0,1fr)_auto] gap-4 bg-slate-50 px-4 py-3 text-xs font-semibold uppercase text-slate-500'>
@@ -1283,6 +1508,9 @@ export default function OfferPlanner() {
     SavedCalculation[]
   >([]);
   const [packages, setPackages] = useState<OfferPackage[]>(defaultPackages);
+  const [materialCatalog, setMaterialCatalog] = useState<MaterialCatalogItem[]>(
+    () => defaultMaterialCatalog.map((item) => ({ ...item }))
+  );
   const [newPackageName, setNewPackageName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -1305,6 +1533,9 @@ export default function OfferPlanner() {
       try {
         const snapshot = await getDoc(calculatorRef);
         const data = snapshot.data() as Partial<CalculatorData> | undefined;
+        const loadedMaterialCatalog = normalizeMaterialCatalog(
+          data?.materialCatalog
+        );
         const loadedSavedCalculations = (data?.savedCalculations ?? []).map(
           (saved) => {
             const normalized = normalizeCalculation(saved);
@@ -1366,6 +1597,7 @@ export default function OfferPlanner() {
           });
           setCalculation(nextCalculation);
           setSavedCalculations(loadedSavedCalculations);
+          setMaterialCatalog(loadedMaterialCatalog);
           if (data?.packages?.length) setPackages(data.packages);
         }
       } catch {
@@ -1385,7 +1617,8 @@ export default function OfferPlanner() {
   const recommendation = calculateServiceRecommendation(
     calculation,
     rates,
-    volume
+    volume,
+    materialCatalog
   );
 
   useEffect(() => {
@@ -1527,6 +1760,26 @@ export default function OfferPlanner() {
     setStatus("idle");
   }
 
+  function updateCustomerName(value: string) {
+    setCalculation((current) => {
+      const usesAutomaticTitle =
+        !current.title.trim() ||
+        current.title === "Neues Angebot" ||
+        current.title === `Angebot ${current.customer}`;
+
+      return {
+        ...current,
+        customer: value,
+        title: usesAutomaticTitle
+          ? value.trim()
+            ? `Angebot ${value.trim()}`
+            : "Neues Angebot"
+          : current.title,
+      };
+    });
+    setStatus("idle");
+  }
+
   function updateManualCalculation<
     Key extends
       | "employees"
@@ -1551,6 +1804,12 @@ export default function OfferPlanner() {
     setStatus("idle");
   }
 
+  function openCalculatedOffer() {
+    enableAutomaticEstimate();
+    setOfferTab("calculation");
+    setActiveStep("price");
+  }
+
   function updatePlanning<Key extends keyof PlanningDetails>(
     key: Key,
     value: PlanningDetails[Key]
@@ -1564,7 +1823,8 @@ export default function OfferPlanner() {
 
   async function persist(
     nextSavedCalculations: SavedCalculation[] = savedCalculations,
-    nextPackages: OfferPackage[] = packages
+    nextPackages: OfferPackage[] = packages,
+    nextMaterialCatalog: MaterialCatalogItem[] = materialCatalog
   ) {
     const companyId = companyData?.id;
     if (!companyId) return false;
@@ -1579,12 +1839,14 @@ export default function OfferPlanner() {
           calculation,
           savedCalculations: nextSavedCalculations,
           packages: nextPackages,
+          materialCatalog: nextMaterialCatalog,
           updatedAt: Date.now(),
         }),
         { merge: true }
       );
       setSavedCalculations(nextSavedCalculations);
       setPackages(nextPackages);
+      setMaterialCatalog(nextMaterialCatalog);
       setStatus("saved");
       return true;
     } catch {
@@ -1977,7 +2239,11 @@ export default function OfferPlanner() {
     }
 
     const pricing = calculatePricing(calculation, rates);
-    const calculationRows = getCalculationRows(calculation, rates);
+    const calculationRows = getCalculationRows(
+      calculation,
+      rates,
+      materialCatalog
+    );
     const rowsHtml = calculationRows
       .map(
         (row) => `<tr>
@@ -2242,6 +2508,7 @@ export default function OfferPlanner() {
           {status === "saved" && <span className='flex items-center gap-1.5 text-sm font-medium text-emerald-700'><Check size={16} /> Gespeichert</span>}
           {status === "error" && <span className='text-sm font-medium text-red-600'>Speichern fehlgeschlagen</span>}
           <OfferAssistant onApply={applyAssistantDraft} />
+          <Button asChild variant='outline' className='flex-1 sm:flex-none'><Link href={`/admin/${companyData?.id}/material-preisliste`}><PackageCheck /> Material-Preisliste</Link></Button>
           <Button variant='outline' className='flex-1 sm:flex-none' onClick={printCustomerDocument}><Printer /> Übersicht</Button>
           <Button variant='outline' className='flex-1 sm:flex-none' onClick={() => setIsCostEstimateDialogOpen(true)}><Printer /> Kostenvoranschlag</Button>
           <Button className='flex-1 sm:flex-none' onClick={() => void persist()} disabled={isSaving}>{isSaving ? <LoaderCircle className='animate-spin' /> : <Save />} Entwurf speichern</Button>
@@ -2333,6 +2600,37 @@ export default function OfferPlanner() {
         </div>
       </section>
 
+      {activeStep !== "finish" && (
+        <section className='mb-6 grid items-center gap-4 border-y border-blue-200 bg-blue-50 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto_auto] sm:px-5'>
+          <div className='flex min-w-0 items-center gap-3'>
+            <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white'>
+              <Zap size={18} />
+            </span>
+            <div className='min-w-0'>
+              <p className='text-sm font-semibold text-slate-950'>Schnellangebot · Automatik aktiv</p>
+              <p className='mt-0.5 text-xs leading-5 text-slate-600'>Mengen, Material, Personal und Fahrzeuge werden bei jeder Eingabe neu berechnet.</p>
+            </div>
+          </div>
+          <div className='grid grid-cols-3 gap-2 sm:contents'>
+            <div className='min-w-24 text-left sm:text-right'>
+              <p className='text-xs text-slate-500'>Material netto</p>
+              <p className='mt-0.5 font-semibold tabular-nums text-slate-950'>{formatCurrency(recommendation.materialCost)}</p>
+            </div>
+            <div className='min-w-24 text-left sm:text-right'>
+              <p className='text-xs text-slate-500'>Arbeitszeit</p>
+              <p className='mt-0.5 font-semibold tabular-nums text-slate-950'>{(recommendation.employees * recommendation.hoursPerEmployee).toFixed(1)} Std.</p>
+            </div>
+            <div className='min-w-24 text-left sm:text-right'>
+              <p className='text-xs text-slate-500'>Brutto</p>
+              <p className='mt-0.5 font-semibold tabular-nums text-slate-950'>{formatCurrency(grossTotal)}</p>
+            </div>
+          </div>
+          <Button type='button' onClick={openCalculatedOffer} disabled={selectedServices.size === 0}>
+            <Calculator /> Angebot ansehen
+          </Button>
+        </section>
+      )}
+
       <div className='grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]'>
         <div className='space-y-6'>
           {activeStep === "order" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
@@ -2351,7 +2649,8 @@ export default function OfferPlanner() {
                   </button>;
                 })}
               </div>
-              <div className='mt-5 rounded-md border border-amber-200 bg-amber-50/60 p-4'>
+              <details className='mt-5 rounded-md border border-amber-200 bg-amber-50/60 p-4'>
+                <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Kombi-Pakete verwalten (optional)</summary>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <div>
                     <p className='text-sm font-semibold text-slate-950'>Kombi-Pakete</p>
@@ -2381,15 +2680,22 @@ export default function OfferPlanner() {
                   <Button type='button' variant='outline' size='sm' onClick={saveCurrentSelectionAsPackage} disabled={!newPackageName.trim() || selectedServices.size === 0}><PackagePlus /> Als Paket speichern</Button>
                 </div>
                 <p className='mt-2 text-xs text-slate-500'>Pakete werden mit „Entwurf speichern“ dauerhaft gesichert.</p>
-              </div>
+              </details>
             </div>
-            {selectedServices.size === 0 ? <p className='rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600'>Waehle mindestens eine Dienstleistung, um die passende Aufnahme und Angebotslogik zu starten.</p> : <div className='grid gap-4 sm:grid-cols-2'>
-              <TextField label='Angebotsbezeichnung' value={calculation.title} onChange={(value) => updateCalculation("title", value)} placeholder='z. B. Umzug Familie Mustermann' />
-              <TextField label='Kunde / Projekt' value={calculation.customer} onChange={(value) => updateCalculation("customer", value)} placeholder='Name oder Firma' />
-              <TextField label='Ansprechpartner' value={calculation.planning.contactName} onChange={(value) => updatePlanning("contactName", value)} placeholder='Vor- und Nachname' />
-              <TextField label='Telefon' value={calculation.planning.contactPhone} onChange={(value) => updatePlanning("contactPhone", value)} placeholder='Telefonnummer' />
-              <TextField label='E-Mail' type='email' value={calculation.planning.contactEmail} onChange={(value) => updatePlanning("contactEmail", value)} placeholder='name@beispiel.de' />
-              <TextField label='Wunschtermin' type='date' value={calculation.planning.date} onChange={(value) => updatePlanning("date", value)} />
+            {selectedServices.size === 0 ? <p className='rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600'>Waehle mindestens eine Dienstleistung, um die passende Aufnahme und Angebotslogik zu starten.</p> : <div className='space-y-4'>
+              <div className='grid gap-4 sm:grid-cols-3'>
+                <TextField label='Kunde / Projekt' value={calculation.customer} onChange={updateCustomerName} placeholder='Name oder Firma' />
+                <TextField label='Ansprechpartner' value={calculation.planning.contactName} onChange={(value) => updatePlanning("contactName", value)} placeholder='Vor- und Nachname' />
+                <TextField label='Wunschtermin' type='date' value={calculation.planning.date} onChange={(value) => updatePlanning("date", value)} />
+              </div>
+              <details className='rounded-md border border-slate-200 bg-slate-50 p-4'>
+                <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Weitere Kundendaten und Angebotsname</summary>
+                <div className='mt-4 grid gap-4 sm:grid-cols-2'>
+                  <TextField label='Angebotsbezeichnung' value={calculation.title} onChange={(value) => updateCalculation("title", value)} placeholder='z. B. Umzug Familie Mustermann' />
+                  <TextField label='Telefon' value={calculation.planning.contactPhone} onChange={(value) => updatePlanning("contactPhone", value)} placeholder='Telefonnummer' />
+                  <TextField label='E-Mail' type='email' value={calculation.planning.contactEmail} onChange={(value) => updatePlanning("contactEmail", value)} placeholder='name@beispiel.de' />
+                </div>
+              </details>
             </div>}
           </section>}
 
@@ -2404,11 +2710,9 @@ export default function OfferPlanner() {
                   service={activeSiteService}
                   planning={calculation.planning}
                   kilometers={calculation.kilometers}
-                  paintingRates={{
-                    paintMaterialPerM2: rates.paintMaterialPerM2,
-                    plasterMaterialPerM2: rates.plasterMaterialPerM2,
-                  }}
-                  onPaintingRateChange={updateRate}
+                  recommendedBoxes={recommendation.boxes}
+                  calculatedMaterials={recommendation.materials}
+                  materialCatalog={materialCatalog}
                   onPlanningChange={updatePlanning}
                   onKilometersChange={(value) => updateCalculation("kilometers", value)}
                 />
@@ -2511,8 +2815,9 @@ export default function OfferPlanner() {
               <p className='mt-2 text-sm text-slate-600'>Diese Werte gelten fuer die aktuelle Planung und werden in der Automatik sofort beruecksichtigt.</p>
               <div className='mt-4 grid gap-4 sm:grid-cols-2'>
                 {selectedServices.has("painting") && <>
-                  <NumberField label='Material je m2 und Anstrich' value={rates.paintMaterialPerM2} onChange={(value) => updateRate("paintMaterialPerM2", value)} suffix='EUR' step='0.01' />
                   <NumberField label='Arbeitszeit je m2 und Anstrich' value={rates.paintLaborHoursPerM2} onChange={(value) => updateRate("paintLaborHoursPerM2", value)} suffix='Std.' step='0.01' />
+                  <NumberField label='Tapezierzeit je m2' value={rates.wallpaperLaborHoursPerM2} onChange={(value) => updateRate("wallpaperLaborHoursPerM2", value)} suffix='Std.' step='0.01' />
+                  <NumberField label='Alt-Tapete entfernen je m2' value={rates.wallpaperRemovalHoursPerM2} onChange={(value) => updateRate("wallpaperRemovalHoursPerM2", value)} suffix='Std.' step='0.01' />
                 </>}
                 {selectedServices.has("clearance") && <>
                   <NumberField label='Entsorgung je m3 (Sperrmuell)' value={rates.disposalRatePerM3} onChange={(value) => updateRate("disposalRatePerM3", value)} suffix='EUR' step='0.01' />
@@ -2521,7 +2826,6 @@ export default function OfferPlanner() {
                 </>}
                 {selectedServices.has("furnitureAssembly") && <NumberField label='Montagezeit je Moebelteil' value={rates.furnitureAssemblyMinutesPerPiece} onChange={(value) => updateRate("furnitureAssemblyMinutesPerPiece", value)} suffix='Min.' step='1' />}
                 {selectedServices.has("packing") && <>
-                  <NumberField label='Kartonpreis' value={rates.packingBoxRate} onChange={(value) => updateRate("packingBoxRate", value)} suffix='EUR' step='0.01' />
                   <NumberField label='Einpackzeit je Karton' value={rates.packingMinutesPerBox} onChange={(value) => updateRate("packingMinutesPerBox", value)} suffix='Min.' step='1' />
                 </>}
                 {selectedServices.has("storage") && <NumberField label='Einlagerung je m3 und Monat' value={rates.storageRatePerM3Month} onChange={(value) => updateRate("storageRatePerM3Month", value)} suffix='EUR' step='0.01' />}
@@ -2535,7 +2839,7 @@ export default function OfferPlanner() {
               <div className='mb-3 flex items-center justify-between'><p className='text-sm font-medium text-slate-700'>Zusatzleistungen</p><Button type='button' variant='outline' size='sm' onClick={addExtraService}><PackagePlus /> Zusatzleistung</Button></div>
               <div className='space-y-2'>{calculation.planning.extraServices.map((service) => <div key={service.id} className='grid grid-cols-[minmax(0,1fr)_72px_120px_36px] gap-2'><input value={service.name} onChange={(event) => updateExtraService(service.id, { name: event.target.value })} aria-label='Zusatzleistung' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><input type='number' min='0' value={service.quantity} onChange={(event) => updateExtraService(service.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><div className='relative'><input type='number' min='0' step='0.01' value={service.unitPrice} onChange={(event) => updateExtraService(service.id, { unitPrice: toNumber(event.target.value) })} aria-label='Einzelpreis' className='h-9 w-full rounded-md border border-slate-300 px-2 pr-9 text-sm outline-none focus:border-primary' /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>EUR</span></div><Button type='button' variant='ghost' size='icon' title='Zusatzleistung entfernen' onClick={() => removeExtraService(service.id)}><Trash2 className='text-red-600' /></Button></div>)}</div>
             </div>
-            </> : <CalculationBreakdown calculation={calculation} rates={rates} onPrint={() => setIsCostEstimateDialogOpen(true)} onRenamePosition={renamePosition} />}
+            </> : <CalculationBreakdown calculation={calculation} rates={rates} materialCatalog={materialCatalog} onPrint={() => setIsCostEstimateDialogOpen(true)} onRenamePosition={renamePosition} />}
           </section>}
 
           {activeStep === "price" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>

@@ -25,6 +25,7 @@ import {
   FileText,
   Inbox,
   MapPinned,
+  PackageCheck,
   UsersRound,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
@@ -76,6 +77,11 @@ const data = {
           title: "Kalkulator",
           url: "/crm/calculator",
           icon: Calculator,
+        },
+        {
+          title: "Material-Preisliste",
+          url: "/material-preisliste",
+          icon: PackageCheck,
         },
       ],
     },

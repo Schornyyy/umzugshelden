@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{offerTitle}}</title>
+  </head>
+  <body style="margin:0;background:#f4f6f9;color:#17315c;font-family:Arial,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6f9;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:680px;background:#ffffff;border:1px solid #dbe1ea;">
+            <tr>
+              <td style="border-bottom:4px solid #e87722;padding:24px 28px;">
+                <div style="font-size:23px;font-weight:700;color:#0d2650;">Umzugshelden</div>
+                <div style="margin-top:4px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#e87722;">Ihr persönliches Angebot</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 18px;font-size:16px;color:#17315c;">Guten Tag {{customerName}},</p>
+                <div style="margin:0 0 24px;font-size:15px;line-height:1.65;color:#475569;">{{messageHtml}}</div>
+                <p style="margin:0 0 24px;border-left:4px solid #e87722;background:#fff8f2;padding:12px 14px;font-size:14px;line-height:1.6;color:#475569;">
+                  Den vollständigen Kostenvoranschlag finden Sie als PDF im Anhang dieser E-Mail.
+                </p>
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dbe1ea;background:#fbfcfd;">
+                  <tr>
+                    <td style="padding:18px 20px;">
+                      <div style="font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#e87722;">Angebot {{offerNumber}}</div>
+                      <h1 style="margin:6px 0 0;font-size:22px;line-height:1.25;color:#0d2650;">{{offerTitle}}</h1>
+                      <div style="margin-top:7px;font-size:13px;color:#64748b;">Erstellt am {{offerDate}}</div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="border-top:1px solid #dbe1ea;padding:18px 20px;">
+                      <div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#64748b;">Leistungen</div>
+                      <div style="margin-top:8px;font-size:15px;line-height:1.6;color:#17315c;">{{servicesHtml}}</div>
+                    </td>
+                  </tr>
+                  {{scheduleHtml}}
+                  {{addressHtml}}
+                  <tr>
+                    <td style="border-top:1px solid #dbe1ea;background:#0d2650;padding:20px;">
+                      <div style="font-size:12px;color:#d6e0ef;">Angebotspreis inklusive Mehrwertsteuer</div>
+                      <div style="margin-top:5px;font-size:27px;font-weight:700;color:#ffffff;">{{grossTotal}}</div>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:24px 0 0;font-size:15px;line-height:1.65;color:#475569;">
+                  Mit freundlichen Grüßen<br />
+                  Lukas Schornstein
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="border-top:1px solid #edf2f7;background:#fbfcfd;padding:16px 28px;font-size:12px;line-height:1.5;color:#64748b;">
+                Umzugshelden · <a href="mailto:info@umzugshelden.io" style="color:#e87722;text-decoration:none;">info@umzugshelden.io</a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

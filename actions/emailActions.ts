@@ -46,13 +46,19 @@ export async function sendCustomEmail({
   subject,
   replacements,
   templatePath,
-  tracking
+  tracking,
+  attachments,
 }: {
   to: string;
   subject: string;
   replacements: { [key: string]: string };
   templatePath: string;
   tracking?: { contractId?: string; companyEmail?: string };
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType: string;
+  }>;
 }) {
   try {
     // Korrigiere den Pfad relativ zum Wurzelverzeichnis
@@ -111,6 +117,7 @@ export async function sendCustomEmail({
       to,
       subject,
       html: emailContentHtml,
+      attachments,
     });
     return { success: true, info };
   } catch (error) {

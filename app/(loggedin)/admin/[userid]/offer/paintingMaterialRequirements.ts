@@ -1,9 +1,15 @@
+import { calculateWallpaperRolls } from "./paintingAreaCalculation";
+
 export type PaintingMaterialInput = {
   wallAreaM2: number;
   ceilingAreaM2: number;
   coats: number;
   repairAreaM2: number;
   plasterAreaM2: number;
+  wallpaperAreaM2?: number;
+  wallpaperRollWidthM?: number;
+  wallpaperRollLengthM?: number;
+  wallpaperWastePercent?: number;
 };
 
 export type PaintingMaterialRequirement = {
@@ -32,8 +38,29 @@ export function calculatePaintingMaterialRequirements(
   const wallAreaM2 = Math.max(0, input.wallAreaM2);
   const ceilingAreaM2 = Math.max(0, input.ceilingAreaM2);
   const surfaceAreaM2 = wallAreaM2 + ceilingAreaM2;
+  const wallpaperAreaM2 = Math.max(0, input.wallpaperAreaM2 ?? 0);
+  const wallpaperRolls = calculateWallpaperRolls(
+    wallpaperAreaM2,
+    input.wallpaperRollWidthM ?? 0.53,
+    input.wallpaperRollLengthM ?? 10.05,
+    input.wallpaperWastePercent ?? 10
+  );
 
-  if (surfaceAreaM2 <= 0) return [];
+  if (surfaceAreaM2 <= 0) {
+    return wallpaperRolls > 0
+      ? [
+          {
+            id: "wallpaper",
+            name: "Tapete",
+            requiredAmount: wallpaperAreaM2,
+            requiredUnit: "m²",
+            packageQuantity: wallpaperRolls,
+            packageLabel: "Rolle",
+            basis: `${input.wallpaperWastePercent ?? 10} % Verschnitt eingerechnet`,
+          },
+        ]
+      : [];
+  }
 
   const coats = Math.max(1, input.coats);
   const coatedAreaM2 = surfaceAreaM2 * coats;
@@ -54,7 +81,6 @@ export function calculatePaintingMaterialRequirements(
     protectionAreaM2 * 2 * materialReserveFactor
   );
   const fillerKg = roundAmount(repairAreaM2 * materialReserveFactor);
-
   return [
     {
       id: "paint",
@@ -119,6 +145,19 @@ export function calculatePaintingMaterialRequirements(
       packageLabel: "Set",
       basis: "1 Set je angefangene 100 m²",
     },
+    ...(wallpaperRolls > 0
+      ? [
+          {
+            id: "wallpaper",
+            name: "Tapete",
+            requiredAmount: wallpaperAreaM2,
+            requiredUnit: "m²",
+            packageQuantity: wallpaperRolls,
+            packageLabel: "Rolle",
+            basis: `${input.wallpaperWastePercent ?? 10} % Verschnitt eingerechnet`,
+          },
+        ]
+      : []),
     ...(repairAreaM2 > 0
       ? [
           {

@@ -17,6 +17,7 @@ export interface CrmAppointment {
   id: string;
   title: string;
   startAt: string;
+  endAt?: string;
   type: CrmAppointmentType;
   details: string;
   completed: boolean;

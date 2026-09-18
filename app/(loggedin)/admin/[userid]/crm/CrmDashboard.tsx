@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { database } from "@/config/firebase";
 import { createCustomerNumber } from "@/lib/crmIdentifiers";
+import type { CrmOfferDocument } from "@/lib/crmOfferDocument";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type {
   CrmAppointment,
@@ -35,11 +36,13 @@ import {
   ArrowLeft,
   BriefcaseBusiness,
   CalendarDays,
+  CalendarPlus,
   Check,
   ChevronRight,
   CircleDollarSign,
   ClipboardCheck,
   Clock3,
+  LoaderCircle,
   Mail,
   MapPin,
   NotebookPen,
@@ -48,6 +51,7 @@ import {
   ReceiptText,
   Save,
   Search,
+  Send,
   Tag,
   Trash2,
   UserRound,
@@ -55,6 +59,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
+import { downloadAppointmentCalendar } from "./crmCalendar";
 
 const CRM_COLLECTION = "crm_customers_umzugshelden";
 const OFFER_COLLECTION = "offer_calculators_umzugshelden";
@@ -81,16 +86,7 @@ const appointmentTypes: Array<{
   { value: "task", label: "Aufgabe" },
 ];
 
-type SavedOfferSummary = {
-  id: string;
-  customerId?: string;
-  title: string;
-  createdAt: number;
-  grossTotal?: number;
-  planning?: {
-    serviceTypes?: string[];
-  };
-};
+type SavedOfferSummary = CrmOfferDocument;
 
 type NewCustomerForm = {
   name: string;
@@ -102,8 +98,15 @@ type NewCustomerForm = {
 type AppointmentForm = {
   title: string;
   startAt: string;
+  endAt: string;
   type: CrmAppointmentType;
   details: string;
+};
+
+type OfferEmailForm = {
+  to: string;
+  subject: string;
+  message: string;
 };
 
 const emptyNewCustomer: NewCustomerForm = {
@@ -113,11 +116,27 @@ const emptyNewCustomer: NewCustomerForm = {
   phone: "",
 };
 
-const emptyAppointment: AppointmentForm = {
-  title: "",
-  startAt: "",
-  type: "call",
-  details: "",
+function dateTimeInputValue(date = new Date()) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function createEmptyAppointment(): AppointmentForm {
+  const start = new Date();
+  start.setMinutes(Math.ceil(start.getMinutes() / 15) * 15, 0, 0);
+  return {
+    title: "",
+    startAt: dateTimeInputValue(start),
+    endAt: dateTimeInputValue(new Date(start.getTime() + 60 * 60 * 1000)),
+    type: "call",
+    details: "",
+  };
+}
+
+const emptyOfferEmail: OfferEmailForm = {
+  to: "",
+  subject: "",
+  message: "",
 };
 
 const currencyFormatter = new Intl.NumberFormat("de-DE", {
@@ -133,16 +152,38 @@ function formatDate(timestamp: number) {
   }).format(timestamp);
 }
 
-function formatAppointmentDate(value: string) {
+function formatAppointmentDate(value: string, endValue?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Termin offen";
-  return new Intl.DateTimeFormat("de-DE", {
+  const startLabel = new Intl.DateTimeFormat("de-DE", {
     weekday: "short",
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+  if (!endValue) return startLabel;
+
+  const end = new Date(endValue);
+  if (Number.isNaN(end.getTime())) return startLabel;
+  const sameDay = date.toDateString() === end.toDateString();
+  const endLabel = new Intl.DateTimeFormat(
+    "de-DE",
+    sameDay
+      ? { hour: "2-digit", minute: "2-digit" }
+      : {
+          weekday: "short",
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        }
+  ).format(end);
+  return `${startLabel} - ${endLabel}`;
+}
+
+function appointmentEndTimestamp(appointment: CrmAppointment) {
+  return new Date(appointment.endAt || appointment.startAt).getTime();
 }
 
 function getStatus(status: CrmCustomerStatus) {
@@ -201,7 +242,18 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [isAppointmentDialogOpen, setIsAppointmentDialogOpen] = useState(false);
   const [newCustomer, setNewCustomer] = useState<NewCustomerForm>(emptyNewCustomer);
-  const [appointmentForm, setAppointmentForm] = useState<AppointmentForm>(emptyAppointment);
+  const [appointmentForm, setAppointmentForm] = useState<AppointmentForm>(
+    createEmptyAppointment
+  );
+  const [appointmentError, setAppointmentError] = useState("");
+  const [isSavingAppointment, setIsSavingAppointment] = useState(false);
+  const [selectedOfferForEmail, setSelectedOfferForEmail] =
+    useState<SavedOfferSummary | null>(null);
+  const [offerEmailForm, setOfferEmailForm] =
+    useState<OfferEmailForm>(emptyOfferEmail);
+  const [isSendingOffer, setIsSendingOffer] = useState(false);
+  const [offerEmailFeedback, setOfferEmailFeedback] = useState<"idle" | "sent">("idle");
+  const [offerEmailError, setOfferEmailError] = useState("");
   const [noteText, setNoteText] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("de-DE"));
 
@@ -281,13 +333,17 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
         new Date(right.appointment.startAt).getTime()
     );
   const overdueAppointments = appointmentEntries
-    .filter(({ appointment }) => new Date(appointment.startAt).getTime() < Date.now())
+    .filter(({ appointment }) => appointmentEndTimestamp(appointment) < Date.now())
     .sort(
       (left, right) =>
         new Date(right.appointment.startAt).getTime() -
         new Date(left.appointment.startAt).getTime()
     );
   const offerVolume = offers.reduce((total, offer) => total + (offer.grossTotal ?? 0), 0);
+  const appointmentRangeValid =
+    Boolean(appointmentForm.startAt && appointmentForm.endAt) &&
+    new Date(appointmentForm.endAt).getTime() >
+      new Date(appointmentForm.startAt).getTime();
 
   function replaceCustomer(updatedCustomer: CrmCustomer) {
     setCustomers((current) =>
@@ -419,12 +475,37 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     }
   }
 
-  async function addAppointment() {
-    if (!draft || !appointmentForm.title.trim() || !appointmentForm.startAt) return;
+  function openAppointmentDialog() {
+    setAppointmentForm(createEmptyAppointment());
+    setAppointmentError("");
+    setIsAppointmentDialogOpen(true);
+  }
+
+  function updateAppointmentStart(startAt: string) {
+    const previousStart = new Date(appointmentForm.startAt).getTime();
+    const previousEnd = new Date(appointmentForm.endAt).getTime();
+    const duration = Math.max(15 * 60_000, previousEnd - previousStart || 60 * 60_000);
+    const nextStart = new Date(startAt);
+    setAppointmentForm({
+      ...appointmentForm,
+      startAt,
+      endAt: Number.isNaN(nextStart.getTime())
+        ? appointmentForm.endAt
+        : dateTimeInputValue(new Date(nextStart.getTime() + duration)),
+    });
+    setAppointmentError("");
+  }
+
+  async function addAppointment(addToCalendar = false) {
+    if (!draft || !appointmentForm.title.trim() || !appointmentRangeValid) {
+      setAppointmentError("Bitte einen gültigen Zeitraum mit Start und Ende angeben.");
+      return;
+    }
     const appointment: CrmAppointment = {
       id: crypto.randomUUID(),
       title: appointmentForm.title.trim(),
       startAt: appointmentForm.startAt,
+      endAt: appointmentForm.endAt,
       type: appointmentForm.type,
       details: appointmentForm.details.trim(),
       completed: false,
@@ -435,17 +516,83 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       appointments: [...draft.appointments, appointment],
       updatedAt: Date.now(),
     };
+    setIsSavingAppointment(true);
     try {
       await updateDoc(doc(database, CRM_COLLECTION, draft.id), {
         appointments: updatedCustomer.appointments,
         updatedAt: updatedCustomer.updatedAt,
       });
       replaceCustomer(updatedCustomer);
-      setAppointmentForm(emptyAppointment);
+      if (addToCalendar) downloadAppointmentCalendar(updatedCustomer, appointment);
+      setAppointmentForm(createEmptyAppointment());
       setIsAppointmentDialogOpen(false);
       setFeedback("saved");
     } catch {
+      setAppointmentError("Der Termin konnte nicht gespeichert werden.");
       setFeedback("error");
+    } finally {
+      setIsSavingAppointment(false);
+    }
+  }
+
+  function openOfferEmailDialog(offer: SavedOfferSummary) {
+    if (!draft) return;
+    setSelectedOfferForEmail(offer);
+    setOfferEmailForm({
+      to: draft.email,
+      subject: `Ihr Angebot: ${offer.title || "Umzugshelden"}`,
+      message: "vielen Dank für Ihr Interesse. Nachfolgend erhalten Sie unser persönliches Angebot. Bei Rückfragen melden Sie sich gerne bei uns.",
+    });
+    setOfferEmailError("");
+    setOfferEmailFeedback("idle");
+  }
+
+  async function sendOfferEmail() {
+    if (!draft || !selectedOfferForEmail) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(offerEmailForm.to.trim())) {
+      setOfferEmailError("Bitte eine gültige Empfängeradresse angeben.");
+      return;
+    }
+    if (!offerEmailForm.subject.trim() || !offerEmailForm.message.trim()) {
+      setOfferEmailError("Betreff und Nachricht dürfen nicht leer sein.");
+      return;
+    }
+
+    setIsSendingOffer(true);
+    setOfferEmailError("");
+    try {
+      const response = await fetch("/api/crm/send-offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: offerEmailForm.to.trim(),
+          subject: offerEmailForm.subject.trim(),
+          message: offerEmailForm.message.trim(),
+          offer: selectedOfferForEmail,
+          customer: {
+            name: draft.name,
+            company: draft.company,
+            customerNumber: draft.customerNumber,
+            email: draft.email,
+            phone: draft.phone,
+            street: draft.street,
+            postalCode: draft.postalCode,
+            city: draft.city,
+          },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Das Angebot konnte nicht versendet werden.");
+      }
+      setSelectedOfferForEmail(null);
+      setOfferEmailFeedback("sent");
+    } catch (error) {
+      setOfferEmailError(
+        error instanceof Error ? error.message : "Das Angebot konnte nicht versendet werden."
+      );
+    } finally {
+      setIsSendingOffer(false);
     }
   }
 
@@ -653,7 +800,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
                 <div className='min-w-0'><h2 className='truncate text-xl font-bold text-slate-950'>{draft.name}</h2><p className='mt-1 text-sm text-slate-500'>Kunde seit {formatDate(draft.createdAt)}</p></div>
               </div>
               <div className='flex flex-wrap items-center gap-2'>
-                <Button variant='outline' onClick={() => setIsAppointmentDialogOpen(true)}><CalendarDays /> Termin</Button>
+                <Button variant='outline' onClick={openAppointmentDialog}><CalendarDays /> Termin</Button>
                 <Button asChild><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}`}><CircleDollarSign /> Angebot erstellen</Link></Button>
               </div>
             </div>
@@ -691,13 +838,13 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
               <div className='space-y-6'>
                 <section>
-                  <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><CalendarDays size={17} /> Termine & Aufgaben</h3><Button variant='outline' size='sm' onClick={() => setIsAppointmentDialogOpen(true)}><Plus /> Neu</Button></div>
-                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex items-start gap-3 p-3 ${appointment.completed ? "bg-slate-50 opacity-65" : "bg-white"}`}><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt)}</span></p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div>)}</div>}
+                  <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><CalendarDays size={17} /> Termine & Aufgaben</h3><Button variant='outline' size='sm' onClick={openAppointmentDialog}><Plus /> Neu</Button></div>
+                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex items-start gap-3 p-3 ${appointment.completed ? "bg-slate-50 opacity-65" : "bg-white"}`}><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span></p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div>)}</div>}
                 </section>
 
                 <section className='border-t border-slate-200 pt-5'>
-                  <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><BriefcaseBusiness size={17} /> Angebote</h3><span className='text-xs text-slate-500'>{selectedOffers.length} gespeichert</span></div>
-                  {selectedOffers.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-7 text-center'><p className='text-sm text-slate-500'>Für diesen Kunden ist noch kein Angebot gespeichert.</p><Button asChild size='sm' className='mt-3'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}`}><Plus /> Erstes Angebot</Link></Button></div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{selectedOffers.map((offer) => { const isMoveOffer = offer.planning?.serviceTypes?.some((service) => service === "move" || service === "seniorMove") ?? false; return <div key={offer.id} className='flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between'><span className='min-w-0'><span className='block truncate text-sm font-medium text-slate-950'>{offer.title || "Unbenanntes Angebot"}</span><span className='mt-1 block text-xs text-slate-500'>{formatDate(offer.createdAt)}{typeof offer.grossTotal === "number" ? ` · ${currencyFormatter.format(offer.grossTotal)}` : ""}</span></span><span className='flex shrink-0 flex-wrap gap-2'><Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}&offerId=${offer.id}`}>Öffnen</Link></Button>{isMoveOffer && <Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/protocols?customerId=${draft.id}&offerId=${offer.id}`}><ClipboardCheck /> Übergabe</Link></Button>}<Button asChild size='sm'><Link href={`/admin/${companyData?.id}/crm/invoices?customerId=${draft.id}&offerId=${offer.id}`}><ReceiptText /> Rechnung</Link></Button></span></div>; })}</div>}
+                  <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><BriefcaseBusiness size={17} /> Angebote</h3><span className={`text-xs ${offerEmailFeedback === "sent" ? "font-medium text-emerald-700" : "text-slate-500"}`}>{offerEmailFeedback === "sent" ? "E-Mail versendet" : `${selectedOffers.length} gespeichert`}</span></div>
+                  {selectedOffers.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-7 text-center'><p className='text-sm text-slate-500'>Für diesen Kunden ist noch kein Angebot gespeichert.</p><Button asChild size='sm' className='mt-3'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}`}><Plus /> Erstes Angebot</Link></Button></div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{selectedOffers.map((offer) => { const isMoveOffer = offer.planning?.serviceTypes?.some((service) => service === "move" || service === "seniorMove") ?? false; return <div key={offer.id} className='flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between'><span className='min-w-0'><span className='block truncate text-sm font-medium text-slate-950'>{offer.title || "Unbenanntes Angebot"}</span><span className='mt-1 block text-xs text-slate-500'>{formatDate(offer.createdAt)}{typeof offer.grossTotal === "number" ? ` · ${currencyFormatter.format(offer.grossTotal)}` : ""}</span></span><span className='flex shrink-0 flex-wrap gap-2'><Button variant='outline' size='sm' onClick={() => openOfferEmailDialog(offer)}><Mail /> E-Mail</Button><Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}&offerId=${offer.id}`}>Öffnen</Link></Button>{isMoveOffer && <Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/protocols?customerId=${draft.id}&offerId=${offer.id}`}><ClipboardCheck /> Übergabe</Link></Button>}<Button asChild size='sm'><Link href={`/admin/${companyData?.id}/crm/invoices?customerId=${draft.id}&offerId=${offer.id}`}><ReceiptText /> Rechnung</Link></Button></span></div>; })}</div>}
                 </section>
 
                 <section className='border-t border-slate-200 pt-5'>
@@ -724,13 +871,29 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
       <Dialog open={isAppointmentDialogOpen} onOpenChange={setIsAppointmentDialogOpen}>
         <DialogContent className='sm:max-w-lg'>
-          <DialogHeader><DialogTitle>Termin oder Aufgabe</DialogTitle><DialogDescription>Der Eintrag erscheint direkt in der Kundenakte.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Termin oder Aufgabe</DialogTitle><DialogDescription>Lege Start und Ende fest und übertrage den Eintrag bei Bedarf direkt in deinen Kalender.</DialogDescription></DialogHeader>
           <div className='space-y-4 py-2'>
             <CustomerField label='Titel *' value={appointmentForm.title} onChange={(value) => setAppointmentForm({ ...appointmentForm, title: value })} placeholder='z. B. Vor-Ort-Besichtigung' />
-            <div className='grid gap-4 sm:grid-cols-2'><label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Art<select value={appointmentForm.type} onChange={(event) => setAppointmentForm({ ...appointmentForm, type: event.target.value as CrmAppointmentType })} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm'>{appointmentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Datum und Uhrzeit *<input type='datetime-local' value={appointmentForm.startAt} onChange={(event) => setAppointmentForm({ ...appointmentForm, startAt: event.target.value })} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm' /></label></div>
+            <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Art<select value={appointmentForm.type} onChange={(event) => setAppointmentForm({ ...appointmentForm, type: event.target.value as CrmAppointmentType })} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm'>{appointmentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <div className='grid gap-4 sm:grid-cols-2'><label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Beginn *<input type='datetime-local' value={appointmentForm.startAt} onChange={(event) => updateAppointmentStart(event.target.value)} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm' /></label><label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Ende *<input type='datetime-local' min={appointmentForm.startAt} value={appointmentForm.endAt} onChange={(event) => { setAppointmentForm({ ...appointmentForm, endAt: event.target.value }); setAppointmentError(""); }} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm' /></label></div>
             <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Details<textarea value={appointmentForm.details} onChange={(event) => setAppointmentForm({ ...appointmentForm, details: event.target.value })} rows={3} className='rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500' /></label>
+            {appointmentError && <p className='text-sm font-medium text-red-600'>{appointmentError}</p>}
           </div>
-          <DialogFooter><Button variant='outline' onClick={() => setIsAppointmentDialogOpen(false)}>Abbrechen</Button><Button onClick={() => void addAppointment()} disabled={!appointmentForm.title.trim() || !appointmentForm.startAt}><CalendarDays /> Eintragen</Button></DialogFooter>
+          <DialogFooter><Button variant='outline' onClick={() => setIsAppointmentDialogOpen(false)}>Abbrechen</Button><Button variant='outline' onClick={() => void addAppointment()} disabled={isSavingAppointment || !appointmentForm.title.trim() || !appointmentRangeValid}>Speichern</Button><Button onClick={() => void addAppointment(true)} disabled={isSavingAppointment || !appointmentForm.title.trim() || !appointmentRangeValid}>{isSavingAppointment ? <LoaderCircle className='animate-spin' /> : <CalendarPlus />} Speichern & Kalender</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedOfferForEmail)} onOpenChange={(open) => { if (!open) setSelectedOfferForEmail(null); }}>
+        <DialogContent className='sm:max-w-xl'>
+          <DialogHeader><DialogTitle>Angebot per E-Mail senden</DialogTitle><DialogDescription>Der vollständige Kostenvoranschlag wird als PDF erstellt und an diese E-Mail angehängt.</DialogDescription></DialogHeader>
+          <div className='space-y-4 py-2'>
+            <CustomerField label='Empfänger *' type='email' value={offerEmailForm.to} onChange={(value) => setOfferEmailForm({ ...offerEmailForm, to: value })} />
+            <CustomerField label='Betreff *' value={offerEmailForm.subject} onChange={(value) => setOfferEmailForm({ ...offerEmailForm, subject: value })} />
+            <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Nachricht *<textarea value={offerEmailForm.message} onChange={(event) => setOfferEmailForm({ ...offerEmailForm, message: event.target.value })} rows={6} className='rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100' /></label>
+            <div className='rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-600'>Mit freundlichen Grüßen<br /><span className='font-medium text-slate-950'>Lukas Schornstein</span></div>
+            {offerEmailError && <p className='text-sm font-medium text-red-600'>{offerEmailError}</p>}
+          </div>
+          <DialogFooter><Button variant='outline' onClick={() => setSelectedOfferForEmail(null)}>Abbrechen</Button><Button onClick={() => void sendOfferEmail()} disabled={isSendingOffer || !offerEmailForm.to.trim() || !offerEmailForm.subject.trim() || !offerEmailForm.message.trim()}>{isSendingOffer ? <LoaderCircle className='animate-spin' /> : <Send />} PDF-Angebot senden</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </main>
