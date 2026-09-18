@@ -12,6 +12,11 @@ import {
 } from "@/components/ui/dialog";
 import MediathekDialog from "@/components/utils/MediathekDialog";
 import { database } from "@/config/firebase";
+import {
+  createOfferScopeItems,
+  DEFAULT_OFFER_PAYMENT_TERMS,
+  OFFER_ISSUER,
+} from "@/lib/crmOfferDocument";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type { CrmCustomer } from "@/types/Crm";
 import type { AssistantOfferDraft } from "@/types/OfferAssistant";
@@ -68,7 +73,6 @@ type PlanningStep = "order" | "site" | "inventory" | "price" | "finish";
 type OfferTab = "conditions" | "calculation";
 
 type CostEstimatePrintOptions = {
-  contactDetails: boolean;
   siteDetails: boolean;
   calculationDetails: boolean;
   packingList: boolean;
@@ -77,7 +81,6 @@ type CostEstimatePrintOptions = {
 };
 
 const defaultCostEstimatePrintOptions: CostEstimatePrintOptions = {
-  contactDetails: true,
   siteDetails: true,
   calculationDetails: true,
   packingList: true,
@@ -175,6 +178,7 @@ type VehicleSelection = {
 
 export type PlanningDetails = {
   serviceTypes: ServiceKey[];
+  scopeDescription: string;
   date: string;
   contactName: string;
   contactPhone: string;
@@ -251,6 +255,10 @@ type Calculation = {
   customerId?: string;
   title: string;
   customer: string;
+  customerAddress: string;
+  offerNumber: string;
+  validUntil: string;
+  paymentTerms: string;
   employees: number;
   hoursPerEmployee: number;
   kilometers: number;
@@ -294,7 +302,7 @@ const serviceOptions: Array<{
   { id: "move", label: "Umzug", description: "Volumen, Personal und Fahrzeuge", icon: Car },
   { id: "seniorMove", label: "Seniorenumzug", description: "Mehr Zeit fuer Betreuung und Sorgfalt", icon: Home },
   { id: "clearance", label: "Entruempelung", description: "Volumen, Personal und Entsorgung", icon: Trash2 },
-  { id: "painting", label: "Malerarbeiten", description: "Flaeche, Anstriche und Material", icon: Paintbrush },
+  { id: "painting", label: "Anstricharbeiten", description: "Flaeche, Anstriche und Material", icon: Paintbrush },
   { id: "furnitureAssembly", label: "Moebelmontage", description: "Moebelteile und Montagezeit", icon: Wrench },
   { id: "packing", label: "Einpackservice", description: "Kartons, Material und Zeit", icon: PackagePlus },
   { id: "storage", label: "Einlagerung", description: "Volumen, Dauer und Transport", icon: Warehouse },
@@ -378,6 +386,7 @@ const legacyServiceMap: Record<string, ServiceKey> = {
   Seniorenumzug: "seniorMove",
   Entruempelung: "clearance",
   Malerarbeiten: "painting",
+  Anstricharbeiten: "painting",
   Moebelmontage: "furnitureAssembly",
   Einpackservice: "packing",
   Einlagerung: "storage",
@@ -391,6 +400,7 @@ const currencyFormatter = new Intl.NumberFormat("de-DE", {
 function createPlanning(): PlanningDetails {
   return {
     serviceTypes: [],
+    scopeDescription: "",
     date: "",
     contactName: "",
     contactPhone: "",
@@ -480,10 +490,28 @@ function createPlanning(): PlanningDetails {
   };
 }
 
+function dateInputValue(date: Date) {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 10);
+}
+
+function createOfferNumber() {
+  const date = new Date();
+  const datePart = dateInputValue(date).replaceAll("-", "");
+  return `ANG-${datePart}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+}
+
 function createCalculation(): Calculation {
+  const validUntil = new Date();
+  validUntil.setDate(validUntil.getDate() + 14);
+
   return {
     title: "Neues Angebot",
     customer: "",
+    customerAddress: "",
+    offerNumber: createOfferNumber(),
+    validUntil: dateInputValue(validUntil),
+    paymentTerms: DEFAULT_OFFER_PAYMENT_TERMS,
     employees: 2,
     hoursPerEmployee: 4,
     kilometers: 30,
@@ -1576,6 +1604,8 @@ export default function OfferPlanner() {
               ...nextCalculation,
               customerId: customer.id,
               customer: nextCalculation.customer || customer.company || customer.name,
+              customerAddress:
+                nextCalculation.customerAddress || customerAddress,
               title: requestedOffer
                 ? nextCalculation.title
                 : `Angebot ${customer.company || customer.name}`,
@@ -2177,7 +2207,14 @@ export default function OfferPlanner() {
       assign("dismantlingHours", draft.dismantlingHours);
       assign("paintAreaM2", draft.paintAreaM2);
       assign("ceilingAreaM2", draft.ceilingAreaM2);
-      assign("paintCoats", draft.paintCoats);
+      if (draft.paintCoats !== undefined) {
+        const coats = Math.max(1, Math.round(draft.paintCoats));
+        planning.paintCoats = coats;
+        planning.paintColors = planning.paintColors.map((color) => ({
+          ...color,
+          coats,
+        }));
+      }
       assign("disposalVolumeM3", draft.disposalVolumeM3);
       assign("clearanceHeavyItems", draft.clearanceHeavyItems);
       assign("clearanceDisposalIncluded", draft.clearanceDisposalIncluded);
@@ -2230,6 +2267,16 @@ export default function OfferPlanner() {
 
   function printCostEstimate() {
     setPrintError(null);
+    if (
+      !(calculation.customer.trim() || calculation.planning.contactName.trim()) ||
+      calculation.planning.serviceTypes.length === 0
+    ) {
+      setPrintError(
+        "Für ein Angebot müssen ein Kunde und mindestens eine Leistung erfasst sein."
+      );
+      return;
+    }
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       setPrintError(
@@ -2261,9 +2308,16 @@ export default function OfferPlanner() {
     const customer =
       calculation.customer || calculation.planning.contactName || "Kunde";
     const createdAt = new Date().toLocaleDateString("de-DE");
-    const contactCardHtml = costEstimatePrintOptions.contactDetails
-      ? `<div class="card"><p class="label">Kunde</p><strong>${escapePrintHtml(customer)}</strong><div class="muted">${escapePrintHtml(calculation.planning.contactPhone || "Telefon nicht angegeben")}<br>${escapePrintHtml(calculation.planning.contactEmail || "E-Mail nicht angegeben")}</div></div>`
-      : "";
+    const validUntil = calculation.validUntil
+      ? new Date(`${calculation.validUntil}T00:00:00`).toLocaleDateString("de-DE")
+      : "nicht festgelegt";
+    const scopeItems = createOfferScopeItems(calculation.planning);
+    const scopeHtml = `<h2>Leistungsumfang</h2>
+      ${calculation.planning.scopeDescription.trim() ? `<div class="scope-description">${escapePrintHtml(calculation.planning.scopeDescription.trim()).replaceAll("\n", "<br>")}</div>` : ""}
+      <div class="scope-list">${scopeItems.length
+        ? scopeItems.map((item) => `<section class="scope-item"><h3>${escapePrintHtml(item.title)}</h3><ul>${item.details.map((detail) => `<li>${escapePrintHtml(detail)}</li>`).join("")}</ul></section>`).join("")
+        : '<p class="muted">Der konkrete Leistungsumfang wurde noch nicht festgelegt.</p>'}</div>`;
+    const contactCardHtml = `<div class="card"><p class="label">Kunde / Auftraggeber</p><strong>${escapePrintHtml(customer)}</strong><div class="muted">${escapePrintHtml(calculation.customerAddress || "Anschrift nicht angegeben")}<br>${escapePrintHtml(calculation.planning.contactPhone || "Telefon nicht angegeben")}<br>${escapePrintHtml(calculation.planning.contactEmail || "E-Mail nicht angegeben")}</div></div>`;
     const siteDetailsHtml = costEstimatePrintOptions.siteDetails
       ? `<h2>Objekt- und Einsatzdaten</h2>
         <section class="grid">
@@ -2307,6 +2361,7 @@ export default function OfferPlanner() {
         .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 4px solid #E87722; }
         .logo { width: 142px; height: auto; object-fit: contain; }
         .document-type { margin: 4px 0 0; color: #E87722; font-size: 8.5pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+        .sender { margin-top: 8px; color: #62728c; font-size: 8pt; }
         h1 { margin: 4px 0 0; color: #0D2650; font-size: 25pt; line-height: 1.12; }
         .meta { min-width: 155px; border: 1px solid #dbe1ea; padding: 11px 13px; color: #62728c; font-size: 9pt; text-align: right; }
         .meta strong { display: block; margin-top: 3px; color: #0D2650; font-size: 10.5pt; }
@@ -2319,6 +2374,11 @@ export default function OfferPlanner() {
         .muted { margin-top: 4px; color: #62728c; }
         h2 { margin: 25px 0 10px; color: #0D2650; font-size: 14pt; }
         h3 { margin: 0 0 7px; color: #0D2650; font-size: 11pt; }
+        .scope-description { margin-bottom: 10px; border-left: 4px solid #E87722; background: #fff8f2; padding: 11px 13px; color: #334155; }
+        .scope-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .scope-item { border: 1px solid #dbe1ea; border-radius: 4px; padding: 11px 13px; break-inside: avoid; }
+        .scope-item ul { margin: 0; padding-left: 17px; color: #52647f; }
+        .scope-item li + li { margin-top: 3px; }
         .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
         .facts div { border-top: 2px solid #f2f4f7; padding-top: 8px; }
         .facts span { display: block; color: #62728c; font-size: 8pt; }
@@ -2345,20 +2405,23 @@ export default function OfferPlanner() {
         .photos-section { break-before: page; page-break-before: always; }
         .photos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .photos img { width: 100%; height: 66mm; border-radius: 3px; object-fit: cover; }
-        .notice { margin-top: 24px; border-left: 4px solid #E87722; background: #fff8f2; padding: 12px 14px; color: #52647f; font-size: 9pt; }
+        .notice, .terms { margin-top: 20px; border-left: 4px solid #E87722; background: #fff8f2; padding: 12px 14px; color: #52647f; font-size: 9pt; }
+        .terms p { margin: 0 0 5px; }
+        .terms p:last-child { margin-bottom: 0; }
         .notes { margin-top: 20px; border-left: 4px solid #E87722; background: #fff8f2; padding: 12px 14px; white-space: normal; }
         .footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 28px; border-top: 1px solid #dbe1ea; padding-top: 11px; color: #62728c; font-size: 8pt; }
         @media print { .document { max-width: none; } .header, .card, .totals, tr { break-inside: avoid; } }
       </style></head><body><main class="document">
         <header class="header">
-          <div><img class="logo" src="${window.location.origin}/images/Umzugshelden.png" alt="Umzugshelden" /><p class="document-type">Kaufmännische Übersicht</p><h1>Kostenvoranschlag</h1></div>
-          <div class="meta">Erstellt am<strong>${createdAt}</strong></div>
+          <div><img class="logo" src="${window.location.origin}/images/Umzugshelden.png" alt="Umzugshelden" /><p class="document-type">Angebot · Kostenvoranschlag</p><h1>Angebot</h1><div class="sender">${escapePrintHtml(OFFER_ISSUER.proprietor)} · ${escapePrintHtml(OFFER_ISSUER.street)} · ${escapePrintHtml(`${OFFER_ISSUER.postalCode} ${OFFER_ISSUER.city}`)}</div></div>
+          <div class="meta">Angebotsnummer<strong>${escapePrintHtml(calculation.offerNumber)}</strong>Erstellt am<strong>${createdAt}</strong>Gültig bis<strong>${validUntil}</strong></div>
         </header>
-        <section class="customer${costEstimatePrintOptions.contactDetails ? "" : " single"}">
+        <section class="customer">
           ${contactCardHtml}
           <div class="card"><p class="label">Projekt</p><strong>${escapePrintHtml(calculation.title || "Dienstleistungsauftrag")}</strong><div class="muted">${escapePrintHtml(services || "Leistung noch nicht festgelegt")}<br>Wunschtermin: ${escapePrintHtml(calculation.planning.date || "noch offen")}</div></div>
         </section>
         ${siteDetailsHtml}
+        ${scopeHtml}
         <h2>Leistungen und Kosten</h2>
         <table><thead><tr><th>Position / Berechnung</th><th>Betrag</th></tr></thead><tbody>${rowsHtml}</tbody></table>
         <section class="totals">
@@ -2372,8 +2435,9 @@ export default function OfferPlanner() {
         ${packingListHtml}
         ${notesHtml}
         ${photosHtml}
-        <div class="notice">Dieser Kostenvoranschlag basiert auf den aktuell erfassten Angaben. Änderungen am Leistungsumfang oder an den Bedingungen vor Ort können den Endpreis verändern.</div>
-        <footer class="footer"><span>Umzugshelden · Zuverlässig geplant. Entspannt umgezogen.</span><span>Vorbehaltlich finaler Prüfung und Auftragsbestätigung.</span></footer>
+        <div class="terms"><p><strong>Zahlungsbedingung:</strong> ${escapePrintHtml(calculation.paymentTerms || DEFAULT_OFFER_PAYMENT_TERMS)}</p><p><strong>Vertragsschluss:</strong> Dieses Angebot ist freibleibend. Ein Vertrag kommt durch unsere Auftragsbestätigung oder den Beginn der Leistungserbringung zustande.</p><p><strong>Grundlage:</strong> Es gelten unsere AGB unter umzugshelden.io/agb.</p></div>
+        <div class="notice"><strong>Unverbindlicher Kostenanschlag:</strong> Die Kalkulation basiert auf den aktuell erfassten Angaben. Wird eine wesentliche Überschreitung erwartet, informieren wir den Auftraggeber unverzüglich (§ 649 BGB). Änderungen oder Zusatzleistungen werden nur nach Abstimmung ausgeführt und gesondert berechnet.</div>
+        <footer class="footer"><span>${escapePrintHtml(OFFER_ISSUER.companyName)} · ${escapePrintHtml(OFFER_ISSUER.proprietor)} · ${escapePrintHtml(OFFER_ISSUER.legalForm)}<br>${escapePrintHtml(OFFER_ISSUER.street)} · ${escapePrintHtml(`${OFFER_ISSUER.postalCode} ${OFFER_ISSUER.city}`)} · ${escapePrintHtml(OFFER_ISSUER.country)}</span><span>${escapePrintHtml(OFFER_ISSUER.phone)}<br>${escapePrintHtml(OFFER_ISSUER.email)} · umzugshelden.io</span></footer>
       </main></body></html>`);
     printWindow.document.close();
     printWindow.focus();
@@ -2527,14 +2591,10 @@ export default function OfferPlanner() {
           <DialogHeader>
             <DialogTitle>Kostenvoranschlag drucken</DialogTitle>
             <DialogDescription>
-              Wähle aus, welche zusätzlichen Informationen im Dokument enthalten sein sollen.
+              Leistungsumfang, Angebotsdaten, Preise und Bedingungen sind immer enthalten. Wähle hier zusätzliche Anlagen und Details.
             </DialogDescription>
           </DialogHeader>
           <div className='grid gap-3 py-2 sm:grid-cols-2'>
-            <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
-              <Checkbox checked={costEstimatePrintOptions.contactDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("contactDetails", checked === true)} />
-              <span><span className='block text-sm font-medium text-slate-950'>Kontaktdaten</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Kunde, Telefon und E-Mail</span></span>
-            </label>
             <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
               <Checkbox checked={costEstimatePrintOptions.siteDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("siteDetails", checked === true)} />
               <span><span className='block text-sm font-medium text-slate-950'>Objekt- und Adressdaten</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Auszug, Zielort, Etagen und Laufweg</span></span>
@@ -2692,6 +2752,9 @@ export default function OfferPlanner() {
                 <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Weitere Kundendaten und Angebotsname</summary>
                 <div className='mt-4 grid gap-4 sm:grid-cols-2'>
                   <TextField label='Angebotsbezeichnung' value={calculation.title} onChange={(value) => updateCalculation("title", value)} placeholder='z. B. Umzug Familie Mustermann' />
+                  <TextField label='Angebotsnummer' value={calculation.offerNumber} onChange={(value) => updateCalculation("offerNumber", value)} placeholder='z. B. ANG-20260918-001' />
+                  <TextField label='Angebot gültig bis' type='date' value={calculation.validUntil} onChange={(value) => updateCalculation("validUntil", value)} />
+                  <TextField label='Kundenanschrift' value={calculation.customerAddress} onChange={(value) => updateCalculation("customerAddress", value)} placeholder='Straße, PLZ Ort' />
                   <TextField label='Telefon' value={calculation.planning.contactPhone} onChange={(value) => updatePlanning("contactPhone", value)} placeholder='Telefonnummer' />
                   <TextField label='E-Mail' type='email' value={calculation.planning.contactEmail} onChange={(value) => updatePlanning("contactEmail", value)} placeholder='name@beispiel.de' />
                 </div>
@@ -2843,8 +2906,10 @@ export default function OfferPlanner() {
           </section>}
 
           {activeStep === "price" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
-            <SectionHeading icon={Clock3} title='Hinweise zur Ausführung' description='Diese Informationen werden in der Kundenansicht mit ausgegeben.' />
-            <textarea value={calculation.planning.notes} onChange={(event) => updatePlanning("notes", event.target.value)} rows={5} placeholder='Besondere Möbel, enge Treppenhäuser, Terminabsprachen oder weitere Hinweise ...' className='w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20' />
+            <SectionHeading icon={Clock3} title='Leistungsumfang & Bedingungen' description='Diese Angaben werden fest in das Kundendokument übernommen.' />
+            <label className='block text-sm font-medium text-slate-700'>Konkrete Leistungsbeschreibung<textarea value={calculation.planning.scopeDescription} onChange={(event) => updatePlanning("scopeDescription", event.target.value)} rows={5} placeholder='Beschreibe konkret, welche Arbeiten ausgeführt werden, z. B. Demontage der Küche, Transport und Montage am Zielort ...' className='mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20' /></label>
+            <label className='mt-4 block text-sm font-medium text-slate-700'>Hinweise zur Ausführung<textarea value={calculation.planning.notes} onChange={(event) => updatePlanning("notes", event.target.value)} rows={4} placeholder='Besondere Möbel, enge Treppenhäuser, Terminabsprachen oder weitere Hinweise ...' className='mt-1.5 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20' /></label>
+            <div className='mt-4'><TextField label='Zahlungsbedingung' value={calculation.paymentTerms} onChange={(value) => updateCalculation("paymentTerms", value)} /></div>
             <div className='mt-5 flex justify-end'><Button onClick={() => void saveCalculation()} disabled={isSaving}><Save /> Planung & Angebot speichern</Button></div>
           </section>}
 

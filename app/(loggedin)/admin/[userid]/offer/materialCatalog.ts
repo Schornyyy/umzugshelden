@@ -67,7 +67,7 @@ export const materialServiceOptions: Array<{
   value: MaterialService;
   label: string;
 }> = [
-  { value: "painting", label: "Malerarbeiten" },
+  { value: "painting", label: "Anstricharbeiten" },
   { value: "packing", label: "Packservice" },
 ];
 

@@ -447,7 +447,7 @@ const seoContent: Record<ServiceKey, SeoContent> = {
   anstricharbeiten: {
     primaryKeyword: "Anstricharbeiten",
     keywordVariants: [
-      "Malerarbeiten",
+      "Anstricharbeiten",
       "Wohnung streichen",
       "Renovierung",
       "Tapezierarbeiten",
@@ -455,11 +455,11 @@ const seoContent: Record<ServiceKey, SeoContent> = {
       "Wohnungsübergabe",
     ],
     image: "/images/anstricharbeiten.webp",
-    imageAlt: "Professionelle Anstricharbeiten und Malerarbeiten in {city}",
-    overviewHeading: "Anstricharbeiten und Malerarbeiten in {city}",
+    imageAlt: "Professionelle Anstricharbeiten in {city}",
+    overviewHeading: "Anstricharbeiten in {city}",
     overviewText: [
       "Für Anstricharbeiten in {city} übernehmen wir die Vorbereitung und Ausführung von Wänden und Decken. Dazu gehören je nach Zustand Abkleben, Spachteln, Schleifen, Grundieren und ein gleichmäßiger Anstrich mit abgestimmten Materialien.",
-      "Besonders bei Auszug, Einzug oder Wohnungsübergabe ist ein verlässlicher Fertigstellungstermin wichtig. Wir stimmen die Malerarbeiten in {city} mit Ihrem Zeitplan ab und führen Material sowie vereinbarte Nebenarbeiten transparent im Angebot auf.",
+      "Besonders bei Auszug, Einzug oder Wohnungsübergabe ist ein verlässlicher Fertigstellungstermin wichtig. Wir stimmen die Anstricharbeiten in {city} mit Ihrem Zeitplan ab und führen Material sowie vereinbarte Nebenarbeiten transparent im Angebot auf.",
     ],
     useCasesHeading: "Renovierung in {city} für Wohnung, Haus und Gewerbe",
     useCases: [
@@ -478,7 +478,7 @@ const seoContent: Record<ServiceKey, SeoContent> = {
     ],
     priceHeading: "Kosten für Anstricharbeiten in {city}",
     priceText:
-      "Die Kosten für Malerarbeiten hängen nicht nur von der Quadratmeterzahl ab. Untergrund, gewünschte Farbe, Abdeckaufwand und notwendige Vorarbeiten entscheiden darüber, wie viel Material und Arbeitszeit benötigt werden.",
+      "Die Kosten für Anstricharbeiten hängen nicht nur von der Quadratmeterzahl ab. Untergrund, gewünschte Farbe, Abdeckaufwand und notwendige Vorarbeiten entscheiden darüber, wie viel Material und Arbeitszeit benötigt werden.",
     priceFactors: [
       "Größe und Anzahl der zu streichenden Flächen",
       "Zustand von Wänden, Decken und Untergrund",
@@ -492,7 +492,7 @@ const seoContent: Record<ServiceKey, SeoContent> = {
           "Ja. Wir übernehmen einzelne Räume ebenso wie komplette Wohnungen oder Häuser und stimmen den Leistungsumfang vor Beginn eindeutig mit Ihnen ab.",
       },
       {
-        question: "Sind Malerarbeiten vor einer Wohnungsübergabe möglich?",
+        question: "Sind Anstricharbeiten vor einer Wohnungsübergabe möglich?",
         answer:
           "Ja. Teilen Sie uns den Übergabetermin möglichst früh mit. Wir prüfen den Zustand, planen notwendige Vorarbeiten und richten die Fertigstellung danach aus.",
       },

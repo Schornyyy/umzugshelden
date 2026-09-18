@@ -459,7 +459,7 @@ function PaintingServiceCalculator(props: Omit<ServiceConfiguratorProps, "servic
 
   return (
     <div>
-      <ServiceHeader icon={Paintbrush} title='Malerarbeiten kalkulieren' description='Flächen, Anstriche, Spachtel- und Ausbesserungsarbeiten sowie die komplette Materialplanung mit Preisen – nur die Personalkosten laufen über die Konditionen.' />
+      <ServiceHeader icon={Paintbrush} title='Anstricharbeiten kalkulieren' description='Flächen, Anstriche, Spachtel- und Ausbesserungsarbeiten sowie die komplette Materialplanung mit Preisen – nur die Personalkosten laufen über die Konditionen.' />
       <AddressFields planning={planning} kilometers={kilometers} onPlanningChange={onPlanningChange} onKilometersChange={onKilometersChange} destination={false} />
       <div className='mt-5 border-t border-slate-200 pt-4'>
         <div className='mb-3 flex flex-col justify-between gap-3 sm:flex-row sm:items-center'>

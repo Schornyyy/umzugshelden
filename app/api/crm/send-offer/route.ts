@@ -53,7 +53,7 @@ function emailReplacements(
         move: "Umzug",
         seniorMove: "Seniorenumzug",
         clearance: "Entrümpelung",
-        painting: "Malerarbeiten",
+        painting: "Anstricharbeiten",
         furnitureAssembly: "Möbelmontage",
         packing: "Einpackservice",
         storage: "Einlagerung",

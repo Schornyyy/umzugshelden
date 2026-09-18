@@ -62,7 +62,7 @@ const serviceSections: Array<{
 }> = [
   {
     id: "painting",
-    label: "Malerarbeiten",
+    label: "Anstricharbeiten",
     description: "Farben, Grundierung, Abdeckung, Werkzeug und Tapeten",
     icon: Paintbrush,
     defaultType: "wallPaint",
