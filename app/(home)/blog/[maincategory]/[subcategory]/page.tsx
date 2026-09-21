@@ -80,8 +80,8 @@ export default async function SubcategoryPublicPage({
     <div className='max-w-5xl mx-auto px-4 py-10 space-y-8'>
       <header className='space-y-2'>
         <nav className='text-xs text-slate-500 flex gap-1 flex-wrap'>
-          <Link href='/blog/unternehmen' className='hover:underline'>
-            Unternehmen
+          <Link href='/blog' className='hover:underline'>
+            Blog
           </Link>
           <span>/</span>
           <Link

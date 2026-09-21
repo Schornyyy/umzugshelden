@@ -4,7 +4,7 @@ export interface AdminBlogCategory {
     id: string
 }
 
-export type AdminBlogMainCategory = "partner" | "seo" | "ratgeber" | "webdesign"
+export type AdminBlogMainCategory = "umzug" | "streicharbeit" | "ratgeber" | "entrümpelung"
 
 export interface AdminBlogPage {
     id: string,

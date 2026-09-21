@@ -8,18 +8,18 @@ const MAIN_CATEGORY_INFO: Record<
   AdminBlogMainCategory,
   { label: string; description: string }
 > = {
-  seo: {
-    label: "SEO",
-    description: "Tipps & Wissen für Suchmaschinenoptimierung",
+  umzug: {
+    label: "Umzug",
+    description: "Planung, Vorbereitung und praktische Tipps für den Umzug",
   },
-  partner: {
-    label: "Partner",
-    description: "Informationen für Kooperationspartner",
+  streicharbeit: {
+    label: "Streicharbeiten",
+    description: "Wissen rund um Renovierung, Farben und saubere Übergaben",
   },
   ratgeber: { label: "Ratgeber", description: "Guides, Hilfe & Wissen" },
-  webdesign: {
-    label: "Webdesign",
-    description: "Tipps & Tricks für modernes Webdesign",
+  entrümpelung: {
+    label: "Entrümpelung",
+    description: "Tipps für Haushaltsauflösung, Entsorgung und Werterhalt",
   },
 };
 
@@ -47,23 +47,23 @@ export default async function MainCategoryOverview({ params }: Props) {
         <p className='text-slate-600 text-sm'>{info.description}</p>
         <nav className='text-xs flex gap-2 text-slate-500'>
           <Link
-            href='/blog/webdesign'
+            href='/blog/umzug'
             className={
-              key === "webdesign"
+              key === "umzug"
                 ? "font-semibold text-blue-600"
                 : "hover:text-blue-600"
             }>
-            Webdesign
+            Umzug
           </Link>
           <span>|</span>
           <Link
-            href='/blog/partner'
+            href='/blog/streicharbeit'
             className={
-              key === "partner"
+              key === "streicharbeit"
                 ? "font-semibold text-blue-600"
                 : "hover:text-blue-600"
             }>
-            Partner
+            Streicharbeiten
           </Link>
           <span>|</span>
           <Link
@@ -77,13 +77,13 @@ export default async function MainCategoryOverview({ params }: Props) {
           </Link>
           <span>|</span>
           <Link
-            href='/blog/seo'
+            href='/blog/entrümpelung'
             className={
-              key === "seo"
+              key === "entrümpelung"
                 ? "font-semibold text-blue-600"
                 : "hover:text-blue-600"
             }>
-            SEO
+            Entrümpelung
           </Link>
         </nav>
       </header>

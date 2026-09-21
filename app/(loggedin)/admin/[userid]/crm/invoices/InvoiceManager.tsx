@@ -14,6 +14,11 @@ import {
   createCustomerNumber,
   createInvoiceNumber,
 } from "@/lib/crmIdentifiers";
+import {
+  createInvoiceDocumentHtml,
+  createInvoicePdfFilename,
+  getInvoiceTotals,
+} from "@/lib/crmInvoiceDocument";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type {
   CrmCustomer,
@@ -23,6 +28,7 @@ import type {
   CrmInvoiceReminder,
   CrmInvoiceSettings,
   CrmInvoiceStatus,
+  CrmInvoiceType,
 } from "@/types/Crm";
 import {
   collection,
@@ -38,14 +44,18 @@ import {
   AlertTriangle,
   BellRing,
   Check,
+  Download,
   FilePlus2,
   LoaderCircle,
+  Mail,
   Plus,
   Printer,
   ReceiptText,
   Save,
   Search,
   Settings2,
+  Send,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -121,6 +131,17 @@ type StoredInvoiceSettings = Omit<Partial<CrmInvoiceSettings>, "issuer"> & {
 
 type Feedback = {
   type: "saved" | "error";
+  message: string;
+};
+
+type InvoiceConfigurationDraft = {
+  invoiceType: CrmInvoiceType;
+  installmentGross: number;
+};
+
+type InvoiceEmailDraft = {
+  to: string;
+  subject: string;
   message: string;
 };
 
@@ -226,12 +247,7 @@ function addDays(value: string, days: number) {
 }
 
 function getTotals(invoice: CrmInvoice) {
-  const net = invoice.lineItems.reduce(
-    (total, item) => total + item.quantity * item.unitPrice,
-    0
-  );
-  const vat = net * (invoice.vatPercent / 100);
-  return { net, vat, gross: net + vat };
+  return getInvoiceTotals(invoice);
 }
 
 function addLine(
@@ -385,6 +401,11 @@ function normalizeInvoice(
     customerNumber: invoice.customerNumber || customer?.customerNumber || "",
     issuer: mergeIssuer(settings.issuer, invoice.issuer),
     sequenceNumber: invoice.sequenceNumber ?? 0,
+    invoiceType: invoice.invoiceType === "installment" ? "installment" : "full",
+    installmentGross:
+      Number.isFinite(invoice.installmentGross) && (invoice.installmentGross ?? 0) >= 0
+        ? invoice.installmentGross
+        : undefined,
     taxNote: invoice.taxNote ?? "",
     reminders: invoice.reminders ?? [],
   };
@@ -410,6 +431,7 @@ function createInvoiceDraft(
     offerId: offer?.id ?? "",
     invoiceNumber: "",
     sequenceNumber: 0,
+    invoiceType: "full",
     status: "draft",
     issueDate: today,
     serviceDate: offer?.planning.date || today,
@@ -535,6 +557,13 @@ function getComplianceIssues(
   if (!hasBillableLine) {
     issues.push("Mindestens eine ausgefüllte Position mit Betrag fehlt.");
   }
+  const totals = getTotals(invoice);
+  if (
+    invoice.invoiceType === "installment" &&
+    (totals.gross <= 0 || totals.gross >= totals.orderGross)
+  ) {
+    issues.push("Der Abschlag muss größer als 0 und kleiner als der Auftragswert sein.");
+  }
   if (!Number.isFinite(invoice.vatPercent) || invoice.vatPercent < 0) {
     issues.push("Der Umsatzsteuersatz darf nicht negativ sein.");
   }
@@ -602,10 +631,17 @@ export default function InvoiceManager() {
   const [settings, setSettings] = useState<CrmInvoiceSettings | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<CrmInvoiceSettings | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [invoiceConfiguration, setInvoiceConfiguration] =
+    useState<InvoiceConfigurationDraft | null>(null);
   const [draft, setDraft] = useState<CrmInvoice | null>(null);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [invoiceEmailDraft, setInvoiceEmailDraft] =
+    useState<InvoiceEmailDraft | null>(null);
+  const [invoiceEmailError, setInvoiceEmailError] = useState("");
+  const [isSendingInvoice, setIsSendingInvoice] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [reminderDraft, setReminderDraft] = useState<ReminderDraft | null>(null);
@@ -722,7 +758,17 @@ export default function InvoiceManager() {
   const customerOffers = offers.filter(
     (offer) => !draft?.customerId || offer.customerId === draft.customerId
   );
-  const totals = draft ? getTotals(draft) : { net: 0, vat: 0, gross: 0 };
+  const totals = draft
+    ? getTotals(draft)
+    : {
+        net: 0,
+        vat: 0,
+        gross: 0,
+        orderNet: 0,
+        orderVat: 0,
+        orderGross: 0,
+        remainingGross: 0,
+      };
   const savedInvoice = draft
     ? invoices.find((invoice) => invoice.id === draft.id)
     : undefined;
@@ -740,6 +786,12 @@ export default function InvoiceManager() {
         (savedInvoice && printSource !== savedInvoice))
   );
   const canPrint = Boolean(printSource);
+  const canEmailInvoice = Boolean(
+    savedInvoice &&
+      isFinalized(savedInvoice) &&
+      savedInvoice.status !== "cancelled" &&
+      getComplianceIssues(savedInvoice).length === 0
+  );
   const availableStatuses = draftIsFinalized
     ? invoiceStatuses.filter((status) => status.value !== "draft")
     : invoiceStatuses;
@@ -776,6 +828,47 @@ export default function InvoiceManager() {
       nextNumberByYear: { ...settings.nextNumberByYear },
     });
     setIsSettingsOpen(true);
+  }
+
+  function openInvoiceConfiguration() {
+    if (!draft) return;
+    const currentTotals = getTotals(draft);
+    setInvoiceConfiguration({
+      invoiceType: draft.invoiceType === "installment" ? "installment" : "full",
+      installmentGross:
+        draft.invoiceType === "installment"
+          ? currentTotals.gross
+          : Math.round(currentTotals.orderGross * 0.5 * 100) / 100,
+    });
+  }
+
+  function applyInvoiceConfiguration() {
+    if (!draft || !invoiceConfiguration || draftIsFinalized) return;
+    const orderGross = getTotals(draft).orderGross;
+    const installmentGross = Math.min(
+      orderGross,
+      Math.max(0, invoiceConfiguration.installmentGross)
+    );
+    if (
+      invoiceConfiguration.invoiceType === "installment" &&
+      (installmentGross <= 0 || installmentGross >= orderGross)
+    ) {
+      setFeedback({
+        type: "error",
+        message: "Der Abschlag muss größer als 0 und kleiner als der Auftragswert sein.",
+      });
+      return;
+    }
+    setDraft({
+      ...draft,
+      invoiceType: invoiceConfiguration.invoiceType,
+      installmentGross:
+        invoiceConfiguration.invoiceType === "installment"
+          ? installmentGross
+          : undefined,
+    });
+    setInvoiceConfiguration(null);
+    setFeedback(null);
   }
 
   function updateSettingsIssuer(field: keyof CrmInvoiceIssuer, value: string) {
@@ -1232,8 +1325,6 @@ export default function InvoiceManager() {
   function printInvoice() {
     if (!printSource) return;
     const invoice = printSource;
-    const issuer = mergeIssuer(invoice.issuer);
-    const invoiceTotals = getTotals(invoice);
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       setFeedback({
@@ -1243,118 +1334,119 @@ export default function InvoiceManager() {
       return;
     }
 
-    const senderLine = [
-      issuer.companyName,
-      `${issuer.proprietor} · ${issuer.legalForm}`,
-      issuer.street,
-      `${issuer.postalCode} ${issuer.city}`.trim(),
-      issuer.country,
-    ]
-      .filter((value) => value.trim())
-      .join(" · ");
-    const recipientNames = [invoice.customerCompany, invoice.customerName]
-      .filter((value) => value.trim())
-      .map(safeText)
-      .join("<br>");
-    const rows = invoice.lineItems
-      .map(
-        (line, index) =>
-          `<tr><td>${safeText(index + 1)}</td><td>${safeText(
-            line.description
-          )}</td><td>${safeText(quantityFormatter.format(line.quantity))} ${safeText(
-            line.unit
-          )}</td><td>${safeText(
-            currencyFormatter.format(line.unitPrice)
-          )}</td><td>${safeText(
-            currencyFormatter.format(line.quantity * line.unitPrice)
-          )}</td></tr>`
-      )
-      .join("");
-    const vatRow =
-      invoice.vatPercent === 0
-        ? `<div class="total-row"><span>${safeText(
-            invoice.taxNote || "Umsatzsteuer 0 %"
-          )}</span><strong>${safeText(
-            currencyFormatter.format(invoiceTotals.vat)
-          )}</strong></div>`
-        : `<div class="total-row"><span>Umsatzsteuer ${safeText(
-            quantityFormatter.format(invoice.vatPercent)
-          )} %</span><strong>${safeText(
-            currencyFormatter.format(invoiceTotals.vat)
-          )}</strong></div>`;
-    const taxIdentifiers = [
-      issuer.taxNumber ? `Steuernummer: ${issuer.taxNumber}` : "",
-      issuer.vatId ? `USt-IdNr.: ${issuer.vatId}` : "",
-    ]
-      .filter(Boolean)
-      .map(safeText)
-      .join("<br>");
-    const draftBanner = printAsDraft
-      ? '<div class="draft-banner">ENTWURF - NICHT ALS RECHNUNG VERWENDEN</div>'
-      : "";
-    const displayedInvoiceNumber = invoice.invoiceNumber || "Noch nicht vergeben";
-
-    printWindow.document.write(`<!doctype html>
-<html lang="de">
-<head>
-  <meta charset="utf-8">
-  <title>${safeText(invoice.invoiceNumber || "Rechnungsentwurf")}</title>
-  <style>
-    @page{margin:15mm}*{box-sizing:border-box}body{margin:0;color:#172554;font:10pt Arial,sans-serif;line-height:1.45}.document{max-width:190mm;margin:auto}.draft-banner{margin-bottom:12px;border:2px solid #b45309;background:#fff7ed;padding:8px;color:#92400e;font-size:10pt;font-weight:700;text-align:center}.sender{padding-bottom:5px;border-bottom:1px solid #cbd5e1;color:#475569;font-size:8pt}.header{display:flex;justify-content:space-between;gap:24px;margin-top:22px}.recipient{min-height:42mm}.eyebrow{color:#c45f18;font-size:8pt;font-weight:700;text-transform:uppercase}h1{margin:2px 0 0;font-size:25pt;color:#0f2b54}.number{margin:3px 0;font-size:12pt;font-weight:700}.meta{display:grid;grid-template-columns:auto auto;gap:4px 18px;align-content:start}.meta span:nth-child(odd){color:#64748b}.meta span:nth-child(even){text-align:right;font-weight:700}.positions{width:100%;margin-top:24px;border-collapse:collapse}th{padding:8px;border-bottom:2px solid #c45f18;color:#475569;font-size:8pt;text-align:left;text-transform:uppercase}td{padding:9px 8px;border-bottom:1px solid #e2e8f0;vertical-align:top}th:nth-child(n+3),td:nth-child(n+3){text-align:right}.totals{width:88mm;margin:18px 0 0 auto}.total-row{display:flex;justify-content:space-between;gap:16px;padding:5px 7px}.gross{margin-top:6px;padding:11px;background:#0f2b54;color:#fff;font-size:12pt}.payment{margin-top:26px;padding:13px 15px;border-left:4px solid #c45f18;background:#fff7ed}.payment-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px}.label{color:#64748b;font-size:8pt;text-transform:uppercase}.footer{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-top:34px;padding-top:10px;border-top:1px solid #cbd5e1;color:#475569;font-size:8pt}@media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
-  </style>
-</head>
-<body>
-  <main class="document">
-    ${draftBanner}
-    <div class="sender">${safeText(senderLine)}</div>
-    <section class="header">
-      <div class="recipient">
-        <p class="eyebrow">Rechnung an</p>
-        <strong>${recipientNames}</strong><br>
-        ${safeMultiline(invoice.customerAddress)}
-      </div>
-      <div>
-        <p class="eyebrow">Rechnung</p>
-        <h1>Rechnung</h1>
-        <p class="number">${safeText(displayedInvoiceNumber)}</p>
-      </div>
-    </section>
-    <section class="meta">
-      <span>Rechnungsnummer</span><span>${safeText(displayedInvoiceNumber)}</span>
-      <span>Kundennummer</span><span>${safeText(invoice.customerNumber || "")}</span>
-      <span>Rechnungsdatum</span><span>${safeText(formatPrintDate(invoice.issueDate))}</span>
-      <span>Leistungsdatum</span><span>${safeText(formatPrintDate(invoice.serviceDate))}</span>
-      <span>Fälligkeitsdatum</span><span>${safeText(formatPrintDate(invoice.dueDate))}</span>
-    </section>
-    <table class="positions">
-      <thead><tr><th>Pos.</th><th>Leistung</th><th>Menge / Einheit</th><th>Netto je Einheit</th><th>Netto gesamt</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <section class="totals">
-      <div class="total-row"><span>Nettosumme</span><strong>${safeText(currencyFormatter.format(invoiceTotals.net))}</strong></div>
-      ${vatRow}
-      <div class="total-row gross"><span>Rechnungsbetrag</span><strong>${safeText(currencyFormatter.format(invoiceTotals.gross))}</strong></div>
-    </section>
-    <section class="payment">
-      <strong>Zahlungshinweise</strong>
-      <p>Zahlbar bis ${safeText(formatPrintDate(invoice.dueDate))} ohne Abzug.</p>
-      <p>${safeMultiline(invoice.notes)}</p>
-      <div class="payment-grid">
-        <div><span class="label">Bank</span><br>${safeText(issuer.bankName)}<br><span class="label">Kontoinhaber</span><br>${safeText(issuer.accountHolder)}</div>
-        <div><span class="label">IBAN</span><br>${safeText(issuer.iban)}<br><span class="label">BIC</span><br>${safeText(issuer.bic)}</div>
-      </div>
-    </section>
-    <footer class="footer">
-      <div><strong>${safeText(issuer.companyName)}</strong><br>${safeText(issuer.proprietor)}<br>${safeText(issuer.legalForm)}</div>
-      <div>${safeText(issuer.street)}<br>${safeText(`${issuer.postalCode} ${issuer.city}`.trim())}<br>${safeText(issuer.country)}</div>
-      <div>${safeText(issuer.email)}<br>${safeText(issuer.phone)}${taxIdentifiers ? `<br>${taxIdentifiers}` : ""}</div>
-    </footer>
-  </main>
-</body>
-</html>`);
+    printWindow.document.write(
+      createInvoiceDocumentHtml(invoice, { draft: printAsDraft })
+    );
     printWindow.document.close();
     printWindow.focus();
     window.setTimeout(() => printWindow.print(), 250);
+  }
+
+  async function downloadInvoice() {
+    if (!printSource) return;
+    setIsDownloading(true);
+    setFeedback(null);
+    try {
+      const response = await fetch("/api/crm/invoices/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoice: printSource, draft: printAsDraft }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Die PDF-Rechnung konnte nicht erstellt werden.");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = createInvoicePdfFilename(printSource);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setFeedback({ type: "saved", message: "PDF heruntergeladen." });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die PDF-Rechnung konnte nicht erstellt werden.",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
+  function openInvoiceEmailDialog() {
+    if (!savedInvoice || !canEmailInvoice) return;
+    const documentType =
+      savedInvoice.invoiceType === "installment"
+        ? "Abschlagsrechnung"
+        : "Rechnung";
+    setInvoiceEmailDraft({
+      to: savedInvoice.customerEmail,
+      subject: `Ihre ${documentType} ${savedInvoice.invoiceNumber}`,
+      message:
+        `anbei erhalten Sie Ihre ${documentType.toLowerCase()} als PDF. ` +
+        "Bei Rückfragen melden Sie sich gerne bei uns.",
+    });
+    setInvoiceEmailError("");
+  }
+
+  async function sendInvoiceEmail() {
+    if (!savedInvoice || !invoiceEmailDraft || !canEmailInvoice) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceEmailDraft.to.trim())) {
+      setInvoiceEmailError("Bitte eine gültige Empfängeradresse angeben.");
+      return;
+    }
+    if (!invoiceEmailDraft.subject.trim() || !invoiceEmailDraft.message.trim()) {
+      setInvoiceEmailError("Betreff und Nachricht dürfen nicht leer sein.");
+      return;
+    }
+
+    setIsSendingInvoice(true);
+    setInvoiceEmailError("");
+    try {
+      const response = await fetch("/api/crm/invoices/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: invoiceEmailDraft.to.trim(),
+          subject: invoiceEmailDraft.subject.trim(),
+          message: invoiceEmailDraft.message.trim(),
+          invoice: savedInvoice,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || "Die Rechnung konnte nicht versendet werden.");
+      }
+
+      if (savedInvoice.status !== "sent" && savedInvoice.status !== "paid") {
+        const sentInvoice: CrmInvoice = {
+          ...savedInvoice,
+          status: "sent",
+          updatedAt: Date.now(),
+        };
+        await setDoc(
+          doc(database, INVOICE_COLLECTION, sentInvoice.id),
+          sanitizeForFirestore(sentInvoice)
+        );
+        updateInvoiceList(sentInvoice);
+      }
+      setInvoiceEmailDraft(null);
+      setFeedback({ type: "saved", message: "Rechnung per E-Mail versendet." });
+    } catch (error) {
+      setInvoiceEmailError(
+        error instanceof Error
+          ? error.message
+          : "Die Rechnung konnte nicht versendet werden."
+      );
+    } finally {
+      setIsSendingInvoice(false);
+    }
   }
 
   if (isLoading) {
@@ -1454,6 +1546,11 @@ export default function InvoiceManager() {
                       <span className="mt-2 block text-sm font-semibold text-slate-950">
                         {currencyFormatter.format(amount)}
                       </span>
+                      {invoice.invoiceType === "installment" && (
+                        <span className="mt-1 block text-[11px] font-medium text-amber-700">
+                          Abschlag · Rest {currencyFormatter.format(getTotals(invoice).remainingGross)}
+                        </span>
+                      )}
                     </button>
                   );
                 })
@@ -1477,6 +1574,13 @@ export default function InvoiceManager() {
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
+                    onClick={openInvoiceConfiguration}
+                    disabled={draftIsFinalized}
+                  >
+                    <SlidersHorizontal /> Rechnung einstellen
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={printInvoice}
                     disabled={!canPrint}
                     title={
@@ -1486,6 +1590,30 @@ export default function InvoiceManager() {
                     }
                   >
                     <Printer /> {printAsDraft ? "Entwurf drucken" : "Drucken"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => void downloadInvoice()}
+                    disabled={!canPrint || isDownloading}
+                  >
+                    {isDownloading ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : (
+                      <Download />
+                    )}
+                    PDF
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={openInvoiceEmailDialog}
+                    disabled={!canEmailInvoice}
+                    title={
+                      canEmailInvoice
+                        ? "Finalisierte Rechnung per E-Mail senden"
+                        : "Erst vollständig ausfüllen, finalisieren und speichern"
+                    }
+                  >
+                    <Mail /> E-Mail
                   </Button>
                   <Button onClick={() => void saveInvoice()} disabled={isSaving}>
                     {isSaving ? <LoaderCircle className="animate-spin" /> : <Save />}
@@ -1772,20 +1900,39 @@ export default function InvoiceManager() {
               </div>
 
               <div className="ml-auto mt-6 max-w-md space-y-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">Nettosumme</span>
-                  <strong>{currencyFormatter.format(totals.net)}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">
-                    MwSt. {quantityFormatter.format(draft.vatPercent)} %
-                  </span>
-                  <strong>{currencyFormatter.format(totals.vat)}</strong>
-                </div>
-                <div className="flex justify-between border-t border-slate-300 pt-3 text-base">
-                  <span className="font-semibold">Rechnungsbetrag</span>
-                  <strong>{currencyFormatter.format(totals.gross)}</strong>
-                </div>
+                {draft.invoiceType === "installment" ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Auftragswert brutto</span>
+                      <strong>{currencyFormatter.format(totals.orderGross)}</strong>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-300 pt-3 text-base">
+                      <span className="font-semibold">Abschlagsbetrag</span>
+                      <strong>{currencyFormatter.format(totals.gross)}</strong>
+                    </div>
+                    <div className="flex justify-between text-amber-800">
+                      <span className="font-medium">Verbleibende Restschuld</span>
+                      <strong>{currencyFormatter.format(totals.remainingGross)}</strong>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Nettosumme</span>
+                      <strong>{currencyFormatter.format(totals.net)}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">
+                        MwSt. {quantityFormatter.format(draft.vatPercent)} %
+                      </span>
+                      <strong>{currencyFormatter.format(totals.vat)}</strong>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-300 pt-3 text-base">
+                      <span className="font-semibold">Rechnungsbetrag</span>
+                      <strong>{currencyFormatter.format(totals.gross)}</strong>
+                    </div>
+                  </>
+                )}
               </div>
 
               <label className="mt-5 block text-sm font-medium text-slate-700">
@@ -2081,6 +2228,230 @@ export default function InvoiceManager() {
               )}
               Speichern & Drucken
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(invoiceEmailDraft)}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceEmailDraft(null);
+        }}
+      >
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Rechnung per E-Mail senden</DialogTitle>
+            <DialogDescription>
+              Die finalisierte Rechnung wird als PDF erstellt und an die angegebene
+              E-Mail-Adresse angehängt.
+            </DialogDescription>
+          </DialogHeader>
+          {invoiceEmailDraft && (
+            <div className="space-y-4 py-1">
+              <label className="block text-sm font-medium text-slate-700">
+                Empfänger
+                <input
+                  type="email"
+                  value={invoiceEmailDraft.to}
+                  onChange={(event) =>
+                    setInvoiceEmailDraft({
+                      ...invoiceEmailDraft,
+                      to: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Betreff
+                <input
+                  value={invoiceEmailDraft.subject}
+                  onChange={(event) =>
+                    setInvoiceEmailDraft({
+                      ...invoiceEmailDraft,
+                      subject: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Nachricht
+                <textarea
+                  value={invoiceEmailDraft.message}
+                  onChange={(event) =>
+                    setInvoiceEmailDraft({
+                      ...invoiceEmailDraft,
+                      message: event.target.value,
+                    })
+                  }
+                  rows={5}
+                  className="mt-1.5 w-full rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none focus:border-blue-500"
+                />
+              </label>
+              {invoiceEmailError && (
+                <p className="text-sm font-medium text-red-600">{invoiceEmailError}</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvoiceEmailDraft(null)}>
+              Abbrechen
+            </Button>
+            <Button
+              onClick={() => void sendInvoiceEmail()}
+              disabled={
+                isSendingInvoice ||
+                !invoiceEmailDraft?.to.trim() ||
+                !invoiceEmailDraft.subject.trim() ||
+                !invoiceEmailDraft.message.trim()
+              }
+            >
+              {isSendingInvoice ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <Send />
+              )}
+              PDF-Rechnung senden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(invoiceConfiguration)}
+        onOpenChange={(open) => {
+          if (!open) setInvoiceConfiguration(null);
+        }}
+      >
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Rechnung einstellen</DialogTitle>
+            <DialogDescription>
+              Lege fest, ob der volle Auftragswert oder nur ein Abschlag berechnet wird.
+              Die verbleibende Restschuld erscheint auf der Rechnung.
+            </DialogDescription>
+          </DialogHeader>
+          {invoiceConfiguration && draft && (() => {
+            const orderGross = getTotals(draft).orderGross;
+            const installmentGross = Math.min(
+              orderGross,
+              Math.max(0, invoiceConfiguration.installmentGross)
+            );
+            const percentage = orderGross > 0
+              ? installmentGross / orderGross * 100
+              : 0;
+            const isInstallment = invoiceConfiguration.invoiceType === "installment";
+            return (
+              <div className="space-y-4 py-1">
+                <fieldset className="grid grid-cols-2 gap-2">
+                  <legend className="mb-2 text-sm font-medium text-slate-700">
+                    Rechnungsart
+                  </legend>
+                  {([
+                    ["full", "Vollrechnung"],
+                    ["installment", "Abschlagsrechnung"],
+                  ] as const).map(([value, label]) => (
+                    <label
+                      key={value}
+                      className={`cursor-pointer rounded-md border p-3 text-sm font-medium ${
+                        invoiceConfiguration.invoiceType === value
+                          ? "border-blue-500 bg-blue-50 text-blue-800"
+                          : "border-slate-200 text-slate-700"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="invoiceType"
+                        value={value}
+                        checked={invoiceConfiguration.invoiceType === value}
+                        onChange={() =>
+                          setInvoiceConfiguration({
+                            ...invoiceConfiguration,
+                            invoiceType: value,
+                          })
+                        }
+                        className="mr-2"
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </fieldset>
+                {isInstallment && (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      Abschlag brutto
+                      <div className="relative mt-1.5">
+                        <input
+                          type="number"
+                          min="0.01"
+                          max={Math.max(0, orderGross - 0.01)}
+                          step="0.01"
+                          value={invoiceConfiguration.installmentGross}
+                          onChange={(event) =>
+                            setInvoiceConfiguration({
+                              ...invoiceConfiguration,
+                              installmentGross: Number(event.target.value),
+                            })
+                          }
+                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-10 text-sm outline-none focus:border-blue-500"
+                        />
+                        <span className="absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">
+                          EUR
+                        </span>
+                      </div>
+                    </label>
+                    <label className="text-sm font-medium text-slate-700">
+                      Anteil am Auftragswert
+                      <div className="relative mt-1.5">
+                        <input
+                          type="number"
+                          min="0.01"
+                          max="99.99"
+                          step="0.01"
+                          value={Math.round(percentage * 100) / 100}
+                          onChange={(event) =>
+                            setInvoiceConfiguration({
+                              ...invoiceConfiguration,
+                              installmentGross:
+                                orderGross * (Number(event.target.value) / 100),
+                            })
+                          }
+                          className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 pr-8 text-sm outline-none focus:border-blue-500"
+                        />
+                        <span className="absolute inset-y-0 right-3 flex items-center text-xs text-slate-500">
+                          %
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                )}
+                <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Auftragswert brutto</span>
+                    <strong>{currencyFormatter.format(orderGross)}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-600">Rechnungsbetrag brutto</span>
+                    <strong>
+                      {currencyFormatter.format(isInstallment ? installmentGross : orderGross)}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between border-t border-slate-300 pt-2 text-amber-800">
+                    <span className="font-medium">Restschuld</span>
+                    <strong>
+                      {currencyFormatter.format(isInstallment ? orderGross - installmentGross : 0)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvoiceConfiguration(null)}>
+              Abbrechen
+            </Button>
+            <Button onClick={applyInvoiceConfiguration}>Übernehmen</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

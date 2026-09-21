@@ -1,6 +1,8 @@
 "use client";
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
+import { deleteBlogPage } from "@/actions/blogPageActions";
+import { Trash2 } from "lucide-react";
 
 interface PageDataItem {
   id: string;
@@ -27,6 +29,7 @@ export default function BlogPagesListClient({
   subcategorySlug: string;
 }) {
   const [data, setData] = useState<PageData>(initial);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   async function load(page: number) {
@@ -41,12 +44,37 @@ export default function BlogPagesListClient({
     });
   }
 
+  function handleDelete(id: string, title: string) {
+    if (!window.confirm(`Beitrag „${title}“ wirklich löschen?`)) return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteBlogPage(id);
+        const targetPage = data.items.length === 1 && data.page > 1
+          ? data.page - 1
+          : data.page;
+        const response = await fetch(
+          `/api/admin/blog/subcategory/${subcategorySlug}/pages?page=${targetPage}`
+        );
+        if (!response.ok) throw new Error("Liste konnte nicht aktualisiert werden");
+        setData(await response.json());
+      } catch (deleteError) {
+        setError(
+          deleteError instanceof Error
+            ? deleteError.message
+            : "Beitrag konnte nicht gelöscht werden"
+        );
+      }
+    });
+  }
+
   return (
     <div className='border rounded p-4 space-y-4'>
       <div className='flex items-center justify-between'>
         <h3 className='font-medium text-sm'>Vorhandene Beiträge</h3>
         <span className='text-xs text-slate-500'>{data.total} gesamt</span>
       </div>
+      {error && <p className='text-xs text-red-600'>{error}</p>}
       {data.items.length === 0 && (
         <p className='text-xs text-slate-500'>Noch keine Beiträge.</p>
       )}
@@ -76,12 +104,21 @@ export default function BlogPagesListClient({
               <p className='text-xs text-slate-600 line-clamp-3 min-h-[48px]'>
                 {item.description}
               </p>
-              <div className='flex justify-end'>
+              <div className='flex items-center justify-end gap-2'>
                 <Link
                   href={`./${subcategorySlug}/${item.slug}`}
                   className='text-xs text-blue-600 hover:underline'>
                   Bearbeiten
                 </Link>
+                <button
+                  type='button'
+                  title='Beitrag löschen'
+                  aria-label={`${item.titel} löschen`}
+                  disabled={isPending}
+                  onClick={() => handleDelete(item.id, item.titel)}
+                  className='flex h-8 w-8 items-center justify-center rounded text-red-600 hover:bg-red-50 disabled:opacity-40'>
+                  <Trash2 className='h-4 w-4' />
+                </button>
               </div>
             </li>
           ))}

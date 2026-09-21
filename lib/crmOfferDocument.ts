@@ -74,6 +74,9 @@ export type CrmOfferPlanning = {
       name: string;
       quantity: number;
       volumeM3: number;
+      lengthCm?: number;
+      widthCm?: number;
+      heightCm?: number;
     }>;
   }>;
 };

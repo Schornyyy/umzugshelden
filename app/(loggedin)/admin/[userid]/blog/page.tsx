@@ -11,10 +11,10 @@ import SubcategoryClient from "./subcategoryClient";
 import ThumbnailPickerField from "./ThumbnailPickerField";
 
 const MAIN_CATEGORIES: AdminBlogMainCategory[] = [
-  "webdesign",
-  "partner",
+  "umzug",
+  "streicharbeit",
   "ratgeber",
-  "seo",
+  "entrümpelung",
 ];
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ function CreateForm() {
     "use server";
     const name = String(formData.get("name") || "").trim();
     const mainCategory = (formData.get("mainCategory") ||
-      "companys") as AdminBlogMainCategory;
+      "umzug  ") as AdminBlogMainCategory;
     const thumbnailUrl =
       String(formData.get("thumbnailUrl") || "").trim() || undefined;
     if (!name) return;

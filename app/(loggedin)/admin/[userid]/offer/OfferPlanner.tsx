@@ -163,6 +163,18 @@ type InventoryItem = {
   name: string;
   quantity: number;
   volumeM3: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+};
+
+type InventoryItemDraft = {
+  name: string;
+  quantity: string;
+  lengthCm: string;
+  widthCm: string;
+  heightCm: string;
+  volumeM3: string;
 };
 
 type Room = {
@@ -335,6 +347,15 @@ const commonInventoryItems = [
   { name: "Waschmaschine", volumeM3: 0.4 },
   { name: "Umzugskarton", volumeM3: 0.08 },
 ];
+
+const emptyInventoryItemDraft: InventoryItemDraft = {
+  name: "",
+  quantity: "1",
+  lengthCm: "",
+  widthCm: "",
+  heightCm: "",
+  volumeM3: "",
+};
 
 const defaultRates: Rates = {
   employeeHourlyRate: 42,
@@ -625,6 +646,18 @@ function formatCurrency(value: number) {
 function toNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
+}
+
+function toOptionalNumber(value: string) {
+  return value.trim() === "" ? undefined : toNumber(value);
+}
+
+function calculateDimensionVolumeM3(
+  item: Pick<InventoryItem, "lengthCm" | "widthCm" | "heightCm">
+) {
+  const { lengthCm, widthCm, heightCm } = item;
+  if (!lengthCm || !widthCm || !heightCm) return null;
+  return (lengthCm * widthCm * heightCm) / 1_000_000;
 }
 
 function calculateVolume(rooms: Room[]) {
@@ -1548,8 +1581,30 @@ export default function OfferPlanner() {
   const [offerTab, setOfferTab] = useState<OfferTab>("conditions");
   const [activeServiceTab, setActiveServiceTab] = useState<ServiceKey | null>(null);
   const [isCostEstimateDialogOpen, setIsCostEstimateDialogOpen] = useState(false);
+  const [customInventoryRoomId, setCustomInventoryRoomId] = useState<string | null>(null);
+  const [inventoryItemDraft, setInventoryItemDraft] = useState<InventoryItemDraft>(emptyInventoryItemDraft);
   const [costEstimatePrintOptions, setCostEstimatePrintOptions] =
     useState<CostEstimatePrintOptions>(defaultCostEstimatePrintOptions);
+
+  const draftDimensions = {
+    lengthCm: toOptionalNumber(inventoryItemDraft.lengthCm),
+    widthCm: toOptionalNumber(inventoryItemDraft.widthCm),
+    heightCm: toOptionalNumber(inventoryItemDraft.heightCm),
+  };
+  const draftDimensionVolumeM3 = calculateDimensionVolumeM3(draftDimensions);
+  const hasAnyDraftDimension = [
+    inventoryItemDraft.lengthCm,
+    inventoryItemDraft.widthCm,
+    inventoryItemDraft.heightCm,
+  ].some((value) => value.trim() !== "");
+  const draftVolumeM3 =
+    draftDimensionVolumeM3 ?? toNumber(inventoryItemDraft.volumeM3);
+  const canAddInventoryItem =
+    customInventoryRoomId !== null &&
+    inventoryItemDraft.name.trim() !== "" &&
+    toNumber(inventoryItemDraft.quantity) > 0 &&
+    draftVolumeM3 > 0 &&
+    (!hasAnyDraftDimension || draftDimensionVolumeM3 !== null);
 
   useEffect(() => {
     const companyId = companyData?.id;
@@ -1957,26 +2012,34 @@ export default function OfferPlanner() {
     );
   }
 
-  function addInventoryItem(roomId: string) {
+  function openInventoryItemDialog(roomId: string) {
+    setInventoryItemDraft(emptyInventoryItemDraft);
+    setCustomInventoryRoomId(roomId);
+  }
+
+  function addInventoryItem() {
+    if (!canAddInventoryItem || !customInventoryRoomId) return;
+    const inventoryItem: InventoryItem = {
+      id: crypto.randomUUID(),
+      name: inventoryItemDraft.name.trim(),
+      quantity: toNumber(inventoryItemDraft.quantity),
+      volumeM3: draftVolumeM3,
+      ...(draftDimensionVolumeM3 !== null ? draftDimensions : {}),
+    };
+
     updatePlanning(
       "rooms",
       calculation.planning.rooms.map((room) =>
-        room.id === roomId
+        room.id === customInventoryRoomId
           ? {
               ...room,
-              items: [
-                ...room.items,
-                {
-                  id: crypto.randomUUID(),
-                  name: "Möbelstück",
-                  quantity: 1,
-                  volumeM3: 0.5,
-                },
-              ],
+              items: [...room.items, inventoryItem],
             }
           : room
       )
     );
+    setCustomInventoryRoomId(null);
+    setInventoryItemDraft(emptyInventoryItemDraft);
   }
 
   function addCommonInventoryItem(
@@ -2028,6 +2091,32 @@ export default function OfferPlanner() {
               items: room.items.map((item) =>
                 item.id === itemId ? { ...item, ...patch } : item
               ),
+            }
+          : room
+      )
+    );
+  }
+
+  function updateInventoryDimension(
+    roomId: string,
+    itemId: string,
+    key: "lengthCm" | "widthCm" | "heightCm",
+    value: number | undefined
+  ) {
+    updatePlanning(
+      "rooms",
+      calculation.planning.rooms.map((room) =>
+        room.id === roomId
+          ? {
+              ...room,
+              items: room.items.map((item) => {
+                if (item.id !== itemId) return item;
+                const nextItem = { ...item, [key]: value };
+                const calculatedVolumeM3 = calculateDimensionVolumeM3(nextItem);
+                return calculatedVolumeM3 === null
+                  ? nextItem
+                  : { ...nextItem, volumeM3: calculatedVolumeM3 };
+              }),
             }
           : room
       )
@@ -2623,6 +2712,103 @@ export default function OfferPlanner() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={customInventoryRoomId !== null}
+        onOpenChange={(open) => {
+          if (!open) setCustomInventoryRoomId(null);
+        }}>
+        <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-xl'>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              addInventoryItem();
+            }}>
+            <DialogHeader>
+              <DialogTitle>Gegenstand hinzufügen</DialogTitle>
+              <DialogDescription>
+                Erfasse die Maße in Zentimetern. Das Einzelvolumen wird automatisch in Kubikmeter umgerechnet.
+              </DialogDescription>
+            </DialogHeader>
+            <div className='grid gap-4 py-5'>
+              <div className='grid gap-4 sm:grid-cols-[minmax(0,1fr)_110px]'>
+                <label className='text-sm font-medium text-slate-700'>
+                  Bezeichnung
+                  <input
+                    autoFocus
+                    required
+                    value={inventoryItemDraft.name}
+                    onChange={(event) => setInventoryItemDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder='z. B. Kommode'
+                    className='mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20'
+                  />
+                </label>
+                <label className='text-sm font-medium text-slate-700'>
+                  Menge
+                  <input
+                    type='number'
+                    min='1'
+                    step='1'
+                    required
+                    value={inventoryItemDraft.quantity}
+                    onChange={(event) => setInventoryItemDraft((current) => ({ ...current, quantity: event.target.value }))}
+                    className='mt-1.5 h-10 w-full rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20'
+                  />
+                </label>
+              </div>
+              <fieldset>
+                <legend className='text-sm font-medium text-slate-700'>Maße</legend>
+                <div className='mt-1.5 grid grid-cols-3 gap-2'>
+                  {([
+                    ["lengthCm", "Länge"],
+                    ["widthCm", "Breite"],
+                    ["heightCm", "Höhe"],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className='text-xs text-slate-500'>
+                      {label}
+                      <div className='relative mt-1'>
+                        <input
+                          type='number'
+                          min='0'
+                          step='0.1'
+                          value={inventoryItemDraft[key]}
+                          onChange={(event) => setInventoryItemDraft((current) => ({ ...current, [key]: event.target.value }))}
+                          className='h-10 w-full rounded-md border border-slate-300 px-2 pr-8 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20'
+                        />
+                        <span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>cm</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label className='text-sm font-medium text-slate-700'>
+                Einzelvolumen
+                <div className='relative mt-1.5'>
+                  <input
+                    type='number'
+                    min='0'
+                    step='0.001'
+                    value={draftDimensionVolumeM3 === null ? inventoryItemDraft.volumeM3 : draftDimensionVolumeM3.toFixed(3)}
+                    onChange={(event) => setInventoryItemDraft((current) => ({ ...current, volumeM3: event.target.value }))}
+                    readOnly={draftDimensionVolumeM3 !== null}
+                    required
+                    className={`h-10 w-full rounded-md border border-slate-300 px-3 pr-10 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 ${draftDimensionVolumeM3 !== null ? "bg-slate-100 text-slate-700" : ""}`}
+                  />
+                  <span className='pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500'>m³</span>
+                </div>
+                <span className='mt-1 block text-xs font-normal text-slate-500'>Ohne Maße kann das Volumen weiterhin direkt angegeben werden.</span>
+              </label>
+              {hasAnyDraftDimension && draftDimensionVolumeM3 === null && (
+                <p className='text-sm text-amber-700'>Für die automatische Berechnung werden Länge, Breite und Höhe benötigt.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type='button' variant='outline' onClick={() => setCustomInventoryRoomId(null)}>Abbrechen</Button>
+              <Button type='submit' disabled={!canAddInventoryItem}><PackagePlus /> Hinzufügen</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       <section className='mb-6 rounded-lg border border-slate-200 bg-white p-3 shadow-sm' aria-label='Planungsschritte'>
         <div className='mb-3 flex items-center justify-between gap-4'>
           <p className='text-sm font-medium text-slate-700'>
@@ -2784,7 +2970,7 @@ export default function OfferPlanner() {
           ))}
 
           {activeStep === "inventory" && usesMoveInventory && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
-            <SectionHeading icon={Box} title='Volumen berechnen' description='Lege Räume und Gegenstände an. Menge mal Einzelvolumen ergibt das Gesamtvolumen für Fahrzeug und Personal.' />
+            <SectionHeading icon={Box} title='Volumen berechnen' description='Erfasse Maße oder ein direktes Einzelvolumen. Menge mal Einzelvolumen ergibt das Gesamtvolumen für Fahrzeug und Personal.' />
             <div className='mb-5 flex items-center justify-between rounded-md border border-emerald-100 bg-emerald-50 px-4 py-3 text-emerald-950'>
               <span className='text-sm font-medium'>Erfasstes Umzugsvolumen</span><strong className='text-2xl'>{volume.toFixed(2)} m³</strong>
             </div>
@@ -2795,15 +2981,27 @@ export default function OfferPlanner() {
                   <Button type='button' variant='ghost' size='icon' title='Raum entfernen' onClick={() => removeRoom(room.id)} disabled={calculation.planning.rooms.length === 1}><Trash2 className='text-red-600' /></Button>
                 </div>
                 <div className='space-y-2'>
-                  {room.items.map((item) => <div key={item.id} className='grid grid-cols-[minmax(0,1fr)_54px_80px_36px] gap-1.5 sm:grid-cols-[minmax(0,1fr)_72px_100px_36px] sm:gap-2'>
-                    <input value={item.name} onChange={(event) => updateInventoryItem(room.id, item.id, { name: event.target.value })} aria-label='Gegenstand' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' />
-                    <input type='number' min='0' value={item.quantity} onChange={(event) => updateInventoryItem(room.id, item.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' />
-                    <div className='relative'><input type='number' min='0' step='0.01' value={item.volumeM3} onChange={(event) => updateInventoryItem(room.id, item.id, { volumeM3: toNumber(event.target.value) })} aria-label='Volumen in Kubikmeter' className='h-9 w-full rounded-md border border-slate-300 px-2 pr-8 text-sm outline-none focus:border-primary' /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>m³</span></div>
-                    <Button type='button' variant='ghost' size='icon' title='Gegenstand entfernen' onClick={() => removeInventoryItem(room.id, item.id)}><Trash2 className='text-red-600' /></Button>
-                  </div>)}
+                  {room.items.map((item) => {
+                    const dimensionVolumeM3 = calculateDimensionVolumeM3(item);
+                    return <div key={item.id} className='rounded-md border border-slate-200 bg-white p-3'>
+                      <div className='grid grid-cols-[minmax(0,1fr)_72px_36px] gap-2'>
+                        <input value={item.name} onChange={(event) => updateInventoryItem(room.id, item.id, { name: event.target.value })} aria-label='Gegenstand' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' />
+                        <input type='number' min='0' value={item.quantity} onChange={(event) => updateInventoryItem(room.id, item.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' />
+                        <Button type='button' variant='ghost' size='icon' title='Gegenstand entfernen' onClick={() => removeInventoryItem(room.id, item.id)}><Trash2 className='text-red-600' /></Button>
+                      </div>
+                      <div className='mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4'>
+                        {([
+                          ["lengthCm", "Länge"],
+                          ["widthCm", "Breite"],
+                          ["heightCm", "Höhe"],
+                        ] as const).map(([key, label]) => <label key={key} className='text-xs text-slate-500'>{label}<div className='relative mt-1'><input type='number' min='0' step='0.1' value={item[key] ?? ""} onChange={(event) => updateInventoryDimension(room.id, item.id, key, toOptionalNumber(event.target.value))} className='h-9 w-full rounded-md border border-slate-300 px-2 pr-8 text-sm text-slate-950 outline-none focus:border-primary' /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>cm</span></div></label>)}
+                        <label className='text-xs text-slate-500'>Volumen<div className='relative mt-1'><input type='number' min='0' step='0.001' value={dimensionVolumeM3 === null ? item.volumeM3 : dimensionVolumeM3.toFixed(3)} onChange={(event) => updateInventoryItem(room.id, item.id, { volumeM3: toNumber(event.target.value) })} readOnly={dimensionVolumeM3 !== null} aria-label='Volumen in Kubikmeter' className={`h-9 w-full rounded-md border border-slate-300 px-2 pr-8 text-sm outline-none focus:border-primary ${dimensionVolumeM3 !== null ? "bg-slate-100 text-slate-700" : ""}`} /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>m³</span></div></label>
+                      </div>
+                    </div>;
+                  })}
                 </div>
                 <div className='mt-3 flex flex-wrap items-center gap-2'>
-                  <Button type='button' variant='outline' size='sm' onClick={() => addInventoryItem(room.id)}><PackagePlus /> Gegenstand</Button>
+                  <Button type='button' variant='outline' size='sm' onClick={() => openInventoryItemDialog(room.id)}><PackagePlus /> Eigener Gegenstand</Button>
                   <span className='text-xs text-slate-500'>Schnell hinzufügen:</span>
                   {commonInventoryItems.map((item) => <button key={item.name} type='button' onClick={() => addCommonInventoryItem(room.id, item)} className='rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-primary hover:text-primary'>{item.name}</button>)}
                 </div>

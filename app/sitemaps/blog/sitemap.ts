@@ -6,10 +6,10 @@ import type { MetadataRoute } from "next";
 // If domain changes, adjust here or move to config
 const BASE_URL = "https://www.umzugshelden.io";
 const MAIN_CATEGORIES: { key: string; path: string }[] = [
-  { key: "seo", path: "/blog/seo" },
-  { key: "webdesign", path: "/blog/webdesign" },
-  { key: "partner", path: "/blog/partner" },
+  { key: "umzug", path: "/blog/umzug" },
+  { key: "streicharbeit", path: "/blog/streicharbeit" },
   { key: "ratgeber", path: "/blog/ratgeber" },
+  { key: "entrümpelung", path: "/blog/entrümpelung" },
 ];
 
 export const dynamic = "force-dynamic"; // always latest content

@@ -1,6 +1,8 @@
 "use server";
 
 import { database } from "@/config/firebase";
+import { createCustomerNumber } from "@/lib/crmIdentifiers";
+import type { CrmCustomer } from "@/types/Crm";
 import { Request, RequestNotice } from "@/types/Request";
 import {
 	and,
@@ -12,9 +14,11 @@ import {
 	setDoc,
 	updateDoc,
 	where,
+	writeBatch,
 } from "firebase/firestore";
 
 const REQUEST_COLLECTION = "requests_umzugshelden";
+const CRM_COLLECTION = "crm_customers_umzugshelden";
 
 // Create a new request scoped to an owner
 export async function createRequest(
@@ -28,20 +32,53 @@ export async function createRequest(
 	}
 ): Promise<Request> {
 	const colRef = collection(database, REQUEST_COLLECTION);
+	const createdAt = Date.now();
+	const requestId = crypto.randomUUID();
 
 	const request: Request = {
-		id: crypto.randomUUID(),
+		id: requestId,
 		ownerId,
 		name: data.name,
 		email: data.email,
 		phone: data.phone,
 		message: data.message,
 		imageUrls: data.imageUrls ?? [],
-		createdAt: Date.now(),
+		createdAt,
 		notices: [],
 	};
+	const imageDetails = request.imageUrls.length
+		? `\n\nAnhänge:\n${request.imageUrls.join("\n")}`
+		: "";
+	const customer: CrmCustomer = {
+		id: requestId,
+		ownerId,
+		customerNumber: createCustomerNumber(requestId, createdAt),
+		name: data.name.trim(),
+		company: "",
+		email: data.email.trim(),
+		phone: data.phone.trim(),
+		street: "",
+		postalCode: "",
+		city: "",
+		status: "lead",
+		source: "Website-Anfrage",
+		tags: ["Website-Anfrage"],
+		notes: [
+			{
+				id: crypto.randomUUID(),
+				text: `${data.message.trim()}${imageDetails}`,
+				createdAt,
+			},
+		],
+		appointments: [],
+		createdAt,
+		updatedAt: createdAt,
+	};
 
-	await setDoc(doc(colRef, request.id), request);
+	const batch = writeBatch(database);
+	batch.set(doc(colRef, request.id), request);
+	batch.set(doc(database, CRM_COLLECTION, customer.id), customer);
+	await batch.commit();
 	return request;
 }
 

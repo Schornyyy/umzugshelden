@@ -11,6 +11,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import type { AdminBlogMainCategory } from "@/types/blog/BlogSubcategory";
+import { BlogBlocksRenderer } from "@/components/blog/BlogBlockRenderer";
+import { normalizeBlogPageSettings } from "@/lib/blogBuilder";
 
 export const dynamic = "force-dynamic";
 
@@ -188,12 +190,27 @@ export default async function BlogArticlePage({
     notFound();
   }
 
+  const settings = normalizeBlogPageSettings(page.settings);
+  const contentWidthClass = {
+    narrow: "max-w-4xl",
+    normal: "max-w-6xl",
+    wide: "max-w-7xl",
+  }[settings.contentWidth];
+
   return (
-    <article className='max-w-5xl mx-auto px-4 py-10 flex flex-col gap-12'>
-      <header className='space-y-4 mb-24'>
-        <nav className='text-xs text-slate-500 flex gap-1 flex-wrap mb-12'>
-          <Link href='/blog/unternehmen' className='hover:underline'>
-            Unternehmen
+    <div
+      className={`min-h-screen px-3 py-8 sm:px-6 sm:py-12 ${
+        settings.fontFamily === "serif" ? "font-serif" : "font-sans"
+      }`}
+      style={{ backgroundColor: settings.pageBackground, color: settings.textColor }}>
+    <article
+      className={`${contentWidthClass} mx-auto flex flex-col gap-12 overflow-hidden`}
+      style={{ backgroundColor: settings.contentBackground }}>
+      <header className='mx-auto w-full max-w-4xl space-y-5 px-5 pb-10 pt-6 text-center sm:px-10 sm:pt-10'>
+        {settings.showBreadcrumbs && (
+        <nav className='mb-10 flex flex-wrap justify-center gap-1 text-xs opacity-70'>
+          <Link href='/blog' className='hover:underline'>
+            Blog
           </Link>
           <span>/</span>
           <Link
@@ -212,16 +229,35 @@ export default async function BlogArticlePage({
             {page.titel}
           </span>
         </nav>
-        <h1 className='text-3xl font-bold tracking-tight text-center'>
+        )}
+        <h1
+          className='text-3xl font-bold tracking-tight sm:text-4xl'
+          style={{ color: settings.headingColor }}>
           {page.titel}
         </h1>
-        <p className='text-slate-600 text-sm  text-center'>
+        <p className='mx-auto max-w-2xl text-sm leading-6 opacity-80'>
           {page.description}
         </p>
+        {settings.showThumbnail && page.thumbnailUrl && (
+          <div className='mx-auto mt-8 aspect-video w-full max-w-3xl overflow-hidden rounded-md bg-slate-100'>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={page.thumbnailUrl}
+              alt={page.titel}
+              className='h-full w-full object-cover'
+            />
+          </div>
+        )}
       </header>
 
-      {/* Sections */}
-      <section className='space-y-24'>
+      {page.blocks?.length ? (
+        <BlogBlocksRenderer
+          blocks={page.blocks}
+          accentColor={settings.accentColor}
+          headingColor={settings.headingColor}
+        />
+      ) : (
+      <section className='space-y-24 px-4'>
         {(() => {
           let imageCounter = 0;
           return page.sections.map((s, i) => {
@@ -234,15 +270,17 @@ export default async function BlogArticlePage({
           });
         })()}
       </section>
+      )}
 
-      {/* FAQ */}
       {page.faq && page.faq.length > 0 && (
-        <section className='space-y-4' id='faq'>
-          <h2 className='text-2xl font-semibold'>Häufige Fragen</h2>
+        <section className='mx-auto w-full max-w-4xl space-y-4 px-5 py-8 sm:px-10' id='faq'>
+          <h2 className='text-2xl font-semibold' style={{ color: settings.headingColor }}>
+            Häufige Fragen
+          </h2>
           <Accordion
             type='single'
             collapsible
-            className='w-full border rounded-lg bg-white'>
+            className='w-full rounded-md border bg-white text-slate-800'>
             {page.faq.map((f, i) => (
               <AccordionItem key={i} value={`faq-${i}`}>
                 <AccordionTrigger className='ml-3'>
@@ -259,24 +297,23 @@ export default async function BlogArticlePage({
         </section>
       )}
 
-      {/* CTA */}
-      <section className='bg-gradient-to-r from-green-600 to-green-500 text-white rounded-xl p-8 flex flex-col md:flex-row md:items-center gap-6'>
+      {settings.showCta && (
+      <section
+        className='mx-5 mb-10 flex flex-col gap-6 rounded-md p-8 text-white md:mx-10 md:flex-row md:items-center'
+        style={{ backgroundColor: settings.accentColor }}>
         <div className='flex-1 space-y-2'>
-          <h2 className='text-xl font-semibold'>
-            Jetzt unverbindlichen Auftrag erstellen
-          </h2>
-          <p className='text-sm opacity-90'>
-            Erhalte passende Angebote und profitiere von unserem Netzwerk.
-          </p>
+          <h2 className='text-xl font-semibold'>{settings.ctaTitle}</h2>
+          <p className='text-sm opacity-90'>{settings.ctaText}</p>
         </div>
         <div>
           <Link
-            href='/auftrag-erstellen'
-            className='inline-block bg-white text-green-700 font-medium px-5 py-3 rounded-lg hover:bg-slate-100 transition text-sm'>
-            Auftrag erstellen
+            href={settings.ctaUrl}
+            className='inline-block rounded bg-white px-5 py-3 text-sm font-medium text-slate-900 transition hover:bg-slate-100'>
+            {settings.ctaLabel}
           </Link>
         </div>
       </section>
+      )}
 
       {/* JSON-LD */}
       <script
@@ -300,5 +337,6 @@ export default async function BlogArticlePage({
         }}
       />
     </article>
+    </div>
   );
 }

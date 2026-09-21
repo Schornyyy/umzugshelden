@@ -18,7 +18,13 @@ import {
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { cacheManager } from "@/lib/cache";
-import type { BlogPage, BlogPageSection, BlogPageFAQEntry } from "@/types/blog/BlogPage";
+import type {
+  BlogPage,
+  BlogPageBlock,
+  BlogPageFAQEntry,
+  BlogPageSection,
+  BlogPageSettings,
+} from "@/types/blog/BlogPage";
 import type { AdminBlogMainCategory } from "@/types/blog/BlogSubcategory";
 import { slugify } from "@/utils/slugify";
 
@@ -41,6 +47,66 @@ const faqSchema = z.object({
   answer: z.string().min(1), // raw JSON string
 });
 
+const colorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const safeLinkSchema = z.string().trim().min(1).max(2048).refine(
+  (value) => value.startsWith("/") || /^(https?:|mailto:|tel:)/i.test(value),
+  "Ungültiger Link"
+);
+
+const blockStyleSchema = z.object({
+  backgroundColor: colorSchema.optional(),
+  textColor: colorSchema.optional(),
+  alignment: z.enum(["left", "center", "right"]).optional(),
+  width: z.enum(["narrow", "normal", "wide", "full"]).optional(),
+  padding: z.enum(["none", "small", "medium", "large"]).optional(),
+  borderRadius: z.enum(["none", "small", "medium", "large"]).optional(),
+});
+
+const blockSchema = z.object({
+  id: z.string().min(1).max(100),
+  type: z.enum([
+    "heading",
+    "richText",
+    "image",
+    "imageText",
+    "quote",
+    "button",
+    "divider",
+    "spacer",
+  ]),
+  heading: z.string().max(300).optional(),
+  headingLevel: z.union([z.literal(2), z.literal(3), z.literal(4)]).optional(),
+  content: z.string().max(500000).optional(),
+  imageUrl: z.string().url().optional(),
+  imageAlt: z.string().max(300).optional(),
+  caption: z.string().max(500).optional(),
+  imagePosition: z.enum(["left", "right", "full"]).optional(),
+  quote: z.string().max(5000).optional(),
+  attribution: z.string().max(300).optional(),
+  buttonLabel: z.string().max(100).optional(),
+  buttonUrl: safeLinkSchema.optional(),
+  buttonStyle: z.enum(["primary", "secondary", "outline"]).optional(),
+  spacerHeight: z.number().int().min(8).max(240).optional(),
+  style: blockStyleSchema.optional(),
+});
+
+const settingsSchema = z.object({
+  contentWidth: z.enum(["narrow", "normal", "wide"]),
+  fontFamily: z.enum(["sans", "serif"]),
+  pageBackground: colorSchema,
+  contentBackground: colorSchema,
+  textColor: colorSchema,
+  headingColor: colorSchema,
+  accentColor: colorSchema,
+  showBreadcrumbs: z.boolean(),
+  showThumbnail: z.boolean(),
+  showCta: z.boolean(),
+  ctaTitle: z.string().max(200),
+  ctaText: z.string().max(500),
+  ctaLabel: z.string().max(100),
+  ctaUrl: safeLinkSchema,
+});
+
 const baseSchema = z.object({
   titel: z.string().min(3),
   description: z.string().min(5),
@@ -51,25 +117,43 @@ const baseSchema = z.object({
   meta_description: z.string().max(300).optional(),
   sections: z.array(sectionSchema).max(20).default([]),
   faq: z.array(faqSchema).max(30).default([]),
+  blocks: z.array(blockSchema).max(100).optional(),
+  settings: settingsSchema.optional(),
   visible: z.boolean().default(false),
 });
 
 export type CreateBlogPageInput = z.infer<typeof baseSchema> & { id?: string };
-export type UpdateBlogPageInput = Partial<CreateBlogPageInput>;
+export type UpdateBlogPageInput = Partial<
+  Omit<CreateBlogPageInput, "thumbnailUrl" | "meta_description">
+> & {
+  thumbnailUrl?: string | null;
+  meta_description?: string | null;
+};
+
+type FirestoreBlogPagePatch = Omit<
+  Partial<BlogPage>,
+  "thumbnailUrl" | "meta_description"
+> & {
+  thumbnailUrl?: string | null;
+  meta_description?: string | null;
+};
 
 function buildSlug(titel: string) {
   return slugify(titel.trim().toLowerCase());
 }
 
-function sanitize<T extends Record<string, unknown>>(obj: T): Partial<T> {
-  const out: Partial<T> = {};
-  (Object.keys(obj) as (keyof T)[]).forEach((k) => {
-    const v = obj[k];
-    if (v !== undefined) {
-      out[k] = v;
-    }
-  });
-  return out;
+function removeUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedDeep) as T;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, nestedValue]) => nestedValue !== undefined)
+        .map(([key, nestedValue]) => [key, removeUndefinedDeep(nestedValue)])
+    ) as T;
+  }
+  return value;
 }
 
 function invalidateCaches(subcategorySlug: string, slug?: string) {
@@ -98,6 +182,8 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
     meta_description: input.meta_description,
     sections: input.sections || [],
     faq: input.faq || [],
+    blocks: input.blocks,
+    settings: input.settings,
     visible: input.visible ?? false,
   });
 
@@ -115,7 +201,7 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
     const existing = await getDoc(ref);
     if (existing.exists()) {
       // do not allow slug change if doc exists already (slug stable from initial title)
-      await updateDoc(ref, {
+      await updateDoc(ref, removeUndefinedDeep({
         titel: parsed.titel,
         description: parsed.description,
         subcategorySlug: parsed.subcategorySlug,
@@ -125,15 +211,17 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
         meta_description: parsed.meta_description || null,
         sections: parsed.sections as BlogPageSection[],
         faq: parsed.faq as BlogPageFAQEntry[],
+        blocks: parsed.blocks as BlogPageBlock[] | undefined,
+        settings: parsed.settings as BlogPageSettings | undefined,
         visible: parsed.visible,
         updatedAt: now,
-      });
+      }));
       const existingData = existing.data() as { slug: string };
       invalidateCaches(parsed.subcategorySlug, existingData.slug);
       revalidateBlogRoutes(parsed.subcategorySlug, existingData.slug);
       return ref.id;
     } else {
-      await setDoc(ref, {
+      await setDoc(ref, removeUndefinedDeep({
         slug,
         titel: parsed.titel,
         description: parsed.description,
@@ -144,16 +232,18 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
         meta_description: parsed.meta_description || null,
         sections: parsed.sections as BlogPageSection[],
         faq: parsed.faq as BlogPageFAQEntry[],
+        blocks: parsed.blocks as BlogPageBlock[] | undefined,
+        settings: parsed.settings as BlogPageSettings | undefined,
         visible: parsed.visible,
         createdAt: now,
         updatedAt: now,
-      });
+      }));
       invalidateCaches(parsed.subcategorySlug, slug);
       revalidateBlogRoutes(parsed.subcategorySlug, slug);
       return ref.id;
     }
   } else {
-    const docRef = await addDoc(colRef, {
+    const docRef = await addDoc(colRef, removeUndefinedDeep({
       slug,
       titel: parsed.titel,
       description: parsed.description,
@@ -164,10 +254,12 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
       meta_description: parsed.meta_description || null,
       sections: parsed.sections as BlogPageSection[],
       faq: parsed.faq as BlogPageFAQEntry[],
+      blocks: parsed.blocks as BlogPageBlock[] | undefined,
+      settings: parsed.settings as BlogPageSettings | undefined,
       visible: parsed.visible,
       createdAt: now,
       updatedAt: now,
-    });
+    }));
     invalidateCaches(parsed.subcategorySlug, slug);
     revalidateBlogRoutes(parsed.subcategorySlug, slug);
     return docRef.id;
@@ -198,6 +290,8 @@ export async function getBlogPageBySlug(subcategorySlug: string, slug: string): 
     meta_description: data.meta_description || undefined,
     sections: (data.sections || []) as BlogPageSection[],
     faq: (data.faq || []) as BlogPageFAQEntry[],
+    blocks: data.blocks as BlogPageBlock[] | undefined,
+    settings: data.settings as BlogPageSettings | undefined,
     visible: data.visible ?? false,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
@@ -228,6 +322,8 @@ export async function listBlogPagesBySubcategory(subcategorySlug: string): Promi
       meta_description: data.meta_description || undefined,
       sections: data.sections || [],
       faq: data.faq || [],
+      blocks: data.blocks as BlogPageBlock[] | undefined,
+      settings: data.settings as BlogPageSettings | undefined,
       visible: data.visible ?? false,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
@@ -257,23 +353,29 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
     subcategorySlug: string;
   } & Partial<BlogPage>;
   const currentSlug: string = existing.slug;
-  const parsedPatch: Partial<BlogPage> = {};
+  const parsedPatch: FirestoreBlogPagePatch = {};
 
   if (patch.titel !== undefined) parsedPatch.titel = patch.titel; // slug not recalculated
   if (patch.description !== undefined) parsedPatch.description = patch.description;
-  if (patch.thumbnailUrl !== undefined) parsedPatch.thumbnailUrl = patch.thumbnailUrl || undefined;
+  if (patch.thumbnailUrl !== undefined) parsedPatch.thumbnailUrl = patch.thumbnailUrl || null;
   if (patch.keywords !== undefined) parsedPatch.keywords = patch.keywords || [];
-  if (patch.meta_description !== undefined) parsedPatch.meta_description = patch.meta_description || undefined;
+  if (patch.meta_description !== undefined) parsedPatch.meta_description = patch.meta_description || null;
   if (patch.sections !== undefined) {
     parsedPatch.sections = patch.sections.map((s) => sectionSchema.parse(s)) as BlogPageSection[];
   }
   if (patch.faq !== undefined) {
     parsedPatch.faq = patch.faq.map((f) => faqSchema.parse(f)) as BlogPageFAQEntry[];
   }
+  if (patch.blocks !== undefined) {
+    parsedPatch.blocks = patch.blocks.map((block) => blockSchema.parse(block)) as BlogPageBlock[];
+  }
+  if (patch.settings !== undefined) {
+    parsedPatch.settings = settingsSchema.parse(patch.settings) as BlogPageSettings;
+  }
   if (patch.visible !== undefined) parsedPatch.visible = patch.visible;
   parsedPatch.updatedAt = Date.now();
 
-  await updateDoc(ref, sanitize(parsedPatch));
+  await updateDoc(ref, removeUndefinedDeep(parsedPatch));
   invalidateCaches(existing.subcategorySlug, currentSlug);
   revalidateBlogRoutes(existing.subcategorySlug, currentSlug);
   return true;
