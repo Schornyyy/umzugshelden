@@ -5,8 +5,8 @@ import {
   type CrmOfferCustomer,
   type CrmOfferDocument,
 } from "@/lib/crmOfferDocument";
+import { launchPdfBrowser, type PdfBrowser } from "@/lib/launchPdfBrowser";
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -92,7 +92,7 @@ function emailReplacements(
 }
 
 export async function POST(request: Request) {
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
+  let browser: PdfBrowser | undefined;
 
   try {
     const body = (await request.json()) as SendOfferRequest;
@@ -120,10 +120,7 @@ export async function POST(request: Request) {
     }
 
     const pdfHtml = createOfferDocumentHtml(body.offer, body.customer);
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    browser = await launchPdfBrowser();
     const page = await browser.newPage();
     await page.setContent(pdfHtml, { waitUntil: "domcontentloaded" });
     const pdf = await page.pdf({

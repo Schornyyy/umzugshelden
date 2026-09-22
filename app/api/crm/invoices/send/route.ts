@@ -4,9 +4,9 @@ import {
   createInvoicePdfFilename,
   getInvoiceTotals,
 } from "@/lib/crmInvoiceDocument";
+import { launchPdfBrowser, type PdfBrowser } from "@/lib/launchPdfBrowser";
 import type { CrmInvoice } from "@/types/Crm";
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -50,12 +50,17 @@ function isSendableInvoice(invoice: CrmInvoice | undefined) {
   return (
     totals.orderGross > 0 &&
     (invoice.invoiceType !== "installment" ||
-      (totals.gross > 0 && totals.gross < totals.orderGross))
+      (totals.gross > 0 && totals.gross < totals.orderGross)) &&
+    (invoice.invoiceType !== "final" ||
+      (Boolean(invoice.relatedInstallmentId) &&
+        Boolean(invoice.relatedInstallmentNumber) &&
+        totals.creditedGross > 0 &&
+        totals.creditedGross < totals.orderGross))
   );
 }
 
 export async function POST(request: Request) {
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
+  let browser: PdfBrowser | undefined;
 
   try {
     const body = (await request.json()) as SendInvoiceRequest;
@@ -85,10 +90,8 @@ export async function POST(request: Request) {
     const invoice = body.invoice as CrmInvoice;
     const totals = getInvoiceTotals(invoice);
     const isInstallment = invoice.invoiceType === "installment";
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    const isFinal = invoice.invoiceType === "final";
+    browser = await launchPdfBrowser();
     const page = await browser.newPage();
     await page.setContent(createInvoiceDocumentHtml(invoice), {
       waitUntil: "domcontentloaded",
@@ -108,7 +111,11 @@ export async function POST(request: Request) {
         customerName: escapeHtml(
           invoice.customerName || invoice.customerCompany || "Damen und Herren"
         ),
-        documentType: isInstallment ? "Abschlagsrechnung" : "Rechnung",
+        documentType: isInstallment
+          ? "Abschlagsrechnung"
+          : isFinal
+            ? "Schlussrechnung"
+            : "Rechnung",
         invoiceNumber: escapeHtml(invoice.invoiceNumber),
         invoiceDate: escapeHtml(formatDate(invoice.issueDate)),
         dueDate: escapeHtml(formatDate(invoice.dueDate)),

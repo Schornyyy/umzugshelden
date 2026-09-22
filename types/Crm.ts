@@ -45,7 +45,7 @@ export interface CrmCustomer {
 }
 
 export type CrmInvoiceStatus = "draft" | "sent" | "paid" | "cancelled";
-export type CrmInvoiceType = "full" | "installment";
+export type CrmInvoiceType = "full" | "installment" | "final";
 
 export interface CrmInvoiceLine {
   id: string;
@@ -106,6 +106,9 @@ export interface CrmInvoice {
   sequenceNumber?: number;
   invoiceType?: CrmInvoiceType;
   installmentGross?: number;
+  relatedInstallmentId?: string;
+  relatedInstallmentNumber?: string;
+  installmentCreditGross?: number;
   status: CrmInvoiceStatus;
   issueDate: string;
   serviceDate: string;

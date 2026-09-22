@@ -42,10 +42,18 @@ export function getInvoiceTotals(invoice: CrmInvoice) {
   const orderVat = roundMoney(orderNet * (invoice.vatPercent / 100));
   const orderGross = roundMoney(orderNet + orderVat);
   const requestedInstallment = Number(invoice.installmentGross);
+  const requestedCredit = Number(invoice.installmentCreditGross);
+  const creditedGross = roundMoney(
+    invoice.invoiceType === "final" && Number.isFinite(requestedCredit)
+      ? Math.min(orderGross, Math.max(0, requestedCredit))
+      : 0
+  );
   const gross = roundMoney(
     invoice.invoiceType === "installment" && Number.isFinite(requestedInstallment)
       ? Math.min(orderGross, Math.max(0, requestedInstallment))
-      : orderGross
+      : invoice.invoiceType === "final"
+        ? Math.max(0, orderGross - creditedGross)
+        : orderGross
   );
   const net = roundMoney(
     invoice.vatPercent > 0
@@ -53,6 +61,12 @@ export function getInvoiceTotals(invoice: CrmInvoice) {
       : gross
   );
   const vat = roundMoney(gross - net);
+  const creditedNet = roundMoney(
+    invoice.vatPercent > 0
+      ? creditedGross / (1 + invoice.vatPercent / 100)
+      : creditedGross
+  );
+  const creditedVat = roundMoney(creditedGross - creditedNet);
 
   return {
     net,
@@ -61,7 +75,13 @@ export function getInvoiceTotals(invoice: CrmInvoice) {
     orderNet,
     orderVat,
     orderGross,
-    remainingGross: roundMoney(Math.max(0, orderGross - gross)),
+    creditedNet,
+    creditedVat,
+    creditedGross,
+    remainingGross:
+      invoice.invoiceType === "installment"
+        ? roundMoney(Math.max(0, orderGross - gross))
+        : 0,
   };
 }
 
@@ -94,7 +114,11 @@ function sanitizeFilePart(value: string) {
 
 export function createInvoicePdfFilename(invoice: CrmInvoice) {
   const number = sanitizeFilePart(invoice.invoiceNumber || invoice.id.slice(0, 8));
-  const prefix = invoice.invoiceType === "installment" ? "Abschlagsrechnung" : "Rechnung";
+  const prefix = invoice.invoiceType === "installment"
+    ? "Abschlagsrechnung"
+    : invoice.invoiceType === "final"
+      ? "Schlussrechnung"
+      : "Rechnung";
   return `${prefix}-${number || "Entwurf"}.pdf`;
 }
 
@@ -105,7 +129,12 @@ export function createInvoiceDocumentHtml(
   const issuer = { ...EMPTY_ISSUER, ...invoice.issuer };
   const totals = getInvoiceTotals(invoice);
   const isInstallment = invoice.invoiceType === "installment";
-  const documentTitle = isInstallment ? "Abschlagsrechnung" : "Rechnung";
+  const isFinal = invoice.invoiceType === "final";
+  const documentTitle = isInstallment
+    ? "Abschlagsrechnung"
+    : isFinal
+      ? "Schlussrechnung"
+      : "Rechnung";
   const displayedInvoiceNumber = invoice.invoiceNumber || "Noch nicht vergeben";
   const senderLine = [
     issuer.companyName,
@@ -149,7 +178,19 @@ export function createInvoiceDocumentHtml(
       <div class="total-row"><span>${escapeHtml(vatLabel)}</span><strong>${escapeHtml(currencyFormatter.format(totals.vat))}</strong></div>
       <div class="total-row gross"><span>Rechnungsbetrag</span><strong>${escapeHtml(currencyFormatter.format(totals.gross))}</strong></div>
       <div class="total-row remaining"><span>Verbleibende Restschuld</span><strong>${escapeHtml(currencyFormatter.format(totals.remainingGross))}</strong></div>`
-    : `<div class="total-row"><span>Nettosumme</span><strong>${escapeHtml(currencyFormatter.format(totals.net))}</strong></div>
+    : isFinal
+      ? `<div class="section-label">Gesamter Auftragswert</div>
+      <div class="total-row"><span>Nettowert</span><strong>${escapeHtml(currencyFormatter.format(totals.orderNet))}</strong></div>
+      <div class="total-row"><span>${escapeHtml(vatLabel)}</span><strong>${escapeHtml(currencyFormatter.format(totals.orderVat))}</strong></div>
+      <div class="total-row order-gross"><span>Auftragswert brutto</span><strong>${escapeHtml(currencyFormatter.format(totals.orderGross))}</strong></div>
+      <div class="section-label installment-label">Abzüglich Abschlagsrechnung ${escapeHtml(invoice.relatedInstallmentNumber || "")}</div>
+      <div class="total-row"><span>Bereits berechnet netto</span><strong>-${escapeHtml(currencyFormatter.format(totals.creditedNet))}</strong></div>
+      <div class="total-row"><span>Darin enthaltene Umsatzsteuer</span><strong>-${escapeHtml(currencyFormatter.format(totals.creditedVat))}</strong></div>
+      <div class="total-row"><span>Abschlag brutto</span><strong>-${escapeHtml(currencyFormatter.format(totals.creditedGross))}</strong></div>
+      <div class="total-row"><span>Schlussbetrag netto</span><strong>${escapeHtml(currencyFormatter.format(totals.net))}</strong></div>
+      <div class="total-row"><span>Umsatzsteuer auf Schlussbetrag</span><strong>${escapeHtml(currencyFormatter.format(totals.vat))}</strong></div>
+      <div class="total-row gross"><span>Zu zahlender Schlussbetrag</span><strong>${escapeHtml(currencyFormatter.format(totals.gross))}</strong></div>`
+      : `<div class="total-row"><span>Nettosumme</span><strong>${escapeHtml(currencyFormatter.format(totals.net))}</strong></div>
       <div class="total-row"><span>${escapeHtml(vatLabel)}</span><strong>${escapeHtml(currencyFormatter.format(totals.vat))}</strong></div>
       <div class="total-row gross"><span>Rechnungsbetrag</span><strong>${escapeHtml(currencyFormatter.format(totals.gross))}</strong></div>`;
 

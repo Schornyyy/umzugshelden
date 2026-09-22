@@ -3,9 +3,9 @@ import {
   createInvoicePdfFilename,
   getInvoiceTotals,
 } from "@/lib/crmInvoiceDocument";
+import { launchPdfBrowser, type PdfBrowser } from "@/lib/launchPdfBrowser";
 import type { CrmInvoice } from "@/types/Crm";
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -23,27 +23,29 @@ function isValidInvoice(invoice: CrmInvoice | undefined) {
   return (
     totals.orderGross > 0 &&
     (invoice.invoiceType !== "installment" ||
-      (totals.gross > 0 && totals.gross < totals.orderGross))
+      (totals.gross > 0 && totals.gross < totals.orderGross)) &&
+    (invoice.invoiceType !== "final" ||
+      (Boolean(invoice.relatedInstallmentId) &&
+        Boolean(invoice.relatedInstallmentNumber) &&
+        totals.creditedGross > 0 &&
+        totals.creditedGross < totals.orderGross))
   );
 }
 
 export async function POST(request: Request) {
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | undefined;
+  let browser: PdfBrowser | undefined;
 
   try {
     const body = (await request.json()) as InvoicePdfRequest;
     if (!isValidInvoice(body.invoice)) {
       return NextResponse.json(
-        { error: "Die Rechnungsdaten oder der Abschlagsbetrag sind ungültig." },
+        { error: "Die Rechnungsdaten oder der Abschlagsbezug sind ungültig." },
         { status: 400 }
       );
     }
 
     const invoice = body.invoice as CrmInvoice;
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    browser = await launchPdfBrowser();
     const page = await browser.newPage();
     await page.setContent(
       createInvoiceDocumentHtml(invoice, { draft: Boolean(body.draft) }),

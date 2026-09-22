@@ -45,6 +45,7 @@ import {
   BellRing,
   Check,
   Download,
+  FileCheck2,
   FilePlus2,
   LoaderCircle,
   Mail,
@@ -135,7 +136,7 @@ type Feedback = {
 };
 
 type InvoiceConfigurationDraft = {
-  invoiceType: CrmInvoiceType;
+  invoiceType: Exclude<CrmInvoiceType, "final">;
   installmentGross: number;
 };
 
@@ -401,10 +402,18 @@ function normalizeInvoice(
     customerNumber: invoice.customerNumber || customer?.customerNumber || "",
     issuer: mergeIssuer(settings.issuer, invoice.issuer),
     sequenceNumber: invoice.sequenceNumber ?? 0,
-    invoiceType: invoice.invoiceType === "installment" ? "installment" : "full",
+    invoiceType:
+      invoice.invoiceType === "installment" || invoice.invoiceType === "final"
+        ? invoice.invoiceType
+        : "full",
     installmentGross:
       Number.isFinite(invoice.installmentGross) && (invoice.installmentGross ?? 0) >= 0
         ? invoice.installmentGross
+        : undefined,
+    installmentCreditGross:
+      Number.isFinite(invoice.installmentCreditGross) &&
+      (invoice.installmentCreditGross ?? 0) >= 0
+        ? invoice.installmentCreditGross
         : undefined,
     taxNote: invoice.taxNote ?? "",
     reminders: invoice.reminders ?? [],
@@ -563,6 +572,15 @@ function getComplianceIssues(
     (totals.gross <= 0 || totals.gross >= totals.orderGross)
   ) {
     issues.push("Der Abschlag muss größer als 0 und kleiner als der Auftragswert sein.");
+  }
+  if (
+    invoice.invoiceType === "final" &&
+    (!invoice.relatedInstallmentId ||
+      !invoice.relatedInstallmentNumber ||
+      totals.creditedGross <= 0 ||
+      totals.creditedGross >= totals.orderGross)
+  ) {
+    issues.push("Die Schlussrechnung benötigt eine gültige Abschlagsrechnung.");
   }
   if (!Number.isFinite(invoice.vatPercent) || invoice.vatPercent < 0) {
     issues.push("Der Umsatzsteuersatz darf nicht negativ sein.");
@@ -767,10 +785,21 @@ export default function InvoiceManager() {
         orderNet: 0,
         orderVat: 0,
         orderGross: 0,
+        creditedNet: 0,
+        creditedVat: 0,
+        creditedGross: 0,
         remainingGross: 0,
       };
   const savedInvoice = draft
     ? invoices.find((invoice) => invoice.id === draft.id)
+    : undefined;
+  const relatedFinalInvoice = savedInvoice?.invoiceType === "installment"
+    ? invoices.find(
+        (invoice) =>
+          invoice.invoiceType === "final" &&
+          invoice.relatedInstallmentId === savedInvoice.id &&
+          invoice.status !== "cancelled"
+      )
     : undefined;
   const draftIsFinalized = draft ? isFinalized(draft) : false;
   const complianceIssues = draft ? getComplianceIssues(draft, !savedInvoice) : [];
@@ -820,6 +849,48 @@ export default function InvoiceManager() {
     setFeedback(null);
   }
 
+  function openOrCreateFinalInvoice() {
+    if (relatedFinalInvoice) {
+      setDraft(relatedFinalInvoice);
+      setFeedback(null);
+      return;
+    }
+    if (
+      !savedInvoice ||
+      !settings ||
+      savedInvoice.invoiceType !== "installment" ||
+      !isFinalized(savedInvoice) ||
+      savedInvoice.status !== "paid"
+    ) {
+      return;
+    }
+
+    const today = dateInputValue();
+    const now = Date.now();
+    const installmentTotals = getTotals(savedInvoice);
+    setDraft({
+      ...savedInvoice,
+      id: crypto.randomUUID(),
+      invoiceNumber: "",
+      sequenceNumber: 0,
+      invoiceType: "final",
+      installmentGross: undefined,
+      relatedInstallmentId: savedInvoice.id,
+      relatedInstallmentNumber: savedInvoice.invoiceNumber,
+      installmentCreditGross: installmentTotals.gross,
+      status: "draft",
+      issueDate: today,
+      dueDate: addDays(today, settings.paymentTermDays),
+      notes:
+        "Vielen Dank für Ihren Auftrag. Bitte überweisen Sie den verbleibenden Schlussbetrag unter Angabe der Rechnungsnummer.",
+      reminders: [],
+      finalizedAt: undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+    setFeedback({ type: "saved", message: "Schlussrechnung als Entwurf vorbereitet." });
+  }
+
   function openSettings() {
     if (!settings) return;
     setSettingsDraft({
@@ -831,7 +902,7 @@ export default function InvoiceManager() {
   }
 
   function openInvoiceConfiguration() {
-    if (!draft) return;
+    if (!draft || draft.invoiceType === "final") return;
     const currentTotals = getTotals(draft);
     setInvoiceConfiguration({
       invoiceType: draft.invoiceType === "installment" ? "installment" : "full",
@@ -866,6 +937,9 @@ export default function InvoiceManager() {
         invoiceConfiguration.invoiceType === "installment"
           ? installmentGross
           : undefined,
+      relatedInstallmentId: undefined,
+      relatedInstallmentNumber: undefined,
+      installmentCreditGross: undefined,
     });
     setInvoiceConfiguration(null);
     setFeedback(null);
@@ -1384,7 +1458,9 @@ export default function InvoiceManager() {
     const documentType =
       savedInvoice.invoiceType === "installment"
         ? "Abschlagsrechnung"
-        : "Rechnung";
+        : savedInvoice.invoiceType === "final"
+          ? "Schlussrechnung"
+          : "Rechnung";
     setInvoiceEmailDraft({
       to: savedInvoice.customerEmail,
       subject: `Ihre ${documentType} ${savedInvoice.invoiceNumber}`,
@@ -1551,6 +1627,11 @@ export default function InvoiceManager() {
                           Abschlag · Rest {currencyFormatter.format(getTotals(invoice).remainingGross)}
                         </span>
                       )}
+                      {invoice.invoiceType === "final" && (
+                        <span className="mt-1 block text-[11px] font-medium text-emerald-700">
+                          Schlussrechnung · Abschlag abgezogen
+                        </span>
+                      )}
                     </button>
                   );
                 })
@@ -1572,10 +1653,35 @@ export default function InvoiceManager() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {savedInvoice?.invoiceType === "installment" && (
+                    <Button
+                      variant="outline"
+                      onClick={openOrCreateFinalInvoice}
+                      disabled={
+                        !relatedFinalInvoice &&
+                        savedInvoice.status !== "paid"
+                      }
+                      title={
+                        relatedFinalInvoice
+                          ? "Vorhandene Schlussrechnung öffnen"
+                          : savedInvoice.status === "paid"
+                            ? "Schlussrechnung aus diesem Abschlag erstellen"
+                            : "Abschlagsrechnung zuerst als bezahlt markieren und speichern"
+                      }
+                    >
+                      <FileCheck2 />
+                      {relatedFinalInvoice ? "Schlussrechnung öffnen" : "Schlussrechnung erstellen"}
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={openInvoiceConfiguration}
-                    disabled={draftIsFinalized}
+                    disabled={draftIsFinalized || draft.invoiceType === "final"}
+                    title={
+                      draft.invoiceType === "final"
+                        ? "Der Abschlag ist fest mit dieser Schlussrechnung verknüpft"
+                        : undefined
+                    }
                   >
                     <SlidersHorizontal /> Rechnung einstellen
                   </Button>
@@ -1913,6 +2019,29 @@ export default function InvoiceManager() {
                     <div className="flex justify-between text-amber-800">
                       <span className="font-medium">Verbleibende Restschuld</span>
                       <strong>{currencyFormatter.format(totals.remainingGross)}</strong>
+                    </div>
+                  </>
+                ) : draft.invoiceType === "final" ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600">Auftragswert brutto</span>
+                      <strong>{currencyFormatter.format(totals.orderGross)}</strong>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>
+                        Abschlagsrechnung {draft.relatedInstallmentNumber || ""}
+                      </span>
+                      <strong>-{currencyFormatter.format(totals.creditedGross)}</strong>
+                    </div>
+                    <div className="flex justify-between border-t border-slate-300 pt-3 text-base">
+                      <span className="font-semibold">Zu zahlender Schlussbetrag</span>
+                      <strong>{currencyFormatter.format(totals.gross)}</strong>
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Netto / MwSt.</span>
+                      <span>
+                        {currencyFormatter.format(totals.net)} / {currencyFormatter.format(totals.vat)}
+                      </span>
                     </div>
                   </>
                 ) : (
