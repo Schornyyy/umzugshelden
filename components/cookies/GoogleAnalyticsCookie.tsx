@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import Cookies from "js-cookie";
 import { usePathname, useSearchParams } from "next/navigation";
 
-const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID || "G-J23E7LL230";
 
 const injectGaTag = (id: string) => {
   if (typeof window === "undefined") return;
