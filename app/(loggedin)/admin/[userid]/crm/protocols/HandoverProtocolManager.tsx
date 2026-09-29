@@ -3,8 +3,16 @@
 import SignaturePadField from "@/components/crm/SignaturePadField";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import MediathekDialog from "@/components/utils/MediathekDialog";
-import { database } from "@/config/firebase";
+import { auth, database } from "@/config/firebase";
 import { createCustomerNumber } from "@/lib/crmIdentifiers";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type {
@@ -33,11 +41,14 @@ import {
   FilePlus2,
   ImagePlus,
   LoaderCircle,
+  Mail,
   MapPin,
   Plus,
   Printer,
+  RefreshCw,
   Save,
   Search,
+  Send,
   ShieldCheck,
   Trash2,
   UserRound,
@@ -93,6 +104,12 @@ type StoredInvoiceSettings = {
 
 type Feedback = {
   type: "saved" | "error";
+  message: string;
+};
+
+type ProtocolEmailDraft = {
+  to: string;
+  subject: string;
   message: string;
 };
 
@@ -437,6 +454,29 @@ function normalizeSignature(value: unknown) {
   };
 }
 
+function normalizeCustomerAccess(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+  const source = value as Record<string, unknown>;
+  if (
+    typeof source.email !== "string" ||
+    typeof source.sentAt !== "number" ||
+    typeof source.expiresAt !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    email: source.email,
+    sentAt: source.sentAt,
+    expiresAt: source.expiresAt,
+    completedAt:
+      typeof source.completedAt === "number" ? source.completedAt : undefined,
+    downloadedAt:
+      typeof source.downloadedAt === "number" ? source.downloadedAt : undefined,
+    emailSentAt:
+      typeof source.emailSentAt === "number" ? source.emailSentAt : undefined,
+  };
+}
+
 function normalizeProtocol(
   value: CrmHandoverProtocol,
   documentId: string,
@@ -498,6 +538,7 @@ function normalizeProtocol(
     accuracyConfirmed: Boolean(source.accuracyConfirmed),
     customerSignature: normalizeSignature(source.customerSignature),
     contractorSignature: normalizeSignature(source.contractorSignature),
+    customerAccess: normalizeCustomerAccess(source.customerAccess),
     finalizedAt: isFinalized
       ? source.finalizedAt ?? source.updatedAt ?? createdAt
       : undefined,
@@ -515,6 +556,9 @@ function cloneProtocol(protocol: CrmHandoverProtocol) {
     photos: protocol.photos.map((photo) => ({ ...photo })),
     customerSignature: { ...protocol.customerSignature },
     contractorSignature: { ...protocol.contractorSignature },
+    customerAccess: protocol.customerAccess
+      ? { ...protocol.customerAccess }
+      : undefined,
   };
 }
 
@@ -823,6 +867,10 @@ export default function HandoverProtocolManager() {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [protocolEmailDraft, setProtocolEmailDraft] =
+    useState<ProtocolEmailDraft | null>(null);
+  const [protocolEmailError, setProtocolEmailError] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const deferredSearch = useDeferredValue(
     search.trim().toLocaleLowerCase("de-DE")
@@ -956,6 +1004,11 @@ export default function HandoverProtocolManager() {
   );
   const draftIsFinalized = draft?.status === "finalized";
   const validationIssues = draft ? getValidationIssues(draft, offers) : [];
+  const contractorHasSigned = Boolean(
+    draft?.contractorSignature.name.trim() &&
+      isSignatureDataUrl(draft.contractorSignature.dataUrl) &&
+      isValidDateTime(draft.contractorSignature.signedAt)
+  );
 
   function updateDraft(
     patch: Partial<CrmHandoverProtocol>,
@@ -1240,6 +1293,81 @@ export default function HandoverProtocolManager() {
       });
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  function openProtocolEmailDialog() {
+    if (!draft || draftIsFinalized) return;
+    if (!contractorHasSigned) {
+      setFeedback({
+        type: "error",
+        message:
+          "Bitte zuerst als Auftragnehmervertretung unterschreiben und anschließend an den Kunden senden.",
+      });
+      return;
+    }
+    setProtocolEmailDraft({
+      to: draft.customerEmail,
+      subject: `Übergabeprotokoll ${draft.protocolNumber} zur Prüfung`,
+      message:
+        "bitte prüfen Sie das vorbereitete Übergabeprotokoll, ergänzen Sie bei Bedarf Feststellungen oder Notizen und unterschreiben Sie es anschließend online.",
+    });
+    setProtocolEmailError("");
+  }
+
+  async function sendProtocolEmail() {
+    if (!draft || !protocolEmailDraft || draftIsFinalized) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(protocolEmailDraft.to.trim())) {
+      setProtocolEmailError("Bitte eine gültige Empfängeradresse angeben.");
+      return;
+    }
+    if (!protocolEmailDraft.subject.trim() || !protocolEmailDraft.message.trim()) {
+      setProtocolEmailError("Betreff und Nachricht dürfen nicht leer sein.");
+      return;
+    }
+
+    setIsSendingEmail(true);
+    setProtocolEmailError("");
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error("Die Anmeldung ist abgelaufen.");
+      const response = await fetch("/api/crm/handover/share", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: protocolEmailDraft.to.trim(),
+          subject: protocolEmailDraft.subject.trim(),
+          message: protocolEmailDraft.message.trim(),
+          protocol: draft,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = Array.isArray(result.issues) ? result.issues[0] : "";
+        throw new Error(
+          [result.error || "Das Protokoll konnte nicht versendet werden.", detail]
+            .filter(Boolean)
+            .join(" ")
+        );
+      }
+
+      updateProtocolList(result.protocol as CrmHandoverProtocol);
+      setProtocolEmailDraft(null);
+      setFeedback({
+        type: "saved",
+        message: "Persönlicher Link wurde per E-Mail versendet.",
+      });
+    } catch (error) {
+      setProtocolEmailError(
+        error instanceof Error
+          ? error.message
+          : "Das Protokoll konnte nicht versendet werden."
+      );
+    } finally {
+      setIsSendingEmail(false);
     }
   }
 
@@ -1555,10 +1683,49 @@ export default function HandoverProtocolManager() {
                     ? "Finalisierter, unveränderlicher Übergabesnapshot"
                     : "Bearbeitbarer Entwurf des Übergabeprotokolls"}
                 </p>
+                {draft.customerAccess && (
+                  <p className={`mt-1 text-xs font-medium ${
+                    draft.customerAccess.completedAt
+                      ? "text-emerald-700"
+                      : draft.customerAccess.expiresAt > Date.now()
+                        ? "text-blue-700"
+                        : "text-amber-700"
+                  }`}>
+                    {draft.customerAccess.completedAt
+                      ? `Online abgeschlossen am ${formatDateTime(
+                          new Date(draft.customerAccess.completedAt).toISOString()
+                        )}`
+                      : draft.customerAccess.expiresAt > Date.now()
+                        ? `Kundenlink aktiv bis ${formatDateTime(
+                            new Date(draft.customerAccess.expiresAt).toISOString()
+                          )}`
+                        : "Kundenlink abgelaufen"}
+                  </p>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" onClick={printProtocol}>
                   <Printer /> Drucken
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={openProtocolEmailDialog}
+                  disabled={
+                    isSaving ||
+                    isSendingEmail ||
+                    draftIsFinalized ||
+                    !contractorHasSigned
+                  }
+                  title={
+                    !contractorHasSigned
+                      ? "Bitte zuerst als Auftragnehmervertretung unterschreiben"
+                      : draft.customerAccess
+                      ? "Erstellt einen neuen 48-Stunden-Link und deaktiviert den bisherigen Link"
+                      : "Persönlichen 48-Stunden-Link per E-Mail senden"
+                  }
+                >
+                  {draft.customerAccess ? <RefreshCw /> : <Mail />}
+                  {draft.customerAccess ? "Link erneuern" : "Per E-Mail senden"}
                 </Button>
                 <Button
                   variant="outline"
@@ -2084,6 +2251,30 @@ export default function HandoverProtocolManager() {
                         disabled={draftIsFinalized}
                       />
                     </div>
+                    {!draftIsFinalized && (
+                      <div className="mt-4 border-l-4 border-blue-700 bg-slate-50 px-4 py-3">
+                        <p className="text-xs leading-5 text-slate-600">
+                          Nach deiner Unterschrift kannst du das vorbereitete
+                          Protokoll direkt mit einem 48 Stunden gültigen Link an
+                          den Kunden senden.
+                        </p>
+                        <Button
+                          type="button"
+                          className="mt-3 w-full"
+                          onClick={openProtocolEmailDialog}
+                          disabled={isSaving || isSendingEmail || !contractorHasSigned}
+                        >
+                          {isSendingEmail ? (
+                            <LoaderCircle className="animate-spin" />
+                          ) : (
+                            <Mail />
+                          )}
+                          {draft.customerAccess
+                            ? "Kundenlink erneuern"
+                            : "Unterschrieben an Kunden senden"}
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -2124,6 +2315,98 @@ export default function HandoverProtocolManager() {
           </section>
         )}
       </div>
+
+      <Dialog
+        open={Boolean(protocolEmailDraft)}
+        onOpenChange={(open) => {
+          if (!open) setProtocolEmailDraft(null);
+        }}
+      >
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {draft?.customerAccess
+                ? "Kundenlink erneuern"
+                : "Protokoll per E-Mail senden"}
+            </DialogTitle>
+            <DialogDescription>
+              Der neue persönliche Link ist 48 Stunden gültig. Ein vorhandener Link
+              wird dadurch sofort ungültig.
+            </DialogDescription>
+          </DialogHeader>
+          {protocolEmailDraft && (
+            <div className="space-y-4 py-1">
+              <label className="block text-sm font-medium text-slate-700">
+                Empfänger
+                <input
+                  type="email"
+                  value={protocolEmailDraft.to}
+                  onChange={(event) =>
+                    setProtocolEmailDraft({
+                      ...protocolEmailDraft,
+                      to: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Betreff
+                <input
+                  value={protocolEmailDraft.subject}
+                  onChange={(event) =>
+                    setProtocolEmailDraft({
+                      ...protocolEmailDraft,
+                      subject: event.target.value,
+                    })
+                  }
+                  className={inputClassName}
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Nachricht
+                <textarea
+                  value={protocolEmailDraft.message}
+                  onChange={(event) =>
+                    setProtocolEmailDraft({
+                      ...protocolEmailDraft,
+                      message: event.target.value,
+                    })
+                  }
+                  rows={5}
+                  className={textareaClassName}
+                />
+              </label>
+              {protocolEmailError && (
+                <p className="text-sm font-medium text-red-600">
+                  {protocolEmailError}
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProtocolEmailDraft(null)}>
+              Abbrechen
+            </Button>
+            <Button
+              onClick={() => void sendProtocolEmail()}
+              disabled={
+                isSendingEmail ||
+                !protocolEmailDraft?.to.trim() ||
+                !protocolEmailDraft.subject.trim() ||
+                !protocolEmailDraft.message.trim()
+              }
+            >
+              {isSendingEmail ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <Send />
+              )}
+              Link senden
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

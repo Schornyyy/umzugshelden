@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { database } from "@/config/firebase";
+import { auth, database } from "@/config/firebase";
 import { createCustomerNumber } from "@/lib/crmIdentifiers";
 import type { CrmOfferDocument } from "@/lib/crmOfferDocument";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
@@ -52,6 +52,7 @@ import {
   Save,
   Search,
   Send,
+  Star,
   Tag,
   Trash2,
   UserRound,
@@ -254,6 +255,11 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   const [isSendingOffer, setIsSendingOffer] = useState(false);
   const [offerEmailFeedback, setOfferEmailFeedback] = useState<"idle" | "sent">("idle");
   const [offerEmailError, setOfferEmailError] = useState("");
+  const [isRequestingReview, setIsRequestingReview] = useState(false);
+  const [reviewFeedback, setReviewFeedback] = useState<{
+    type: "sent" | "error";
+    message: string;
+  } | null>(null);
   const [noteText, setNoteText] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("de-DE"));
 
@@ -309,6 +315,10 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     const customer = customers.find((item) => item.id === selectedCustomerId) ?? null;
     setDraft(customer ? { ...customer, tags: [...customer.tags] } : null);
   }, [customers, selectedCustomerId]);
+
+  useEffect(() => {
+    setReviewFeedback(null);
+  }, [selectedCustomerId]);
 
   const filteredCustomers = customers.filter((customer) => {
     const matchesStatus = statusFilter === "all" || customer.status === statusFilter;
@@ -454,6 +464,61 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       setFeedback("saved");
     } catch {
       setFeedback("error");
+    }
+  }
+
+  async function requestGoogleReview() {
+    const ownerId = companyData?.id;
+    if (!draft || !ownerId) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
+      setReviewFeedback({
+        type: "error",
+        message: "Bitte zuerst eine gültige E-Mail-Adresse speichern.",
+      });
+      return;
+    }
+
+    setIsRequestingReview(true);
+    setReviewFeedback(null);
+    try {
+      const idToken = await auth.currentUser?.getIdToken(true);
+      if (!idToken) throw new Error("Die Anmeldung ist abgelaufen.");
+
+      const response = await fetch("/api/crm/request-review", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ customerId: draft.id, ownerId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          result.error || "Die Bewertungs-E-Mail konnte nicht versendet werden."
+        );
+      }
+
+      const note = result.note as CrmNote;
+      replaceCustomer({
+        ...draft,
+        notes: [note, ...draft.notes],
+        updatedAt: result.updatedAt as number,
+      });
+      setReviewFeedback({
+        type: "sent",
+        message: "Bewertungs-E-Mail versendet.",
+      });
+    } catch (error) {
+      setReviewFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Bewertungs-E-Mail konnte nicht versendet werden.",
+      });
+    } finally {
+      setIsRequestingReview(false);
     }
   }
 
@@ -799,8 +864,10 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
                 <span className='flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-lg font-bold text-white'>{draft.name.slice(0, 1).toUpperCase()}</span>
                 <div className='min-w-0'><h2 className='truncate text-xl font-bold text-slate-950'>{draft.name}</h2><p className='mt-1 text-sm text-slate-500'>Kunde seit {formatDate(draft.createdAt)}</p></div>
               </div>
-              <div className='flex flex-wrap items-center gap-2'>
+              <div className='flex flex-wrap items-center justify-end gap-2'>
+                {reviewFeedback && <span className={`text-xs font-medium ${reviewFeedback.type === "sent" ? "text-emerald-700" : "text-red-600"}`}>{reviewFeedback.message}</span>}
                 <Button variant='outline' onClick={openAppointmentDialog}><CalendarDays /> Termin</Button>
+                <Button variant='outline' onClick={() => void requestGoogleReview()} disabled={isRequestingReview || !draft.email.trim()} title={draft.email.trim() ? "Google-Bewertungslink per E-Mail senden" : "Keine E-Mail-Adresse hinterlegt"}>{isRequestingReview ? <LoaderCircle className='animate-spin' /> : <Star />} {isRequestingReview ? "Wird gesendet ..." : "Bewertung anfragen"}</Button>
                 <Button asChild><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}`}><CircleDollarSign /> Angebot erstellen</Link></Button>
               </div>
             </div>

@@ -1,7 +1,7 @@
-import { getUserById } from "@/actions/userActions";
+import { getUserByEmail } from "@/actions/userActions";
 import { auth } from "@/config/firebase";
 import { User } from "@/types/UserType";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState } from "react";
 
 interface CompanyDataContextType {
@@ -28,49 +28,43 @@ export const CompanyDataProvider = ({
 }) => {
   const [companyData, setCompanyData] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [authChecked, setAuthChecked] = useState<boolean>(false);
   const params = useParams<{ userid: string }>();
+  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (user) => {
-      if (user) {
-        try {
-          const data = await getUserById(params.userid);
-
-          if (data) {
-            setCompanyData(data);
-          } else {
-            router.push("/login");
-          }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-        } catch (error: any) {
-          router.push("/login");
-        }
-      } else {
-        setAuthChecked(true);
-        router.push("/login");
+      if (!user?.email) {
+        setCompanyData(null);
+        setLoading(false);
+        router.replace("/login");
+        return;
       }
-      setAuthChecked(true);
-      setLoading(false);
-    });
-    return () => unsubscribe();
-  }, [params.userid, router]);
 
-  useEffect(() => {
-    if (authChecked && auth.currentUser) {
-      const fetchCompanyData = async () => {
-        const data = await getUserById(params.userid);
-
-        if (data) {
-          setCompanyData(data);
-        } else {
-          router.push("/login");
+      try {
+        await user.reload();
+        const account = user.email ? await getUserByEmail(user.email) : null;
+        if (!account || account.role !== "admin") {
+          setCompanyData(null);
+          router.replace("/login");
+          return;
         }
-      };
-      fetchCompanyData();
-    }
-  }, [authChecked, params.userid, router]);
+
+        setCompanyData(account);
+        if (params.userid !== account.id) {
+          router.replace(
+            pathname.replace(/^\/admin\/[^/]+/, `/admin/${account.id}`)
+          );
+        }
+      } catch {
+        setCompanyData(null);
+        router.replace("/login");
+      } finally {
+        setLoading(false);
+      }
+    });
+    return unsubscribe;
+  }, [params.userid, pathname, router]);
 
   if (loading) {
     return <div>Loading...</div>;

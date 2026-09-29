@@ -182,6 +182,15 @@ export interface CrmHandoverContractor {
   phone: string;
 }
 
+export interface CrmHandoverCustomerAccess {
+  email: string;
+  sentAt: number;
+  expiresAt: number;
+  completedAt?: number;
+  downloadedAt?: number;
+  emailSentAt?: number;
+}
+
 export interface CrmHandoverProtocol {
   id: string;
   ownerId: string;
@@ -213,6 +222,7 @@ export interface CrmHandoverProtocol {
   accuracyConfirmed: boolean;
   customerSignature: CrmHandoverSignature;
   contractorSignature: CrmHandoverSignature;
+  customerAccess?: CrmHandoverCustomerAccess;
   finalizedAt?: number;
   createdAt: number;
   updatedAt: number;
