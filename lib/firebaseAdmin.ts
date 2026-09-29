@@ -25,6 +25,12 @@ function getAdminApp(): App {
   const applicationCredentials =
     process.env.GOOGLE_APPLICATION_CREDENTIALS?.trim();
   if (applicationCredentials) {
+    if (applicationCredentials.startsWith("{")) {
+      return initializeApp({
+        credential: cert(JSON.parse(applicationCredentials)),
+        projectId,
+      });
+    }
     return initializeApp({ credential: applicationDefault(), projectId });
   }
 
