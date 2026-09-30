@@ -5,6 +5,7 @@ import { cities } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 import { redirectUser } from "@/actions/userActions";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
+import CityServiceMigrationPanel from "@/components/admin/city/CityServiceMigrationPanel";
 
 const PAGE_SIZE = 24;
 
@@ -12,6 +13,7 @@ export default function AdminCitiesPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const ownerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
 
   const [search, setSearch] = useState("");
   // page state (1-based). Initialize synchronously from window.location.search
@@ -147,6 +149,14 @@ export default function AdminCitiesPage() {
   return (
     <div className='mx-auto max-w-5xl py-2 md:px-6 md:py-8'>
       <h1 className='mb-5 text-2xl font-bold'>Städte Übersicht</h1>
+      {companyData && ownerId && (
+        <CityServiceMigrationPanel ownerId={ownerId} userId={companyData.id} />
+      )}
+      {companyData && !ownerId && (
+        <p className='mb-6 text-sm text-red-600'>
+          Owner-ID nicht konfiguriert.
+        </p>
+      )}
       <div className='mb-5 rounded-md border border-slate-200 bg-white p-4 shadow-sm'>
         <label
           className='block text-sm font-medium text-gray-700 mb-1'

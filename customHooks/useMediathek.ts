@@ -22,12 +22,14 @@ import { database } from '@/config/firebase';
 import { storage } from '@/config/firebase';
 import { MediathekItem } from '@/types/utils/MediathekType';
 import { useCompanyData } from '@/provider/CompanyDataProvider';
+import { optimizeMediaFile } from '@/utils/optimizeMediaImage';
 
 const COL = 'mediathek';
 const DEFAULT_PAGE_SIZE = 30;
 const CACHE_TTL_MS = 60_000; // 60s
 
 interface MediaCache {
+  ownerId: string;
   items: MediathekItem[];
   ts: number;
   lastDoc: QueryDocumentSnapshot<DocumentData> | null;
@@ -87,8 +89,14 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
 
   const refresh = useCallback(async (force = false) => {
     setError(null);
+    const ownerId = companyData?.id;
+    if (!ownerId) {
+      setItems([]);
+      setHasMore(false);
+      return;
+    }
     const now = Date.now();
-    if (!force && _mediaCache && (now - _mediaCache.ts) < CACHE_TTL_MS) {
+    if (!force && _mediaCache?.ownerId === ownerId && (now - _mediaCache.ts) < CACHE_TTL_MS) {
       setItems(_mediaCache.items);
       lastDocRef.current = _mediaCache.lastDoc;
       setHasMore(!_mediaCache.exhausted);
@@ -97,7 +105,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
     setLoading(true);
     try {
       const colRef = collection(database, COL);
-      const qCol = query(colRef, and(where("ownerId", "==", companyData!.id)),orderBy('createdAt', 'desc'), limit(pageSize));
+      const qCol = query(colRef, and(where("ownerId", "==", ownerId)),orderBy('createdAt', 'desc'), limit(pageSize));
       const snap = await getDocs(qCol);
       const data: MediathekItem[] = snap.docs.map(mapDoc);
       const last = snap.docs[snap.docs.length - 1] || null;
@@ -105,7 +113,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
       const exhausted = snap.docs.length < pageSize;
       setItems(data);
       setHasMore(!exhausted);
-      _mediaCache = { items: data, ts: Date.now(), lastDoc: last, exhausted };
+      _mediaCache = { ownerId, items: data, ts: Date.now(), lastDoc: last, exhausted };
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Fehler beim Laden';
       setError(msg);
@@ -116,12 +124,14 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return;
+    const ownerId = companyData?.id;
+    if (!ownerId) return;
     if (!lastDocRef.current) return; // nothing to paginate from
     setLoading(true);
     setError(null);
     try {
       const colRef = collection(database, COL);
-      const qCol = query(colRef, orderBy('createdAt', 'desc'), startAfter(lastDocRef.current), limit(pageSize));
+      const qCol = query(colRef, and(where("ownerId", "==", ownerId)), orderBy('createdAt', 'desc'), startAfter(lastDocRef.current), limit(pageSize));
       const snap = await getDocs(qCol);
       if (!snap.size) {
         setHasMore(false);
@@ -133,7 +143,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
       lastDocRef.current = last;
       setItems(prev => {
         const merged = [...prev, ...newItems];
-        _mediaCache = { items: merged, ts: Date.now(), lastDoc: last, exhausted: newItems.length < pageSize };
+        _mediaCache = { ownerId, items: merged, ts: Date.now(), lastDoc: last, exhausted: newItems.length < pageSize };
         return merged;
       });
       if (snap.docs.length < pageSize) {
@@ -146,34 +156,31 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
     } finally {
       setLoading(false);
     }
-  }, [hasMore, loading, pageSize]);
+  }, [companyData, hasMore, loading, pageSize]);
 
   const upload = useCallback(async (file: File, alt?: string) => {
     setUploading(true);
     setError(null);
     try {
-      const storagePath = `mediathek/${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, storagePath);
-      await uploadBytes(storageRef, file, { contentType: file.type });
-      const url = await getDownloadURL(storageRef);
-      // optional: attempt to read dimensions
-      let width: number | undefined; let height: number | undefined;
-      if (file.type.startsWith('image/')) {
-        try {
-          const bmp = await createImageBitmap(file);
-          width = bmp.width; height = bmp.height; bmp.close();
-        } catch {/* ignore */}
+      if (!companyData?.id) {
+        throw new Error('Für den Upload ist eine Unternehmens-ID erforderlich.');
       }
+      const optimized = await optimizeMediaFile(file);
+      const uploadFile = optimized.file;
+      const storagePath = `mediathek/${Date.now()}-${uploadFile.name}`;
+      const storageRef = ref(storage, storagePath);
+      await uploadBytes(storageRef, uploadFile, { contentType: uploadFile.type });
+      const url = await getDownloadURL(storageRef);
       const meta: Omit<MediathekItem, 'id'> = {
-        ownerId: companyData ? companyData.id : "",
+        ownerId: companyData.id,
         url,
-        thumbUrl: url, // placeholder for future real thumb
-        name: file.name,
+        thumbUrl: url,
+        name: uploadFile.name,
         alt,
-        contentType: file.type,
-        size: file.size,
-        width,
-        height,
+        contentType: uploadFile.type,
+        size: uploadFile.size,
+        width: optimized.width,
+        height: optimized.height,
         createdAt: Date.now(),
         storagePath,
       };
@@ -184,7 +191,8 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
       const newItem: MediathekItem = { id: docRef.id, ...meta };
       setItems(prev => [newItem, ...prev]);
       // update cache
-      _mediaCache = { items: [newItem, ...(_mediaCache?.items || [])], ts: Date.now(), lastDoc: _mediaCache?.lastDoc || null, exhausted: _mediaCache?.exhausted ?? true };
+      const cachedItems = _mediaCache?.ownerId === companyData.id ? _mediaCache.items : [];
+      _mediaCache = { ownerId: companyData.id, items: [newItem, ...cachedItems], ts: Date.now(), lastDoc: _mediaCache?.ownerId === companyData.id ? _mediaCache.lastDoc : null, exhausted: _mediaCache?.ownerId === companyData.id ? _mediaCache.exhausted : true };
       return newItem;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Fehler beim Upload';
@@ -193,7 +201,7 @@ export function useMediathek(opts: UseMediathekOptions = {}): UseMediathekReturn
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [companyData]);
 
   const updateAlt = useCallback(async (id: string, alt: string) => {
     try {

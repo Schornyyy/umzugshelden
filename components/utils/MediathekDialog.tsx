@@ -20,6 +20,27 @@ interface MediathekDialogProps {
   accept?: string; // file input accept override
 }
 
+function acceptsMedia(
+  item: { contentType?: string; name: string },
+  accept: string,
+) {
+  if (!accept || accept === "*/*") return true;
+  const rules = accept.split(",").map((rule) => rule.trim().toLowerCase());
+  const contentType = item.contentType?.toLowerCase() || "";
+  const fileName = item.name.toLowerCase();
+  return rules.some((rule) => {
+    if (rule === "image/*") {
+      return contentType.startsWith("image/") || /\.(avif|gif|jpe?g|png|svg|webp)$/.test(fileName);
+    }
+    if (rule === "video/*") {
+      return contentType.startsWith("video/") || /\.(m4v|mov|mp4|ogg|webm)$/.test(fileName);
+    }
+    if (rule.endsWith("/*")) return contentType.startsWith(rule.slice(0, -1));
+    if (rule.startsWith(".")) return fileName.endsWith(rule);
+    return contentType === rule;
+  });
+}
+
 const MediathekDialog: React.FC<MediathekDialogProps> = ({
   btnName,
   onSelect,
@@ -66,8 +87,9 @@ const MediathekDialog: React.FC<MediathekDialogProps> = ({
       : null;
 
   const filteredItems = useMemo(() => {
-    if (filter === "all") return items;
-    return items.filter((i) => {
+    const acceptedItems = items.filter((item) => acceptsMedia(item, accept));
+    if (filter === "all") return acceptedItems;
+    return acceptedItems.filter((i) => {
       const ct = i.contentType || "";
       if (filter === "image") return ct.startsWith("image/");
       if (filter === "video") return ct.startsWith("video/");
@@ -78,7 +100,7 @@ const MediathekDialog: React.FC<MediathekDialogProps> = ({
         ct !== "application/pdf"
       );
     });
-  }, [items, filter]);
+  }, [accept, items, filter]);
 
   const handleFiles = useCallback(
     async (files: FileList | null) => {
@@ -141,7 +163,8 @@ const MediathekDialog: React.FC<MediathekDialogProps> = ({
           <DialogTitle>Mediathek</DialogTitle>
           <DialogDescription>
             Wähle Dateien aus oder lade neue hoch. Filtere, bearbeite Alt-Texte
-            und wähle mehrere Medien bei Bedarf.
+            und wähle mehrere Medien bei Bedarf. Bilder werden automatisch
+            verkleinert, komprimiert und als WebP gespeichert.
           </DialogDescription>
         </DialogHeader>
         <div className='flex flex-col gap-4'>
@@ -288,6 +311,11 @@ const MediathekDialog: React.FC<MediathekDialogProps> = ({
                   disabled={uploading}
                   className='text-xs'
                 />
+                {accept.startsWith("image/") && (
+                  <p className='mt-2 text-[11px] leading-4 text-slate-500'>
+                    Automatisch WebP, maximal 2560 px, komprimierte Dateigröße.
+                  </p>
+                )}
               </div>
               <div className='border rounded p-2 text-xs space-y-2'>
                 <div className='flex justify-between'>

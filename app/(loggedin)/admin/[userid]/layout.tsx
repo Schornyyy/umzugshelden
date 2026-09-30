@@ -8,10 +8,16 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
-import React, { ReactNode, useEffect } from "react";
+import { usePathname } from "next/navigation";
+import React, { ReactNode, useEffect, useState } from "react";
 
 const Layout = ({ children }: { children: ReactNode }) => {
   const { companyData } = useCompanyData();
+  const pathname = usePathname();
+  const isEditorRoute =
+    pathname.includes("/citys/vorlagen/") ||
+    /\/citys\/[^/]+\/(?:services\/[^/]+|stadtseite)\/?$/.test(pathname);
+  const [sidebarOpen, setSidebarOpen] = useState(!isEditorRoute);
 
   useEffect(() => {
     if (!companyData?.id) {
@@ -19,10 +25,18 @@ const Layout = ({ children }: { children: ReactNode }) => {
     }
   }, [companyData]);
 
+  useEffect(() => {
+    if (isEditorRoute) setSidebarOpen(false);
+  }, [isEditorRoute]);
+
   return (
-    <SidebarProvider className='min-h-[100dvh] bg-slate-950'>
+    <SidebarProvider
+      open={sidebarOpen}
+      onOpenChange={setSidebarOpen}
+      className='min-h-[100dvh] bg-slate-950'>
       <AdminSideBar className='z-30 bg-slate-950' />
-      <SidebarInset className='min-h-[100dvh] bg-slate-50 md:p-6'>
+      <SidebarInset
+        className={`min-h-[100dvh] bg-slate-50 ${isEditorRoute ? "md:p-0" : "md:p-6"}`}>
         <header className='sticky top-0 z-20 flex h-[calc(4rem+env(safe-area-inset-top))] items-center justify-between border-b border-slate-200 bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur md:hidden'>
           <div className='flex items-center gap-3'>
             <SidebarTrigger
@@ -40,7 +54,12 @@ const Layout = ({ children }: { children: ReactNode }) => {
             U
           </span>
         </header>
-        <div className='min-h-0 flex-1 px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 md:p-0'>
+        <div
+          className={`min-h-0 flex-1 ${
+            isEditorRoute
+              ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0"
+              : "px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 md:p-0"
+          }`}>
           {children}
         </div>
         <MobileAdminNavigation />

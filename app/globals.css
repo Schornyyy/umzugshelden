@@ -190,3 +190,97 @@ button, [role="button"] {
     @apply bg-background text-foreground;
   }
 }
+
+.city-service-builder-block {
+  overflow: clip;
+}
+
+.city-service-builder-block[data-background-color="true"] > :first-child {
+  background-color: var(--builder-background-color) !important;
+}
+
+.city-service-builder-block[data-background-image="true"] > :first-child {
+  background-image:
+    linear-gradient(
+      color-mix(
+        in srgb,
+        var(--builder-overlay-color, #000000) var(--builder-overlay-opacity, 0%),
+        transparent
+      ),
+      color-mix(
+        in srgb,
+        var(--builder-overlay-color, #000000) var(--builder-overlay-opacity, 0%),
+        transparent
+      )
+    ),
+    var(--builder-background-image) !important;
+  background-position: var(--builder-background-position, center) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+}
+
+.city-service-builder-block[data-padding-top="true"] > :first-child {
+  padding-top: var(--builder-padding-top) !important;
+}
+
+.city-service-builder-block[data-padding-bottom="true"] > :first-child {
+  padding-bottom: var(--builder-padding-bottom) !important;
+}
+
+.city-service-builder-block[data-min-height="true"] > :first-child {
+  min-height: var(--builder-min-height) !important;
+}
+
+.city-service-builder-block[data-content-width="true"] .container {
+  max-width: var(--builder-content-width) !important;
+}
+
+.city-service-builder-block[data-text-align="true"]
+  :where(h1, h2, h3, h4, p) {
+  text-align: var(--builder-text-align) !important;
+}
+
+.city-service-builder-block[data-text-color="true"]
+  :where(h1, h2, h3, h4, p, li, dt, dd) {
+  color: var(--builder-text-color) !important;
+}
+
+.city-service-builder-block[data-accent-color="true"] .text-primary {
+  color: var(--builder-accent-color) !important;
+}
+
+.city-service-builder-block[data-accent-color="true"] .border-primary {
+  border-color: var(--builder-accent-color) !important;
+}
+
+.city-service-builder-block[data-accent-color="true"] .bg-primary {
+  background-color: var(--builder-accent-color) !important;
+}
+
+.city-service-builder-block[data-heading-size="true"]
+  :where(h1, h2, h3, h4) {
+  font-size: var(--builder-heading-size) !important;
+  overflow-wrap: anywhere;
+}
+
+.city-service-builder-block[data-text-size="true"] :where(p, li, dt, dd) {
+  font-size: var(--builder-text-size) !important;
+}
+
+@media (max-width: 767px) {
+  .city-service-builder-block[data-hide-mobile="true"] {
+    display: none;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .city-service-builder-block[data-hide-tablet="true"] {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .city-service-builder-block[data-hide-desktop="true"] {
+    display: none;
+  }
+}

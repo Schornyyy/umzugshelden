@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarTrigger,
 } from "@/components/ui/sidebar";
 import Image from "next/image";
 import { Button } from "./ui/button";
@@ -102,20 +103,29 @@ export function AdminSideBar({
   }
 
   return (
-    <Sidebar {...props} className='sticky left-0 top-0 bg-slate-950 text-white'>
-      <SidebarHeader className='border-b border-slate-800 px-5 py-5'>
-        <Image
-          src={"/images/Umzugshelden.png"}
-          alt='Logo'
-          height={256}
-          width={256}
-          className='h-auto w-40 object-contain brightness-0 invert'
-        />
-        <p className='mt-3 text-xs font-medium uppercase tracking-[0.16em] text-slate-400'>
+    <Sidebar
+      {...props}
+      collapsible='icon'
+      className='sticky left-0 top-0 bg-slate-950 text-white'>
+      <SidebarHeader className='border-b border-slate-800 px-3 py-4 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-2'>
+        <div className='flex w-full items-center justify-between gap-2 group-data-[collapsible=icon]:justify-center'>
+          <Image
+            src={"/images/Umzugshelden.png"}
+            alt='Umzugshelden'
+            height={256}
+            width={256}
+            className='h-auto w-36 object-contain brightness-0 invert group-data-[collapsible=icon]:hidden'
+          />
+          <SidebarTrigger
+            title='Seitenleiste ein- oder ausklappen (Strg+B)'
+            className='h-9 w-9 shrink-0 text-slate-300 hover:bg-slate-800 hover:text-white'
+          />
+        </div>
+        <p className='mt-2 text-xs font-medium uppercase tracking-[0.16em] text-slate-400 group-data-[collapsible=icon]:hidden'>
           Verwaltungsbereich
         </p>
       </SidebarHeader>
-      <SidebarContent className='px-3 py-4'>
+      <SidebarContent className='px-3 py-4 group-data-[collapsible=icon]:px-2'>
         {data.navMain.map((item) => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel className='px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500'>
@@ -127,6 +137,7 @@ export function AdminSideBar({
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       asChild
+                      tooltip={item.title}
                       isActive={
                         "exact" in item && item.exact
                           ? pathname === `/admin/${companyData?.id}${item.url}`
@@ -147,13 +158,14 @@ export function AdminSideBar({
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className='border-t border-slate-800 p-3'>
+      <SidebarFooter className='border-t border-slate-800 p-3 group-data-[collapsible=icon]:p-2'>
         <Button
           variant='ghost'
-          className='h-11 w-full justify-start gap-3 rounded-md px-3 text-slate-300 hover:bg-red-500/15 hover:text-red-200'
+          title='Abmelden'
+          className='h-11 w-full justify-start gap-3 rounded-md px-3 text-slate-300 hover:bg-red-500/15 hover:text-red-200 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0'
           onClick={handleLogout}>
           <ArrowLeft className='h-5 w-5' />
-          Abmelden
+          <span className='group-data-[collapsible=icon]:hidden'>Abmelden</span>
         </Button>
       </SidebarFooter>
       <SidebarRail />

@@ -14,6 +14,10 @@ import { CityFaqTab } from "@/components/admin/city/CityFaqTab";
 import { CitySectionsTab } from "@/components/admin/city/CitySectionsTab";
 import { CityMetaTab } from "@/components/admin/city/CityMetaTab";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
+import { CITY_SERVICE_KEYS } from "@/types/city/CityServicePage";
+import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
+import { ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 interface EditableFaq {
   question: string;
@@ -214,7 +218,7 @@ export default function CityFaqEditorPage() {
             Stadtseite bearbeiten: {cityReadable}
           </h1>
           <p className='text-sm text-gray-600 mt-1'>
-            FAQ, Sektionen & Meta Daten verwalten.
+            Übersichtsseite und einzelne Dienstleistungsseiten verwalten.
           </p>
         </div>
         {state.cityPage && (
@@ -225,6 +229,31 @@ export default function CityFaqEditorPage() {
       </div>
       <CityAdminTabs
         tabs={[
+          {
+            id: "services",
+            label: "Seiten & Leistungen",
+            content: (
+              <div className='space-y-5'>
+                <Link
+                  href={`/admin/${encodeURIComponent(companyData?.id || "")}/citys/${encodeURIComponent(slug)}/stadtseite`}
+                  className='flex min-h-16 items-center justify-between gap-3 rounded border border-emerald-500 bg-emerald-50/50 px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm hover:bg-emerald-50'>
+                  <span>Stadtübersicht {cityReadable}</span>
+                  <ArrowRight className='h-4 w-4 shrink-0 text-emerald-700' />
+                </Link>
+                <div className='grid gap-3 sm:grid-cols-2'>
+                  {CITY_SERVICE_KEYS.map((serviceKey) => (
+                  <Link
+                    key={serviceKey}
+                    href={`/admin/${encodeURIComponent(companyData?.id || "")}/citys/${encodeURIComponent(slug)}/services/${serviceKey}`}
+                    className='flex min-h-16 items-center justify-between gap-3 rounded border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm hover:border-emerald-500 hover:bg-emerald-50/40'>
+                    <span>{getDefaultCityServiceName(serviceKey)}</span>
+                    <ArrowRight className='h-4 w-4 shrink-0 text-emerald-700' />
+                  </Link>
+                  ))}
+                </div>
+              </div>
+            ),
+          },
           {
             id: "faq",
             label: "FAQ",
