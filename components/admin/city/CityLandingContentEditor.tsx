@@ -266,11 +266,31 @@ export default function CityLandingContentEditor({
       </nav>
 
       {activeTab === "content" && (
-        <CityServiceBlockEditor
-          blocks={blocks}
-          onChange={setBlocks}
-          readOnly={mode === "page" && inheritTemplate}
-        />
+        <div className='space-y-3'>
+          {mode === "page" && inheritTemplate && (
+            <div className='flex flex-wrap items-center gap-3 border-l-4 border-amber-500 bg-amber-50 px-4 py-3'>
+              <div className='min-w-0 flex-1'>
+                <p className='text-sm font-semibold text-amber-950'>
+                  Diese Stadtseite verwendet noch die globale Vorlage.
+                </p>
+                <p className='mt-0.5 text-xs text-amber-800'>
+                  Aktiviere eigene Inhalte, um FAQ-Fragen und andere Abschnitte zu bearbeiten.
+                </p>
+              </div>
+              <button
+                type='button'
+                onClick={() => setContentInheritance(false)}
+                className='h-9 rounded bg-amber-900 px-3 text-xs font-semibold text-white hover:bg-amber-800'>
+                Individuell bearbeiten
+              </button>
+            </div>
+          )}
+          <CityServiceBlockEditor
+            blocks={blocks}
+            onChange={setBlocks}
+            readOnly={mode === "page" && inheritTemplate}
+          />
+        </div>
       )}
 
       {activeTab === "seo" && (

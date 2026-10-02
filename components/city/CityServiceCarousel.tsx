@@ -1,5 +1,6 @@
 "use client";
 
+import SemanticHeading from "@/components/SemanticHeading";
 import { Button } from "@/components/ui/button";
 import { resolveCityServiceText, type CityServiceTemplateContext } from "@/lib/cityServiceTemplate";
 import type { CityServiceCarouselBlock } from "@/types/city/CityServicePage";
@@ -54,9 +55,11 @@ export default function CityServiceCarousel({
         {(block.heading || block.intro) && (
           <div className='mx-auto mb-8 max-w-3xl text-center'>
             {block.heading && (
-              <h2 className='font-sans text-3xl font-bold text-navy md:text-4xl'>
+              <SemanticHeading
+                level={block.headingLevel}
+                className='font-sans text-3xl font-bold text-navy md:text-4xl'>
                 {text(block.heading)}
-              </h2>
+              </SemanticHeading>
             )}
             {block.intro && (
               <p className='mt-3 font-body text-gray-600'>{text(block.intro)}</p>
@@ -69,6 +72,7 @@ export default function CityServiceCarousel({
             key={slide.image}
             src={slide.image}
             alt={text(slide.imageAlt)}
+            title={slide.imageTitle ? text(slide.imageTitle) : undefined}
             fill
             sizes='(max-width: 1200px) 100vw, 1152px'
             className='object-cover'
@@ -118,6 +122,12 @@ export default function CityServiceCarousel({
             </>
           )}
         </div>
+
+        {slide.imageCaption && (
+          <p className='mt-3 text-center font-body text-sm text-gray-500'>
+            {text(slide.imageCaption)}
+          </p>
+        )}
 
         {block.showDots && block.slides.length > 1 && (
           <div className='mt-4 flex justify-center gap-2' aria-label='Bildauswahl'>

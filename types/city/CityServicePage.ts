@@ -9,6 +9,7 @@ export const CITY_SERVICE_KEYS = [
 export type CityServiceKey = (typeof CITY_SERVICE_KEYS)[number];
 
 export type CityServiceBlockTone = "white" | "muted" | "navy" | "accent";
+export type CityServiceHeadingLevel = 2 | 3 | 4;
 
 export type CityServiceBlockStyle = {
   backgroundColor?: string;
@@ -37,6 +38,7 @@ type CityServiceBlockBase = {
   id: string;
   enabled: boolean;
   tone: CityServiceBlockTone;
+  headingLevel?: CityServiceHeadingLevel;
   style?: CityServiceBlockStyle;
 };
 
@@ -46,6 +48,8 @@ export type CityServiceHeroBlock = CityServiceBlockBase & {
   description: string;
   image: string;
   imageAlt: string;
+  imageTitle?: string;
+  imageCaption?: string;
   formTitle: string;
   formText: string;
 };
@@ -63,6 +67,8 @@ export type CityServiceImageTextBlock = CityServiceBlockBase & {
   paragraphs: string[];
   image: string;
   imageAlt: string;
+  imageTitle?: string;
+  imageCaption?: string;
   imagePosition: "left" | "right";
   ctaLabel?: string;
   ctaUrl?: string;
@@ -184,7 +190,7 @@ export type CityServiceGalleryBlock = CityServiceBlockBase & {
   type: "gallery";
   heading: string;
   intro?: string;
-  images: { src: string; alt: string; caption?: string }[];
+  images: { src: string; alt: string; title?: string; caption?: string }[];
   columns: 2 | 3 | 4;
   aspectRatio: "square" | "landscape" | "portrait";
 };
@@ -227,6 +233,8 @@ export type CityServiceCarouselBlock = CityServiceBlockBase & {
   slides: {
     image: string;
     imageAlt: string;
+    imageTitle?: string;
+    imageCaption?: string;
     heading?: string;
     text?: string;
     linkLabel?: string;
@@ -243,7 +251,7 @@ export type CityServiceImageCollageBlock = CityServiceBlockBase & {
   eyebrow?: string;
   heading: string;
   text: string;
-  images: { src: string; alt: string }[];
+  images: { src: string; alt: string; title?: string; caption?: string }[];
   imagePosition: "left" | "right";
   layout: "stacked" | "fan" | "mosaic";
 };

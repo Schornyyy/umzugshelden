@@ -13,6 +13,7 @@ export function resolveCityServiceText(
 ) {
   const replacements: Record<string, string> = {
     "{city}": context.city,
+    "{cityName}": context.city,
     "{service}": context.service,
     "{primaryKeyword}": context.primaryKeyword,
     "{region}": context.region,

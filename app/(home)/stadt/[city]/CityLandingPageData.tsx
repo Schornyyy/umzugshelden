@@ -4,6 +4,7 @@ import ServiceSchema from "@/components/ServiceSchema";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
 import {
   assertCitySeoCoverage,
+  CITY_SERVICE_CONTENT_LAST_MODIFIED,
   getCityServiceSeoContent,
 } from "@/lib/cityServiceSeo";
 import {
@@ -57,6 +58,9 @@ async function loadCityLandingData(cityParam: string) {
   );
   const nearbyLimit =
     localAreaBlock?.type === "localArea" ? localAreaBlock.nearbyLimit : 3;
+  const nearbyCityNames = nearbyCities
+    .map((nearby) => nearby.name)
+    .slice(0, nearbyLimit);
   const localSeo = getCityServiceSeoContent({
     cityName,
     serviceKey: "umzugsservice",
@@ -71,12 +75,17 @@ async function loadCityLandingData(cityParam: string) {
     primaryKeyword: "Umzugsservice",
     region: localSeo.regionName,
     localIntro: localSeo.introText,
-    nearbyCities: joinGerman(
-      nearbyCities.map((nearby) => nearby.name).slice(0, nearbyLimit),
-    ),
+    nearbyCities: joinGerman(nearbyCityNames),
   };
 
-  return { cityName, citySlug, resolved, localSeo, context };
+  return {
+    cityName,
+    citySlug,
+    resolved,
+    localSeo,
+    context,
+    nearbyCityNames,
+  };
 }
 
 export function buildCityLandingStaticParams() {
@@ -103,12 +112,23 @@ export default async function CityLandingPageData({
         )}
         path={path}
         city={data.cityName}
+        region={data.localSeo.regionName}
+        areaServed={data.nearbyCityNames}
         image={data.resolved.seo.image}
+        imageAlt={resolveCityServiceText(
+          data.resolved.seo.imageAlt,
+          data.context,
+        )}
         alternateNames={data.resolved.seo.keywords.map(
           (keyword) =>
             `${resolveCityServiceText(keyword, data.context)} ${data.cityName}`,
         )}
         offers={CITY_SERVICE_KEYS.map(getDefaultCityServiceName)}
+        breadcrumbs={[
+          { name: "Startseite", path: "/" },
+          { name: data.cityName, path },
+        ]}
+        dateModified={CITY_SERVICE_CONTENT_LAST_MODIFIED}
       />
       <CityServiceBlocksRenderer
         blocks={data.resolved.blocks}

@@ -3,6 +3,7 @@ import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRender
 import ServiceSchema from "@/components/ServiceSchema";
 import {
   assertCitySeoCoverage,
+  CITY_SERVICE_CONTENT_LAST_MODIFIED,
   getCityServiceSeoContent,
 } from "@/lib/cityServiceSeo";
 import {
@@ -93,6 +94,9 @@ async function loadPageData(cityParam: string, serviceParam: string) {
   );
   const nearbyLimit =
     localAreaBlock?.type === "localArea" ? localAreaBlock.nearbyLimit : 3;
+  const nearbyCityNames = nearbyCities
+    .map((nearby) => nearby.name)
+    .slice(0, nearbyLimit);
   const localSeo = getCityServiceSeoContent({
     cityName,
     serviceKey,
@@ -104,7 +108,7 @@ async function loadPageData(cityParam: string, serviceParam: string) {
   const context = buildPageContext(
     resolved,
     cityName,
-    nearbyCities.map((nearby) => nearby.name).slice(0, nearbyLimit),
+    nearbyCityNames,
     localSeo.regionName,
     localSeo.introText,
   );
@@ -116,6 +120,7 @@ async function loadPageData(cityParam: string, serviceParam: string) {
     resolved,
     localSeo,
     context,
+    nearbyCityNames,
   };
 }
 
@@ -141,30 +146,6 @@ export default async function CityServicePageData({
   }
 
   const path = `/stadt/${encodeURIComponent(data.citySlug)}/${data.serviceKey}`;
-  const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "Startseite",
-        item: "https://umzugshelden.io",
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: data.cityName,
-        item: `https://umzugshelden.io/stadt/${encodeURIComponent(data.citySlug)}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: `${data.resolved.template.serviceName} in ${data.cityName}`,
-        item: `https://umzugshelden.io${path}`,
-      },
-    ],
-  };
   const featureBlock = data.resolved.blocks.find(
     (block) => block.id === "features" && block.type === "checkList",
   );
@@ -180,16 +161,36 @@ export default async function CityServicePageData({
         )}
         path={path}
         city={data.cityName}
+        region={data.localSeo.regionName}
+        areaServed={data.nearbyCityNames}
         image={data.resolved.seo.image}
+        imageAlt={resolveCityServiceText(
+          data.resolved.seo.imageAlt,
+          data.context,
+        )}
         alternateNames={data.resolved.seo.keywords.map(
           (keyword) =>
             `${resolveCityServiceText(keyword, data.context)} ${data.cityName}`,
         )}
-        offers={featureBlock?.type === "checkList" ? featureBlock.items : []}
-      />
-      <script
-        type='application/ld+json'
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        offers={
+          featureBlock?.type === "checkList"
+            ? featureBlock.items.map((item) =>
+                resolveCityServiceText(item, data.context),
+              )
+            : []
+        }
+        breadcrumbs={[
+          { name: "Startseite", path: "/" },
+          {
+            name: data.cityName,
+            path: `/stadt/${encodeURIComponent(data.citySlug)}`,
+          },
+          {
+            name: `${data.resolved.template.serviceName} in ${data.cityName}`,
+            path,
+          },
+        ]}
+        dateModified={CITY_SERVICE_CONTENT_LAST_MODIFIED}
       />
       <CityServiceBlocksRenderer
         blocks={data.resolved.blocks}

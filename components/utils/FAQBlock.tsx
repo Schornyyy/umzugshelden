@@ -1,6 +1,6 @@
+import SemanticHeading from "@/components/SemanticHeading";
 import { FAQType } from "@/types/utils/FAQType";
 import React from "react";
-import Headings from "../Headings";
 import {
   Accordion,
   AccordionContent,
@@ -8,7 +8,15 @@ import {
   AccordionTrigger,
 } from "../ui/accordion";
 
-const FAQBlock = ({ faqs, title }: { faqs: FAQType[]; title: string }) => {
+const FAQBlock = ({
+  faqs,
+  title,
+  headingLevel = 3,
+}: {
+  faqs: FAQType[];
+  title: string;
+  headingLevel?: 2 | 3 | 4;
+}) => {
   // Generate JSON-LD FAQ schema from the provided faqs
   const faqSchema = {
     "@context": "https://schema.org",
@@ -23,13 +31,17 @@ const FAQBlock = ({ faqs, title }: { faqs: FAQType[]; title: string }) => {
     })),
   };
   return (
-    <div className='max-w-7xl bg-white shadow-md p-6 rounded-md self-center w-full my-36'>
+    <div className='mx-auto my-36 w-full max-w-7xl rounded-md bg-white p-6 shadow-md'>
       {/* Structured data for FAQ - JSON-LD */}
       <script
         type='application/ld+json'
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
-      <Headings level={3}>{title}</Headings>
+      <SemanticHeading
+        level={headingLevel}
+        className='font-sans text-md font-medium md:text-2xl'>
+        {title}
+      </SemanticHeading>
       <Accordion type='single' collapsible>
         {faqs.map((faq, index) => (
           <AccordionItem key={index} value={`item-${index}`}>

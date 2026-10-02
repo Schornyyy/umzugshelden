@@ -1,5 +1,6 @@
 "use client";
 
+import SemanticHeading from "@/components/SemanticHeading";
 import { resolveCityServiceText, type CityServiceTemplateContext } from "@/lib/cityServiceTemplate";
 import type { CityServiceBeforeAfterBlock } from "@/types/city/CityServicePage";
 import Image from "next/image";
@@ -27,9 +28,11 @@ export default function CityServiceBeforeAfter({
     <section className={`${sectionTone[block.tone]} py-20`}>
       <div className='container mx-auto max-w-5xl px-4'>
         <div className='mx-auto max-w-3xl text-center'>
-          <h2 className={`font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
+          <SemanticHeading
+            level={block.headingLevel}
+            className={`font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
             {text(block.heading)}
-          </h2>
+          </SemanticHeading>
           {block.text && (
             <p className={`mt-3 font-body ${isNavy ? "text-gray-300" : "text-gray-600"}`}>
               {text(block.text)}

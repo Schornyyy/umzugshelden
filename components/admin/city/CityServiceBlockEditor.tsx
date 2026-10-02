@@ -10,9 +10,11 @@ import {
   CITY_SERVICE_KEYS,
   type CityServiceKey,
   type CityServiceBlock,
+  type CityServiceHeadingLevel,
   type CityServiceBlockStyle,
   type CityServiceBlockTone,
   type CityServiceBlockType,
+  type CityServiceImageCollageBlock,
   type CityServiceImageCardsBlock,
 } from "@/types/city/CityServicePage";
 import { Reorder } from "framer-motion";
@@ -144,6 +146,33 @@ function Field({
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
       />
+    </label>
+  );
+}
+
+function HeadingLevelField({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: CityServiceHeadingLevel;
+  onChange: (value: CityServiceHeadingLevel) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <label className='block'>
+      <span className={LABEL_CLASS}>Überschriftenebene</span>
+      <select
+        className={INPUT_CLASS}
+        value={value}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(Number(event.target.value) as CityServiceHeadingLevel)
+        }>
+        <option value={2}>H2 – Hauptabschnitt</option>
+        <option value={3}>H3 – Unterabschnitt</option>
+        <option value={4}>H4 – Detailüberschrift</option>
+      </select>
     </label>
   );
 }
@@ -773,6 +802,13 @@ function BlockInspector({
               disabled={readOnly}
               onChange={(enabled) => patch({ enabled })}
             />
+            {block.type !== "hero" && block.type !== "spacer" && (
+              <HeadingLevelField
+                value={block.headingLevel ?? (block.type === "faq" ? 3 : 2)}
+                disabled={readOnly}
+                onChange={(headingLevel) => patch({ headingLevel })}
+              />
+            )}
           </div>
 
       {block.type === "hero" && (
@@ -781,6 +817,8 @@ function BlockInspector({
           <TextareaField label='Beschreibung' value={block.description} disabled={readOnly} onChange={(description) => patch({ description })} />
           <MediaField label='Hintergrundbild' value={block.image} disabled={readOnly} onChange={(image) => image && patch({ image })} />
           <Field label='Alternativtext' value={block.imageAlt} disabled={readOnly} onChange={(imageAlt) => patch({ imageAlt })} />
+          <Field label='Bildtitel' value={block.imageTitle || ""} disabled={readOnly} onChange={(imageTitle) => patch({ imageTitle: imageTitle || undefined })} />
+          <Field label='Bildunterschrift' value={block.imageCaption || ""} disabled={readOnly} onChange={(imageCaption) => patch({ imageCaption: imageCaption || undefined })} />
           <Field label='Formular-Titel' value={block.formTitle} disabled={readOnly} onChange={(formTitle) => patch({ formTitle })} />
           <TextareaField label='Formular-Text' value={block.formText} disabled={readOnly} onChange={(formText) => patch({ formText })} />
         </div>
@@ -800,6 +838,8 @@ function BlockInspector({
           <StringListEditor label='Absätze' values={block.paragraphs} disabled={readOnly} onChange={(paragraphs) => patch({ paragraphs })} />
           <MediaField label='Bild' value={block.image} disabled={readOnly} onChange={(image) => image && patch({ image })} />
           <Field label='Alternativtext' value={block.imageAlt} disabled={readOnly} onChange={(imageAlt) => patch({ imageAlt })} />
+          <Field label='Bildtitel' value={block.imageTitle || ""} disabled={readOnly} onChange={(imageTitle) => patch({ imageTitle: imageTitle || undefined })} />
+          <Field label='Bildunterschrift' value={block.imageCaption || ""} disabled={readOnly} onChange={(imageCaption) => patch({ imageCaption: imageCaption || undefined })} />
           <label className='block'>
             <span className={LABEL_CLASS}>Bildposition</span>
             <select className={INPUT_CLASS} value={block.imagePosition} disabled={readOnly} onChange={(event) => patch({ imagePosition: event.target.value })}>
@@ -916,6 +956,7 @@ function BlockInspector({
               <>
                 <MediaField label={`Bild ${index + 1}`} value={image.src} disabled={readOnly} onChange={(src) => src && update({ src })} />
                 <Field label='Alternativtext' value={image.alt} disabled={readOnly} onChange={(alt) => update({ alt })} />
+                <Field label='Bildtitel' value={image.title || ""} disabled={readOnly} onChange={(title) => update({ title: title || undefined })} />
                 <Field label='Bildunterschrift' value={image.caption || ""} disabled={readOnly} onChange={(caption) => update({ caption: caption || undefined })} />
               </>
             )}
@@ -962,6 +1003,8 @@ function BlockInspector({
               <>
                 <MediaField label={`Slide-Bild ${index + 1}`} value={slide.image} disabled={readOnly} onChange={(image) => image && update({ image })} />
                 <Field label='Alternativtext' value={slide.imageAlt} disabled={readOnly} onChange={(imageAlt) => update({ imageAlt })} />
+                <Field label='Bildtitel' value={slide.imageTitle || ""} disabled={readOnly} onChange={(imageTitle) => update({ imageTitle: imageTitle || undefined })} />
+                <Field label='Bildunterschrift' value={slide.imageCaption || ""} disabled={readOnly} onChange={(imageCaption) => update({ imageCaption: imageCaption || undefined })} />
                 <Field label='Titel' value={slide.heading || ""} disabled={readOnly} onChange={(heading) => update({ heading: heading || undefined })} />
                 <TextareaField label='Text' value={slide.text || ""} disabled={readOnly} onChange={(text) => update({ text: text || undefined })} />
                 <Field label='Button-Text' value={slide.linkLabel || ""} disabled={readOnly} onChange={(linkLabel) => update({ linkLabel: linkLabel || undefined })} />
@@ -1001,7 +1044,7 @@ function BlockInspector({
               </select>
             </label>
           </div>
-          <CollectionEditor
+          <CollectionEditor<CityServiceImageCollageBlock["images"][number]>
             label='Collage-Bilder'
             itemName='Bild'
             values={block.images}
@@ -1014,6 +1057,8 @@ function BlockInspector({
               <>
                 <MediaField label={`Bild ${index + 1}`} value={image.src} disabled={readOnly} onChange={(src) => src && update({ src })} />
                 <Field label='Alternativtext' value={image.alt} disabled={readOnly} onChange={(alt) => update({ alt })} />
+                <Field label='Bildtitel' value={image.title || ""} disabled={readOnly} onChange={(title) => update({ title: title || undefined })} />
+                <Field label='Bildunterschrift' value={image.caption || ""} disabled={readOnly} onChange={(caption) => update({ caption: caption || undefined })} />
               </>
             )}
           />

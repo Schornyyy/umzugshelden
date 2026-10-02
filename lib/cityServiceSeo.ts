@@ -1,7 +1,7 @@
 import type { NearbyCity } from "@/statics/Lists";
 
 // Nur anheben, wenn sich veröffentlichte Stadt- oder Service-Inhalte ändern.
-export const CITY_SERVICE_CONTENT_LAST_MODIFIED = "2026-09-30";
+export const CITY_SERVICE_CONTENT_LAST_MODIFIED = "2026-10-02";
 
 export type CityServiceKey =
   | "umzugsservice"

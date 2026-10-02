@@ -68,6 +68,9 @@ const baseBlockSchema = z.object({
   id: z.string().trim().min(1).max(100),
   enabled: z.boolean(),
   tone: toneSchema,
+  headingLevel: z
+    .union([z.literal(2), z.literal(3), z.literal(4)])
+    .optional(),
   style: blockStyleSchema.optional(),
 });
 const templateText = z.string().max(20_000);
@@ -89,6 +92,8 @@ const heroBlockSchema = baseBlockSchema.extend({
   description: templateText,
   image: assetPath,
   imageAlt: shortText,
+  imageTitle: shortText.optional(),
+  imageCaption: shortText.optional(),
   formTitle: shortText,
   formText: templateText,
 });
@@ -104,6 +109,8 @@ const imageTextBlockSchema = baseBlockSchema.extend({
   paragraphs: z.array(templateText).min(1).max(10),
   image: assetPath,
   imageAlt: shortText,
+  imageTitle: shortText.optional(),
+  imageCaption: shortText.optional(),
   imagePosition: z.enum(["left", "right"]),
   ctaLabel: z.string().max(100).optional(),
   ctaUrl: safeLink.optional(),
@@ -233,6 +240,7 @@ const galleryBlockSchema = baseBlockSchema.extend({
       z.object({
         src: assetPath,
         alt: shortText,
+        title: shortText.optional(),
         caption: shortText.optional(),
       }),
     )
@@ -294,6 +302,8 @@ const carouselBlockSchema = baseBlockSchema.extend({
       z.object({
         image: assetPath,
         imageAlt: shortText,
+        imageTitle: shortText.optional(),
+        imageCaption: shortText.optional(),
         heading: shortText.optional(),
         text: templateText.optional(),
         linkLabel: z.string().trim().max(100).optional(),
@@ -313,7 +323,14 @@ const imageCollageBlockSchema = baseBlockSchema.extend({
   heading: shortText,
   text: templateText,
   images: z
-    .array(z.object({ src: assetPath, alt: shortText }))
+    .array(
+      z.object({
+        src: assetPath,
+        alt: shortText,
+        title: shortText.optional(),
+        caption: shortText.optional(),
+      }),
+    )
     .min(2)
     .max(5),
   imagePosition: z.enum(["left", "right"]),
