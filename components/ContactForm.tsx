@@ -57,6 +57,35 @@ const services = [
 
 type ServiceId = (typeof services)[number]["id"];
 
+type Gtag = (
+  command: "event",
+  eventName: "purchase",
+  parameters: {
+    event_callback: () => void;
+    event_timeout: number;
+  },
+) => void;
+
+function gtagSendEvent(url?: string) {
+  const callback = () => {
+    if (typeof url === "string") {
+      window.location.href = url;
+    }
+  };
+  const gtag = (window as Window & { gtag?: Gtag }).gtag;
+
+  if (typeof gtag !== "function") {
+    callback();
+    return false;
+  }
+
+  gtag("event", "purchase", {
+    event_callback: callback,
+    event_timeout: 2000,
+  });
+  return false;
+}
+
 const ContactForm = ({ dark = false }: { dark?: boolean }) => {
   const [step, setStep] = useState(1);
   const [serviceId, setServiceId] = useState<ServiceId | null>(null);
@@ -220,6 +249,7 @@ const ContactForm = ({ dark = false }: { dark?: boolean }) => {
       const emailData = await emailRes.json();
 
       if (emailRes.ok && !emailData.error) {
+        gtagSendEvent();
         setStatus({
           ok: true,
           msg: "Danke — Anfrage erfasst und E-Mail gesendet.",
