@@ -9,9 +9,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { auth, database } from "@/config/firebase";
+import { auth, database, storage } from "@/config/firebase";
 import { createCustomerNumber } from "@/lib/crmIdentifiers";
 import type { CrmOfferDocument } from "@/lib/crmOfferDocument";
+import {
+  CRM_TASK_TEMPLATE_CATALOG_VERSION,
+  createOrderFromOffer,
+  DEFAULT_CRM_TASK_TEMPLATES,
+  getCrmOrderStatus,
+  isCrmOrderTaskComplete,
+  normalizeCrmOrder,
+  normalizeCrmOrderTask,
+  synchronizeOrderWithOffer,
+} from "@/lib/crmOrderTasks";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type {
   CrmAppointment,
@@ -19,6 +29,10 @@ import type {
   CrmCustomer,
   CrmCustomerStatus,
   CrmNote,
+  CrmOrder,
+  CrmOrderTask,
+  CrmOrderTaskPhase,
+  CrmTaskTemplate,
 } from "@/types/Crm";
 import {
   collection,
@@ -31,6 +45,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   Archive,
   ArrowLeft,
@@ -41,6 +56,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardCheck,
+  ClipboardList,
   Clock3,
   LoaderCircle,
   Mail,
@@ -61,6 +77,7 @@ import {
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 import { downloadAppointmentCalendar } from "./crmCalendar";
+import OrderTasksPanel from "./OrderTasksPanel";
 
 const CRM_COLLECTION = "crm_customers_umzugshelden";
 const OFFER_COLLECTION = "offer_calculators_umzugshelden";
@@ -261,6 +278,12 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     message: string;
   } | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [activeCustomerTab, setActiveCustomerTab] =
+    useState<"overview" | "tasks">("overview");
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [taskTemplates, setTaskTemplates] = useState<CrmTaskTemplate[]>([]);
+  const [isSavingTemplates, setIsSavingTemplates] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("de-DE"));
 
   useEffect(() => {
@@ -288,14 +311,82 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
               tags: customer.tags ?? [],
               notes: customer.notes ?? [],
               appointments: customer.appointments ?? [],
+              orders: (customer.orders ?? []).map(normalizeCrmOrder),
             };
           })
           .sort((left, right) => right.updatedAt - left.updatedAt);
         const savedCalculations = (offerSnapshot.data()?.savedCalculations ?? []) as SavedOfferSummary[];
-        setCustomers(loadedCustomers);
+        const analyzedCustomers = loadedCustomers.map((customer) => ({
+          ...customer,
+          orders: customer.orders.map((order) => {
+            if (order.automation) return order;
+            const offer = savedCalculations.find(
+              (candidate) => candidate.id === order.offerId
+            );
+            return offer
+              ? synchronizeOrderWithOffer(order, offer, Date.now())
+              : order;
+          }),
+        }));
+        const savedTaskTemplates = offerSnapshot.data()?.taskTemplates;
+        const savedTemplateCatalogVersion =
+          offerSnapshot.data()?.taskTemplateCatalogVersion ?? 0;
+        const existingTemplates = Array.isArray(savedTaskTemplates)
+          ? (savedTaskTemplates as CrmTaskTemplate[])
+          : [];
+        const upgradedExistingTemplates = existingTemplates.map((template) => {
+          const defaultTemplate = DEFAULT_CRM_TASK_TEMPLATES.find(
+            (candidate) => candidate.id === template.id
+          );
+          if (
+            !defaultTemplate ||
+            savedTemplateCatalogVersion >= CRM_TASK_TEMPLATE_CATALOG_VERSION
+          ) {
+            return template;
+          }
+          return {
+            ...template,
+            tasks: template.tasks.map((templateTask) => {
+              const defaultTask = defaultTemplate.tasks.find(
+                (candidate) => candidate.id === templateTask.id
+              );
+              return defaultTask
+                ? {
+                    ...templateTask,
+                    kind: templateTask.kind ?? defaultTask.kind,
+                    role: templateTask.role ?? defaultTask.role,
+                    required: templateTask.required ?? defaultTask.required,
+                    requiresEvidence:
+                      templateTask.requiresEvidence ??
+                      defaultTask.requiresEvidence,
+                    blocksOnNegative:
+                      templateTask.blocksOnNegative ??
+                      defaultTask.blocksOnNegative,
+                  }
+                : templateTask;
+            }),
+          };
+        });
+        const templates =
+          savedTemplateCatalogVersion < CRM_TASK_TEMPLATE_CATALOG_VERSION
+            ? [
+                ...upgradedExistingTemplates,
+                ...DEFAULT_CRM_TASK_TEMPLATES.filter(
+                  (defaultTemplate) =>
+                    !upgradedExistingTemplates.some(
+                      (template) => template.id === defaultTemplate.id
+                    )
+                ).map((template) => ({
+                  ...template,
+                  tasks: template.tasks.map((task) => ({ ...task })),
+                })),
+              ]
+            : upgradedExistingTemplates;
+        setCustomers(analyzedCustomers);
         setOffers(savedCalculations);
+        setTaskTemplates(templates);
         setSelectedCustomerId(
-          (current) => current ?? customerId ?? loadedCustomers[0]?.id ?? null
+          (current) => current ?? customerId ?? analyzedCustomers[0]?.id ?? null
         );
         setFeedback("idle");
       } catch {
@@ -318,6 +409,8 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
   useEffect(() => {
     setReviewFeedback(null);
+    setActiveCustomerTab("overview");
+    setSelectedOrderId(null);
   }, [selectedCustomerId]);
 
   const filteredCustomers = customers.filter((customer) => {
@@ -386,6 +479,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       tags: [],
       notes: [],
       appointments: [],
+      orders: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -701,6 +795,274 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     }
   }
 
+  async function acceptOffer(offer: SavedOfferSummary) {
+    if (!draft) return;
+    const existingOrder = draft.orders.find((order) => order.offerId === offer.id);
+    if (existingOrder) {
+      setSelectedOrderId(existingOrder.id);
+      setActiveCustomerTab("tasks");
+      return;
+    }
+
+    const acceptedAt = Date.now();
+    const order = createOrderFromOffer(offer, crypto.randomUUID(), acceptedAt);
+    const updatedCustomer: CrmCustomer = {
+      ...draft,
+      status: "customer",
+      orders: [order, ...draft.orders],
+      updatedAt: acceptedAt,
+    };
+    setIsSavingOrder(true);
+    try {
+      await updateDoc(doc(database, CRM_COLLECTION, draft.id), {
+        status: updatedCustomer.status,
+        orders: updatedCustomer.orders,
+        updatedAt: updatedCustomer.updatedAt,
+      });
+      replaceCustomer(updatedCustomer);
+      setSelectedOrderId(order.id);
+      setActiveCustomerTab("tasks");
+      setFeedback("saved");
+    } catch {
+      setFeedback("error");
+    } finally {
+      setIsSavingOrder(false);
+    }
+  }
+
+  async function reanalyzeOrder(orderId: string) {
+    if (!draft) return false;
+    const order = draft.orders.find((candidate) => candidate.id === orderId);
+    const offer = order
+      ? offers.find((candidate) => candidate.id === order.offerId)
+      : undefined;
+    if (!order || !offer) {
+      setFeedback("error");
+      return false;
+    }
+    const nextOrders = draft.orders.map((candidate) =>
+      candidate.id === orderId
+        ? synchronizeOrderWithOffer(candidate, offer, Date.now())
+        : candidate
+    );
+    return persistOrders(nextOrders);
+  }
+
+  async function persistOrders(nextOrders: CrmOrder[]) {
+    if (!draft) return false;
+    const updatedCustomer = {
+      ...draft,
+      orders: nextOrders,
+      updatedAt: Date.now(),
+    };
+    setIsSavingOrder(true);
+    try {
+      await updateDoc(doc(database, CRM_COLLECTION, draft.id), {
+        orders: updatedCustomer.orders,
+        updatedAt: updatedCustomer.updatedAt,
+      });
+      replaceCustomer(updatedCustomer);
+      setFeedback("saved");
+      return true;
+    } catch {
+      setFeedback("error");
+      return false;
+    } finally {
+      setIsSavingOrder(false);
+    }
+  }
+
+  function updateOrderTasks(
+    orderId: string,
+    updateTasks: (order: CrmOrder) => CrmOrder["tasks"]
+  ) {
+    if (!draft || isSavingOrder) return Promise.resolve(false);
+    const now = Date.now();
+    const nextOrders = draft.orders.map((order) => {
+      if (order.id !== orderId) return order;
+      const tasks = updateTasks(order).map(normalizeCrmOrderTask);
+      return {
+        ...order,
+        tasks,
+        status: getCrmOrderStatus(tasks),
+        updatedAt: now,
+      };
+    });
+    return persistOrders(nextOrders);
+  }
+
+  function toggleOrderTask(orderId: string, taskId: string) {
+    const task = draft?.orders
+      .find((order) => order.id === orderId)
+      ?.tasks.find((orderTask) => orderTask.id === taskId);
+    if (!task) return;
+    updateOrderTask(orderId, taskId, { completed: !task.completed });
+  }
+
+  function updateOrderTask(
+    orderId: string,
+    taskId: string,
+    updates: Partial<CrmOrderTask>
+  ) {
+    return updateOrderTasks(orderId, (order) =>
+      order.tasks.map((orderTask) => {
+        if (orderTask.id !== taskId) return orderTask;
+        const updatedTask = normalizeCrmOrderTask({ ...orderTask, ...updates });
+        if (updatedTask.kind !== "task") {
+          updatedTask.completed = isCrmOrderTaskComplete(updatedTask);
+        }
+        if (isCrmOrderTaskComplete(updatedTask)) {
+          updatedTask.completedAt ??= Date.now();
+        } else {
+          delete updatedTask.completedAt;
+        }
+        return updatedTask;
+      })
+    );
+  }
+
+  function addOrderTask(
+    orderId: string,
+    phase: CrmOrderTaskPhase,
+    title: string
+  ) {
+    updateOrderTasks(orderId, (order) => [
+      ...order.tasks,
+      {
+        id: crypto.randomUUID(),
+        phase,
+        title,
+        details: "",
+        serviceType: "general",
+        kind: "task",
+        role: phase === "before" ? "office" : "crewLead",
+        required: true,
+        requiresEvidence: false,
+        blocksOnNegative: false,
+        completed: false,
+        value: "",
+        note: "",
+        evidence: [],
+        custom: true,
+      },
+    ]);
+  }
+
+  function removeOrderTask(orderId: string, taskId: string) {
+    updateOrderTasks(orderId, (order) =>
+      order.tasks.filter((orderTask) => orderTask.id !== taskId)
+    );
+  }
+
+  async function uploadOrderTaskEvidence(
+    orderId: string,
+    taskId: string,
+    file: File
+  ) {
+    const ownerId = companyData?.id;
+    const customer = draft;
+    const orderTask = customer?.orders
+      .find((order) => order.id === orderId)
+      ?.tasks.find((task) => task.id === taskId);
+    if (!ownerId || !customer || !orderTask) {
+      throw new Error("Der Nachweis konnte keiner Aufgabe zugeordnet werden.");
+    }
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const storageRef = ref(
+      storage,
+      `crm-orders/${ownerId}/${customer.id}/${orderId}/${taskId}/${crypto.randomUUID()}-${safeName}`
+    );
+    const snapshot = await uploadBytes(storageRef, file, {
+      contentType: file.type,
+    });
+    const url = await getDownloadURL(snapshot.ref);
+    const saved = await updateOrderTask(orderId, taskId, {
+      evidence: [
+        ...orderTask.evidence,
+        {
+          id: crypto.randomUUID(),
+          url,
+          name: file.name,
+          uploadedAt: Date.now(),
+        },
+      ],
+    });
+    if (!saved) {
+      throw new Error(
+        "Die Datei wurde hochgeladen, konnte aber nicht am Auftrag gespeichert werden."
+      );
+    }
+  }
+
+  async function saveTaskTemplates(nextTemplates: CrmTaskTemplate[]) {
+    const ownerId = companyData?.id;
+    if (!ownerId) return false;
+    setIsSavingTemplates(true);
+    try {
+      await setDoc(
+        doc(database, OFFER_COLLECTION, ownerId),
+        {
+          taskTemplates: nextTemplates,
+          taskTemplateCatalogVersion: CRM_TASK_TEMPLATE_CATALOG_VERSION,
+          updatedAt: Date.now(),
+        },
+        { merge: true }
+      );
+      setTaskTemplates(nextTemplates);
+      setFeedback("saved");
+      return true;
+    } catch {
+      setFeedback("error");
+      return false;
+    } finally {
+      setIsSavingTemplates(false);
+    }
+  }
+
+  function applyTaskTemplate(orderId: string, template: CrmTaskTemplate) {
+    updateOrderTasks(orderId, (order) => {
+      const existingByTemplateTask = new Map(
+        order.tasks
+          .filter(
+            (orderTask) =>
+              orderTask.templateId === template.id && orderTask.templateTaskId
+          )
+          .map((orderTask) => [orderTask.templateTaskId, orderTask])
+      );
+      const templateTasks = template.tasks.map((templateTask) => {
+        const existingTask = existingByTemplateTask.get(templateTask.id);
+        return normalizeCrmOrderTask({
+          ...(existingTask ?? {
+            id: crypto.randomUUID(),
+            completed: false,
+            value: "",
+            note: "",
+            evidence: [],
+          }),
+          phase: templateTask.phase,
+          title: templateTask.title,
+          details: templateTask.details,
+          serviceType: "template",
+          kind: templateTask.kind ?? "task",
+          role:
+            templateTask.role ??
+            (templateTask.phase === "before" ? "office" : "crewLead"),
+          required: templateTask.required ?? true,
+          requiresEvidence: templateTask.requiresEvidence ?? false,
+          blocksOnNegative: templateTask.blocksOnNegative ?? false,
+          templateId: template.id,
+          templateTaskId: templateTask.id,
+          templateName: template.name,
+        });
+      });
+      const unrelatedTasks = order.tasks.filter(
+        (orderTask) => orderTask.templateId !== template.id
+      );
+      return [...unrelatedTasks, ...templateTasks];
+    });
+  }
+
   async function permanentlyDeleteCustomer() {
     if (!draft || draft.status !== "inactive") return;
     try {
@@ -872,7 +1234,12 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
               </div>
             </div>
 
-            <div className='grid gap-6 p-4 sm:p-6 2xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]'>
+            <nav className='flex gap-1 border-b border-slate-200 px-4 pt-2 sm:px-6' aria-label='Kundenakte'>
+              <button type='button' onClick={() => setActiveCustomerTab("overview")} className={`border-b-2 px-3 py-2.5 text-sm font-medium transition ${activeCustomerTab === "overview" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-900"}`}>Übersicht</button>
+              {draft.orders.length > 0 && <button type='button' onClick={() => setActiveCustomerTab("tasks")} className={`flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition ${activeCustomerTab === "tasks" ? "border-blue-600 text-blue-700" : "border-transparent text-slate-500 hover:text-slate-900"}`}><ClipboardList size={16} /> Aufgaben <span className='rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700'>{draft.orders.reduce((total, order) => total + order.tasks.filter((task) => !task.completed).length, 0)}</span></button>}
+            </nav>
+
+            {activeCustomerTab === "overview" ? <div className='grid gap-6 p-4 sm:p-6 2xl:grid-cols-[minmax(0,0.9fr)_minmax(420px,1.1fr)]'>
               <div className='space-y-6'>
                 <section>
                   <div className='mb-3 flex items-center justify-between gap-3'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><UserRound size={17} /> Stammdaten</h3><Button size='sm' onClick={() => void saveProfile()} disabled={isSaving || !draft.name.trim()}><Save /> Speichern</Button></div>
@@ -911,7 +1278,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
                 <section className='border-t border-slate-200 pt-5'>
                   <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><BriefcaseBusiness size={17} /> Angebote</h3><span className={`text-xs ${offerEmailFeedback === "sent" ? "font-medium text-emerald-700" : "text-slate-500"}`}>{offerEmailFeedback === "sent" ? "E-Mail versendet" : `${selectedOffers.length} gespeichert`}</span></div>
-                  {selectedOffers.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-7 text-center'><p className='text-sm text-slate-500'>Für diesen Kunden ist noch kein Angebot gespeichert.</p><Button asChild size='sm' className='mt-3'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}`}><Plus /> Erstes Angebot</Link></Button></div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{selectedOffers.map((offer) => { const isMoveOffer = offer.planning?.serviceTypes?.some((service) => service === "move" || service === "seniorMove") ?? false; return <div key={offer.id} className='flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between'><span className='min-w-0'><span className='block truncate text-sm font-medium text-slate-950'>{offer.title || "Unbenanntes Angebot"}</span><span className='mt-1 block text-xs text-slate-500'>{formatDate(offer.createdAt)}{typeof offer.grossTotal === "number" ? ` · ${currencyFormatter.format(offer.grossTotal)}` : ""}</span></span><span className='flex shrink-0 flex-wrap gap-2'><Button variant='outline' size='sm' onClick={() => openOfferEmailDialog(offer)}><Mail /> E-Mail</Button><Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}&offerId=${offer.id}`}>Öffnen</Link></Button>{isMoveOffer && <Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/protocols?customerId=${draft.id}&offerId=${offer.id}`}><ClipboardCheck /> Übergabe</Link></Button>}<Button asChild size='sm'><Link href={`/admin/${companyData?.id}/crm/invoices?customerId=${draft.id}&offerId=${offer.id}`}><ReceiptText /> Rechnung</Link></Button></span></div>; })}</div>}
+                  {selectedOffers.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-7 text-center'><p className='text-sm text-slate-500'>Für diesen Kunden ist noch kein Angebot gespeichert.</p><Button asChild size='sm' className='mt-3'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}`}><Plus /> Erstes Angebot</Link></Button></div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{selectedOffers.map((offer) => { const isMoveOffer = offer.planning?.serviceTypes?.some((service) => service === "move" || service === "seniorMove") ?? false; const order = draft.orders.find((item) => item.offerId === offer.id); return <div key={offer.id} className='flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between'><span className='min-w-0'><span className='flex items-center gap-2'><span className='block truncate text-sm font-medium text-slate-950'>{offer.title || "Unbenanntes Angebot"}</span>{order && <span className='shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700'>Angenommen</span>}</span><span className='mt-1 block text-xs text-slate-500'>{formatDate(offer.createdAt)}{typeof offer.grossTotal === "number" ? ` · ${currencyFormatter.format(offer.grossTotal)}` : ""}</span></span><span className='flex shrink-0 flex-wrap gap-2'><Button variant='outline' size='sm' onClick={() => openOfferEmailDialog(offer)}><Mail /> E-Mail</Button><Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/calculator?customerId=${draft.id}&offerId=${offer.id}`}>Öffnen</Link></Button>{isMoveOffer && <Button asChild variant='outline' size='sm'><Link href={`/admin/${companyData?.id}/crm/protocols?customerId=${draft.id}&offerId=${offer.id}`}><ClipboardCheck /> Übergabe</Link></Button>}{order ? <Button variant='outline' size='sm' onClick={() => { setSelectedOrderId(order.id); setActiveCustomerTab("tasks"); }}><ClipboardList /> Aufgaben</Button> : <Button size='sm' onClick={() => void acceptOffer(offer)} disabled={isSavingOrder}><Check /> Akzeptieren</Button>}<Button asChild size='sm' variant={order ? "default" : "outline"}><Link href={`/admin/${companyData?.id}/crm/invoices?customerId=${draft.id}&offerId=${offer.id}`}><ReceiptText /> Rechnung</Link></Button></span></div>; })}</div>}
                 </section>
 
                 <section className='border-t border-slate-200 pt-5'>
@@ -921,7 +1288,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
                   {draft.notes.length > 0 && <div className='mt-4 space-y-3'>{draft.notes.map((note) => <article key={note.id} className='group border-l-2 border-blue-500 bg-slate-50 px-3 py-2.5'><div className='flex items-start justify-between gap-3'><p className='whitespace-pre-wrap text-sm leading-5 text-slate-700'>{note.text}</p><Button variant='ghost' size='icon' className='h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100' title='Notiz löschen' onClick={() => void deleteNote(note.id)}><Trash2 size={14} className='text-red-600' /></Button></div><p className='mt-2 flex items-center gap-1 text-[11px] text-slate-400'><Clock3 size={12} /> {formatDate(note.createdAt)}</p></article>)}</div>}
                 </section>
               </div>
-            </div>
+            </div> : <OrderTasksPanel orders={draft.orders} templates={taskTemplates} selectedOrderId={selectedOrderId} isSaving={isSavingOrder} isSavingTemplates={isSavingTemplates} onSelectOrder={setSelectedOrderId} onReanalyzeOrder={reanalyzeOrder} onToggleTask={toggleOrderTask} onUpdateTask={updateOrderTask} onUploadEvidence={uploadOrderTaskEvidence} onAddTask={addOrderTask} onRemoveTask={removeOrderTask} onApplyTemplate={applyTaskTemplate} onSaveTemplates={saveTaskTemplates} />}
           </section>
         ) : (
           <section className='flex min-h-96 flex-col items-center justify-center px-6 text-center'><span className='flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500'><UserRound size={25} /></span><h2 className='mt-4 text-lg font-semibold text-slate-950'>Kundenakte auswählen</h2><p className='mt-1 max-w-sm text-sm text-slate-500'>Wähle links einen Kunden aus oder lege den ersten Kontakt an.</p><Button className='mt-4' onClick={() => setIsCustomerDialogOpen(true)}><Plus /> Kunde anlegen</Button></section>

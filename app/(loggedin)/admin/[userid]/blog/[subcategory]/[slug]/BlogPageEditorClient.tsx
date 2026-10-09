@@ -30,6 +30,8 @@ interface EditorProps {
   initialData: BlogPage | null;
   subcategorySlug: string;
   mainCategory: AdminBlogMainCategory;
+  requestedSlug: string;
+  availableParents: { id: string; titel: string; path: string }[];
 }
 
 type TabKey = "content" | "settings" | "seo" | "faq";
@@ -40,6 +42,8 @@ export default function BlogPageEditorClient({
   initialData,
   subcategorySlug,
   mainCategory,
+  requestedSlug,
+  availableParents,
 }: EditorProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("content");
@@ -47,6 +51,8 @@ export default function BlogPageEditorClient({
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [titel, setTitel] = useState(initialData?.titel || "");
+  const [slug, setSlug] = useState(initialData?.slug || requestedSlug);
+  const [parentId, setParentId] = useState(initialData?.parentId || "");
   const [description, setDescription] = useState(
     initialData?.description || ""
   );
@@ -85,6 +91,8 @@ export default function BlogPageEditorClient({
       if (initialData) {
         await updateBlogPage(initialData.id, {
           titel,
+          slug,
+          parentId: parentId || null,
           description,
           thumbnailUrl: thumbnailUrl || null,
           keywords: keywords
@@ -100,6 +108,8 @@ export default function BlogPageEditorClient({
       } else {
         await createBlogPage({
           titel,
+          slug,
+          parentId: parentId || null,
           description,
           subcategorySlug,
           mainCategory: mainCategory,
@@ -127,6 +137,8 @@ export default function BlogPageEditorClient({
   }, [
     initialData,
     titel,
+    slug,
+    parentId,
     description,
     thumbnailUrl,
     keywords,
@@ -167,7 +179,7 @@ export default function BlogPageEditorClient({
           {saved && <span className='text-xs text-emerald-700'>Gespeichert</span>}
           {initialData?.visible && (
             <Link
-              href={`/blog/${mainCategory}/${subcategorySlug}/${initialData.slug}`}
+              href={`/blog/${initialData.path || `${mainCategory}/${subcategorySlug}/${initialData.slug}`}`}
               target='_blank'
               title='Öffentliche Seite öffnen'
               aria-label='Öffentliche Seite öffnen'
@@ -220,6 +232,39 @@ export default function BlogPageEditorClient({
               onChange={(e) => setTitel(e.target.value)}
               className='w-full border rounded px-2 py-1'
             />
+          </div>
+          <div className='grid gap-4 md:grid-cols-2'>
+            <label>
+              <span className='mb-1 block text-sm font-medium'>URL-Slug</span>
+              <input
+                value={slug}
+                onChange={(event) => setSlug(event.target.value)}
+                className='w-full rounded border px-3 py-2'
+                placeholder='umzugshilfe'
+              />
+              <span className='mt-1 block text-xs text-slate-500'>
+                Nur der letzte Teil der URL, ohne Schrägstriche.
+              </span>
+            </label>
+            <label>
+              <span className='mb-1 block text-sm font-medium'>Übergeordnete Seite</span>
+              <select
+                value={parentId}
+                onChange={(event) => setParentId(event.target.value)}
+                className='w-full rounded border px-3 py-2'>
+                <option value=''>Keine – direkt unter /blog</option>
+                {availableParents.map((page) => (
+                  <option key={page.id} value={page.id}>
+                    /blog/{page.path} – {page.titel}
+                  </option>
+                ))}
+              </select>
+              <span className='mt-1 block text-xs text-slate-500'>
+                Vorschau: /blog/{parentId
+                  ? `${availableParents.find((page) => page.id === parentId)?.path || ""}/`
+                  : ""}{slug || "slug"}
+              </span>
+            </label>
           </div>
           <div>
             <label className='block text-sm font-medium mb-1'>

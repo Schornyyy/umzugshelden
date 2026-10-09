@@ -47,7 +47,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .filter((p) => p.visible)
       .forEach((p) => {
         entries.push({
-          url: `${BASE_URL}/blog/${p.mainCategory}/${p.subcategorySlug}/${p.slug}`,
+          url: `${BASE_URL}/blog/${p.path || `${p.mainCategory}/${p.subcategorySlug}/${p.slug}`}`,
           lastModified: new Date(p.updatedAt || p.createdAt),
           priority: 0.8,
           changeFrequency: "weekly",

@@ -1,143 +1,183 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
 import {
-  EditorState,
   Editor,
+  EditorState,
   RichUtils,
-  convertToRaw,
   convertFromRaw,
+  convertToRaw,
+  type DraftHandleValue,
 } from "draft-js";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import "draft-js/dist/Draft.css";
 
-export const RichTextEditor = ({
-  field,
-  defaultValue,
-}: {
-  field: { onChange: (v: string) => void };
+type Props = {
+  field: { onChange: (value: string) => void };
   defaultValue: string;
-}) => {
-  // Initialisiere den Editor-State mit dem defaultValue (falls vorhanden)
-  const [editorState, setEditorState] = useState(() => {
-    if (defaultValue) {
-      try {
-        const parsedContent = JSON.parse(defaultValue);
-        const contentState = convertFromRaw(parsedContent);
-        return EditorState.createWithContent(contentState);
-      } catch (e: any) {
-        console.error(
-          "Invalid defaultValue format, initializing with empty editor",
-          e
-        );
-        return EditorState.createEmpty();
-      }
-    }
+};
+
+const BUTTON_CLASS =
+  "rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100";
+
+function createInitialState(value: string) {
+  if (!value) return EditorState.createEmpty();
+  try {
+    return EditorState.createWithContent(convertFromRaw(JSON.parse(value)));
+  } catch (error) {
+    console.error("Rich-Text-Inhalt konnte nicht geladen werden", error);
     return EditorState.createEmpty();
-  });
+  }
+}
 
-  // Handhabt Änderungen im Editor und übergibt die Änderungen an das Formular
-  const handleEditorChange = (state: EditorState) => {
+export function RichTextEditor({ field, defaultValue }: Props) {
+  const [editorState, setEditorState] = useState(() => createInitialState(defaultValue));
+  const editorRef = useRef<Editor>(null);
+
+  const commit = (state: EditorState) => {
     setEditorState(state);
-
-    // Konvertiere Editor-Inhalte in einen JSON-String und aktualisiere das Feld
-    const contentState = state.getCurrentContent();
-    const rawContent = JSON.stringify(convertToRaw(contentState));
-    field.onChange(rawContent); // `onChange` an React Hook Form übergeben
+    field.onChange(JSON.stringify(convertToRaw(state.getCurrentContent())));
   };
 
-  // Handhabt Tastenkürzelbefehle für Formatierungen
-  const handleKeyCommand = (command: string) => {
-    const newState = RichUtils.handleKeyCommand(editorState, command);
-    if (newState) {
-      handleEditorChange(newState);
-      return "handled";
-    }
-    return "not-handled";
+  const handleKeyCommand = (command: string): DraftHandleValue => {
+    const next = RichUtils.handleKeyCommand(editorState, command);
+    if (!next) return "not-handled";
+    commit(next);
+    return "handled";
   };
 
-  // Umschaltet den Blocktyp (Absatz, Listen, Überschrift)
-  const toggleBlockType = (blockType: string) => {
-    const newState = RichUtils.toggleBlockType(editorState, blockType);
-    handleEditorChange(newState);
-  };
-
-  // Umschaltet den Inline-Stil (z.B. fett, kursiv, unterstrichen)
   const toggleInlineStyle = (style: string) => {
-    const newState = RichUtils.toggleInlineStyle(editorState, style);
-    handleEditorChange(newState);
+    commit(RichUtils.toggleInlineStyle(editorState, style));
+    editorRef.current?.focus();
+  };
+
+  const toggleBlockType = (blockType: string) => {
+    commit(RichUtils.toggleBlockType(editorState, blockType));
+    editorRef.current?.focus();
+  };
+
+  const replaceStyleGroup = (prefix: string, style: string) => {
+    let next = editorState;
+    editorState.getCurrentInlineStyle().forEach((activeStyle) => {
+      if (activeStyle?.startsWith(prefix)) {
+        next = RichUtils.toggleInlineStyle(next, activeStyle);
+      }
+    });
+    if (!next.getCurrentInlineStyle().has(style)) {
+      next = RichUtils.toggleInlineStyle(next, style);
+    }
+    commit(next);
+    editorRef.current?.focus();
+  };
+
+  const addLink = () => {
+    const selection = editorState.getSelection();
+    if (selection.isCollapsed()) {
+      window.alert("Bitte zuerst den zu verlinkenden Text markieren.");
+      return;
+    }
+    const url = window.prompt("Linkziel eingeben (https://, mailto:, tel: oder /pfad)");
+    if (!url) return;
+    if (!(url.startsWith("/") || /^(https?:|mailto:|tel:)/i.test(url))) {
+      window.alert("Das Linkziel ist ungültig.");
+      return;
+    }
+    const content = editorState.getCurrentContent();
+    const contentWithEntity = content.createEntity("LINK", "MUTABLE", { url });
+    const entityKey = contentWithEntity.getLastCreatedEntityKey();
+    const stateWithEntity = EditorState.set(editorState, {
+      currentContent: contentWithEntity,
+    });
+    commit(RichUtils.toggleLink(stateWithEntity, selection, entityKey));
+  };
+
+  const removeLink = () => {
+    commit(RichUtils.toggleLink(editorState, editorState.getSelection(), null));
   };
 
   return (
-    <div className='border rounded-md p-4'>
-      {/* Formatierungs-Toolbar */}
-      <div className='mb-4 flex gap-2 flex-row flex-wrap'>
-        {/* Inline Style Buttons */}
-        <button
-          type='button'
-          onClick={() => toggleInlineStyle("BOLD")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Bold
+    <div className='overflow-hidden rounded-md border border-slate-300 bg-white'>
+      <div className='flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 p-2'>
+        <select
+          className={BUTTON_CLASS}
+          value={editorState.getCurrentContent().getBlockForKey(editorState.getSelection().getStartKey()).getType()}
+          onChange={(event) => toggleBlockType(event.target.value)}
+          aria-label='Absatzformat'>
+          <option value='unstyled'>Absatz</option>
+          <option value='header-one'>Überschrift 1</option>
+          <option value='header-two'>Überschrift 2</option>
+          <option value='header-three'>Überschrift 3</option>
+          <option value='header-four'>Überschrift 4</option>
+          <option value='blockquote'>Zitat</option>
+          <option value='code-block'>Codeblock</option>
+        </select>
+        {[
+          ["BOLD", "Fett"],
+          ["ITALIC", "Kursiv"],
+          ["UNDERLINE", "Unterstrichen"],
+          ["STRIKETHROUGH", "Durchgestrichen"],
+          ["CODE", "Code"],
+        ].map(([style, label]) => (
+          <button key={style} type='button' className={BUTTON_CLASS} onClick={() => toggleInlineStyle(style)}>
+            {label}
+          </button>
+        ))}
+        <button type='button' className={BUTTON_CLASS} onClick={() => toggleBlockType("unordered-list-item")}>
+          Aufzählung
         </button>
-        <button
-          type='button'
-          onClick={() => toggleInlineStyle("ITALIC")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Italic
+        <button type='button' className={BUTTON_CLASS} onClick={() => toggleBlockType("ordered-list-item")}>
+          Nummerierung
         </button>
-        <button
-          type='button'
-          onClick={() => toggleInlineStyle("UNDERLINE")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Underline
-        </button>
-        {/* Block Type Buttons */}
-        <button
-          type='button'
-          onClick={() => toggleBlockType("unordered-list-item")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Unordered List
-        </button>
-        <button
-          type='button'
-          onClick={() => toggleBlockType("ordered-list-item")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Ordered List
-        </button>
-        <button
-          type='button'
-          onClick={() => toggleBlockType("header-one")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Überschrift
-        </button>
-        <button
-          type='button'
-          onClick={() => toggleBlockType("header-two")}
-          className='px-4 py-2 bg-gray-200 rounded'>
-          Kl. Überschrift
-        </button>
+        <label className={`${BUTTON_CLASS} flex items-center gap-1`}>
+          Farbe
+          <input
+            type='color'
+            className='h-5 w-6 cursor-pointer border-0 bg-transparent p-0'
+            onChange={(event) => replaceStyleGroup("COLOR-", `COLOR-${event.target.value}`)}
+          />
+        </label>
+        <select
+          className={BUTTON_CLASS}
+          defaultValue=''
+          aria-label='Schriftgröße'
+          onChange={(event) => {
+            if (event.target.value) replaceStyleGroup("FONT_SIZE-", `FONT_SIZE-${event.target.value}`);
+            event.target.value = "";
+          }}>
+          <option value='' disabled>Schriftgröße</option>
+          {[12, 14, 16, 18, 20, 24, 28, 32, 40, 48].map((size) => (
+            <option key={size} value={size}>{size}px</option>
+          ))}
+        </select>
+        <button type='button' className={BUTTON_CLASS} onClick={addLink}>Link setzen</button>
+        <button type='button' className={BUTTON_CLASS} onClick={removeLink}>Link entfernen</button>
       </div>
-
-      {/* Der eigentliche Editor */}
-      <div
-        className='border p-4 rounded bg-white'
-        style={{ minHeight: "200px" }}>
+      <div className='min-h-52 cursor-text p-4' onClick={() => editorRef.current?.focus()}>
         <Editor
+          ref={editorRef}
           editorState={editorState}
-          onChange={handleEditorChange}
+          onChange={commit}
           handleKeyCommand={handleKeyCommand}
-          placeholder='Gib hier deine Produktbeschreibung ein...'
+          placeholder='Text eingeben und frei formatieren ...'
+          customStyleFn={(styles) => {
+            const result: React.CSSProperties = {};
+            styles.forEach((style) => {
+              if (style?.startsWith("COLOR-")) result.color = style.slice(6);
+              if (style?.startsWith("FONT_SIZE-")) result.fontSize = `${style.slice(10)}px`;
+            });
+            return result;
+          }}
         />
       </div>
     </div>
   );
-};
+}
 
-// Lightweight adapter for simpler usage (value/onChange)
-export const SimpleRichTextEditor = ({
+export function SimpleRichTextEditor({
   value,
   onChange,
 }: {
   value: string;
-  onChange: (val: string) => void;
-}) => {
+  onChange: (value: string) => void;
+}) {
   return <RichTextEditor field={{ onChange }} defaultValue={value} />;
-};
+}

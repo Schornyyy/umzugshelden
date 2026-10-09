@@ -24,6 +24,112 @@ export interface CrmAppointment {
   createdAt: number;
 }
 
+export type CrmOrderTaskPhase = "before" | "during" | "after";
+export type CrmOrderTaskKind =
+  | "task"
+  | "check"
+  | "measurement"
+  | "evidence"
+  | "approval";
+export type CrmOrderTaskRole =
+  | "office"
+  | "projectLead"
+  | "crewLead"
+  | "driver"
+  | "installer"
+  | "painter"
+  | "specialist"
+  | "customer";
+export type CrmOrderTaskAnswer = "yes" | "no" | "notApplicable";
+
+export interface CrmOrderTaskEvidence {
+  id: string;
+  url: string;
+  name: string;
+  uploadedAt: number;
+}
+
+export interface CrmOrderTask {
+  id: string;
+  phase: CrmOrderTaskPhase;
+  title: string;
+  details: string;
+  serviceType: string;
+  kind: CrmOrderTaskKind;
+  role: CrmOrderTaskRole;
+  required: boolean;
+  requiresEvidence: boolean;
+  blocksOnNegative: boolean;
+  completed: boolean;
+  completedAt?: number;
+  answer?: CrmOrderTaskAnswer;
+  value: string;
+  note: string;
+  evidence: CrmOrderTaskEvidence[];
+  custom?: boolean;
+  templateId?: string;
+  templateTaskId?: string;
+  templateName?: string;
+  automationKey?: string;
+  moduleId?: string;
+}
+
+export interface CrmTaskTemplateItem {
+  id: string;
+  phase: CrmOrderTaskPhase;
+  title: string;
+  details: string;
+  kind?: CrmOrderTaskKind;
+  role?: CrmOrderTaskRole;
+  required?: boolean;
+  requiresEvidence?: boolean;
+  blocksOnNegative?: boolean;
+}
+
+export interface CrmTaskTemplate {
+  id: string;
+  name: string;
+  description: string;
+  tasks: CrmTaskTemplateItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CrmOrderAutomationModule {
+  id: string;
+  label: string;
+  reason: string;
+}
+
+export interface CrmOrderAutomationRisk {
+  id: string;
+  severity: "high" | "medium" | "low";
+  title: string;
+  details: string;
+  taskKey: string;
+}
+
+export interface CrmOrderAutomation {
+  version: number;
+  generatedAt: number;
+  modules: CrmOrderAutomationModule[];
+  risks: CrmOrderAutomationRisk[];
+}
+
+export interface CrmOrder {
+  id: string;
+  offerId: string;
+  offerTitle: string;
+  offerNumber: string;
+  serviceTypes: string[];
+  serviceDate: string;
+  status: "active" | "completed";
+  tasks: CrmOrderTask[];
+  automation?: CrmOrderAutomation;
+  acceptedAt: number;
+  updatedAt: number;
+}
+
 export interface CrmCustomer {
   id: string;
   ownerId: string;
@@ -40,6 +146,7 @@ export interface CrmCustomer {
   tags: string[];
   notes: CrmNote[];
   appointments: CrmAppointment[];
+  orders: CrmOrder[];
   createdAt: number;
   updatedAt: number;
 }

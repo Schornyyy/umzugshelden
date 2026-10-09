@@ -12,6 +12,7 @@ interface PageDataItem {
   thumbnailUrl?: string;
   visible: boolean;
   createdAt: number;
+  path?: string;
 }
 interface PageData {
   items: PageDataItem[];
@@ -103,6 +104,9 @@ export default function BlogPagesListClient({
               </div>
               <p className='text-xs text-slate-600 line-clamp-3 min-h-[48px]'>
                 {item.description}
+              </p>
+              <p className='break-all rounded bg-slate-50 px-2 py-1 text-[10px] text-slate-500'>
+                /blog/{item.path || item.slug}
               </p>
               <div className='flex items-center justify-end gap-2'>
                 <Link

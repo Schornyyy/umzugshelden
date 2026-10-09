@@ -12,6 +12,7 @@ import {
   updateDoc,
   deleteDoc,
   setDoc,
+  writeBatch,
   orderBy,
   limit,
 } from "firebase/firestore";
@@ -33,6 +34,7 @@ const COLLECTION = "blogPages_umzugshelden";
 // cache key helpers (local, to avoid editing central enum for now)
 const cacheKeyBySlug = (subcategorySlug: string, slug: string) => `BLOG_PAGE_${subcategorySlug}_${slug}`;
 const cacheKeyListBySub = (subcategorySlug: string) => `BLOG_PAGES_LIST_${subcategorySlug}`;
+const cacheKeyByPath = (path: string) => `BLOG_PAGE_PATH_${path}`;
 
 // Zod schemas
 const sectionSchema = z.object({
@@ -55,11 +57,27 @@ const safeLinkSchema = z.string().trim().min(1).max(2048).refine(
 
 const blockStyleSchema = z.object({
   backgroundColor: colorSchema.optional(),
+  backgroundImage: z.string().url().optional(),
+  backgroundPosition: z.enum(["top", "center", "bottom"]).optional(),
+  overlayColor: colorSchema.optional(),
+  overlayOpacity: z.number().min(0).max(100).optional(),
   textColor: colorSchema.optional(),
+  accentColor: colorSchema.optional(),
   alignment: z.enum(["left", "center", "right"]).optional(),
   width: z.enum(["narrow", "normal", "wide", "full"]).optional(),
   padding: z.enum(["none", "small", "medium", "large"]).optional(),
   borderRadius: z.enum(["none", "small", "medium", "large"]).optional(),
+  headingSize: z.number().min(16).max(96).optional(),
+  textSize: z.number().min(10).max(32).optional(),
+  paddingTop: z.number().min(0).max(240).optional(),
+  paddingBottom: z.number().min(0).max(240).optional(),
+  marginTop: z.number().min(0).max(160).optional(),
+  marginBottom: z.number().min(0).max(160).optional(),
+  minHeight: z.number().min(0).max(1200).optional(),
+  borderRadiusPx: z.number().min(0).max(64).optional(),
+  hideOnDesktop: z.boolean().optional(),
+  hideOnTablet: z.boolean().optional(),
+  hideOnMobile: z.boolean().optional(),
 });
 
 const blockSchema = z.object({
@@ -71,6 +89,7 @@ const blockSchema = z.object({
     "imageText",
     "quote",
     "button",
+    "carousel",
     "divider",
     "spacer",
   ]),
@@ -87,6 +106,32 @@ const blockSchema = z.object({
   buttonUrl: safeLinkSchema.optional(),
   buttonStyle: z.enum(["primary", "secondary", "outline"]).optional(),
   spacerHeight: z.number().int().min(8).max(240).optional(),
+  carouselSlides: z.array(z.object({
+    imageUrl: z.string().url().or(z.literal("")),
+    imageAlt: z.string().max(300),
+    heading: z.string().max(300).optional(),
+    text: z.string().max(2000).optional(),
+    linkLabel: z.string().max(100).optional(),
+    linkUrl: safeLinkSchema.optional(),
+  })).max(30).optional(),
+  carouselAutoplay: z.boolean().optional(),
+  carouselInterval: z.number().int().min(1000).max(30000).optional(),
+  carouselShowArrows: z.boolean().optional(),
+  carouselShowDots: z.boolean().optional(),
+  slides: z.array(z.object({
+    image: z.string().url().or(z.literal("")),
+    imageAlt: z.string().max(300),
+    imageTitle: z.string().max(300).optional(),
+    imageCaption: z.string().max(500).optional(),
+    heading: z.string().max(300).optional(),
+    text: z.string().max(2000).optional(),
+    linkLabel: z.string().max(100).optional(),
+    linkUrl: safeLinkSchema.optional(),
+  })).max(30).optional(),
+  autoplay: z.boolean().optional(),
+  interval: z.number().int().min(1000).max(30000).optional(),
+  showArrows: z.boolean().optional(),
+  showDots: z.boolean().optional(),
   style: blockStyleSchema.optional(),
 });
 
@@ -120,6 +165,8 @@ const baseSchema = z.object({
   blocks: z.array(blockSchema).max(100).optional(),
   settings: settingsSchema.optional(),
   visible: z.boolean().default(false),
+  slug: z.string().trim().min(1).max(120).optional(),
+  parentId: z.string().trim().min(1).nullable().optional(),
 });
 
 export type CreateBlogPageInput = z.infer<typeof baseSchema> & { id?: string };
@@ -142,6 +189,49 @@ function buildSlug(titel: string) {
   return slugify(titel.trim().toLowerCase());
 }
 
+function normalizePath(value: string) {
+  return value.split("/").map((part) => slugify(part.trim().toLowerCase())).filter(Boolean).join("/");
+}
+
+function getStoredPath(page: Partial<BlogPage>) {
+  if (page.path) return normalizePath(page.path);
+  return normalizePath(`${page.mainCategory || ""}/${page.subcategorySlug || ""}/${page.slug || ""}`);
+}
+
+async function getAllBlogPagesRaw() {
+  const snap = await getDocs(collection(database, COLLECTION));
+  return snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<BlogPage, "id">) }));
+}
+
+async function resolvePagePath(
+  slug: string,
+  parentId: string | null | undefined,
+  currentId?: string,
+) {
+  const pages = await getAllBlogPagesRaw();
+  if (parentId === currentId) throw new Error("Eine Seite kann nicht ihr eigener Elternpunkt sein");
+  const parent = parentId ? pages.find((page) => page.id === parentId) : undefined;
+  if (parentId && !parent) throw new Error("Die gewählte übergeordnete Seite existiert nicht");
+
+  if (currentId && parent) {
+    let ancestor: typeof parent | undefined = parent;
+    const visited = new Set<string>();
+    while (ancestor) {
+      if (ancestor.id === currentId) throw new Error("Unterseiten können nicht zu ihren eigenen Eltern gemacht werden");
+      if (visited.has(ancestor.id)) throw new Error("Ungültige Seitenhierarchie");
+      visited.add(ancestor.id);
+      ancestor = ancestor.parentId
+        ? pages.find((page) => page.id === ancestor?.parentId)
+        : undefined;
+    }
+  }
+
+  const path = normalizePath(parent ? `${getStoredPath(parent)}/${slug}` : slug);
+  const duplicate = pages.find((page) => page.id !== currentId && getStoredPath(page) === path);
+  if (duplicate) throw new Error(`Die Blog-URL /blog/${path} ist bereits vergeben`);
+  return { path, pages };
+}
+
 function removeUndefinedDeep<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map(removeUndefinedDeep) as T;
@@ -156,10 +246,11 @@ function removeUndefinedDeep<T>(value: T): T {
   return value;
 }
 
-function invalidateCaches(subcategorySlug: string, slug?: string) {
+function invalidateCaches(subcategorySlug: string, slug?: string, path?: string) {
   try {
     cacheManager.delete(cacheKeyListBySub(subcategorySlug));
     if (slug) cacheManager.delete(cacheKeyBySlug(subcategorySlug, slug));
+    if (path) cacheManager.delete(cacheKeyByPath(path));
   } catch {}
 }
 
@@ -168,6 +259,7 @@ function revalidateBlogRoutes(subcategorySlug: string, slug?: string) {
     revalidatePath("/blog");
     revalidatePath(`/blog/${subcategorySlug}`);
     if (slug) revalidatePath(`/blog/${subcategorySlug}/${slug}`);
+    revalidatePath("/blog", "layout");
   } catch {}
 }
 
@@ -187,13 +279,10 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
     visible: input.visible ?? false,
   });
 
-  const slug = buildSlug(parsed.titel);
+  const slug = normalizePath(input.slug || buildSlug(parsed.titel));
+  if (slug.includes("/")) throw new Error("Der Slug darf nur aus einem URL-Segment bestehen");
+  const { path } = await resolvePagePath(slug, input.parentId, input.id);
   const colRef = collection(database, COLLECTION);
-  // slug uniqueness per subcategory
-  const qDup = query(colRef, where("subcategorySlug", "==", parsed.subcategorySlug), where("slug", "==", slug));
-  const dupSnap = await getDocs(qDup);
-  if (!dupSnap.empty) throw new Error("Blog Seite mit diesem Titel/Slug existiert bereits");
-
   const now = Date.now();
 
   if (input.id) {
@@ -213,16 +302,21 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
         faq: parsed.faq as BlogPageFAQEntry[],
         blocks: parsed.blocks as BlogPageBlock[] | undefined,
         settings: parsed.settings as BlogPageSettings | undefined,
+        slug,
+        path,
+        parentId: input.parentId || null,
         visible: parsed.visible,
         updatedAt: now,
       }));
-      const existingData = existing.data() as { slug: string };
-      invalidateCaches(parsed.subcategorySlug, existingData.slug);
+      const existingData = existing.data() as { slug: string; path?: string };
+      invalidateCaches(parsed.subcategorySlug, existingData.slug, existingData.path);
       revalidateBlogRoutes(parsed.subcategorySlug, existingData.slug);
       return ref.id;
     } else {
       await setDoc(ref, removeUndefinedDeep({
         slug,
+        path,
+        parentId: input.parentId || null,
         titel: parsed.titel,
         description: parsed.description,
         subcategorySlug: parsed.subcategorySlug,
@@ -245,6 +339,8 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
   } else {
     const docRef = await addDoc(colRef, removeUndefinedDeep({
       slug,
+      path,
+      parentId: input.parentId || null,
       titel: parsed.titel,
       description: parsed.description,
       subcategorySlug: parsed.subcategorySlug,
@@ -281,6 +377,8 @@ export async function getBlogPageBySlug(subcategorySlug: string, slug: string): 
   const page: BlogPage = {
     id: d.id,
     slug: data.slug,
+    path: getStoredPath(data),
+    parentId: data.parentId || null,
     titel: data.titel,
     description: data.description,
     subcategorySlug: data.subcategorySlug,
@@ -300,6 +398,25 @@ export async function getBlogPageBySlug(subcategorySlug: string, slug: string): 
   return page;
 }
 
+export async function getBlogPageByPath(path: string): Promise<BlogPage | null> {
+  const normalized = normalizePath(path);
+  const key = cacheKeyByPath(normalized);
+  const cached = cacheManager.get<BlogPage>(key);
+  if (cached) return cached;
+
+  const pages = await getAllBlogPagesRaw();
+  const page = pages.find((item) => getStoredPath(item) === normalized) || null;
+  if (page) cacheManager.set(key, page, { ttl: 5 * 60 * 1000 });
+  return page;
+}
+
+export async function listAllBlogPages(): Promise<BlogPage[]> {
+  const pages = await getAllBlogPagesRaw();
+  return pages
+    .map((page) => ({ ...page, path: getStoredPath(page), parentId: page.parentId || null }))
+    .sort((a, b) => getStoredPath(a).localeCompare(getStoredPath(b), "de"));
+}
+
 export async function listBlogPagesBySubcategory(subcategorySlug: string): Promise<BlogPage[]> {
   const key = cacheKeyListBySub(subcategorySlug);
   const cached = cacheManager.get<BlogPage[]>(key);
@@ -313,6 +430,8 @@ export async function listBlogPagesBySubcategory(subcategorySlug: string): Promi
     return {
       id: d.id,
       slug: data.slug,
+      path: getStoredPath(data),
+      parentId: data.parentId || null,
       titel: data.titel,
       description: data.description,
       subcategorySlug: data.subcategorySlug,
@@ -353,9 +472,48 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
     subcategorySlug: string;
   } & Partial<BlogPage>;
   const currentSlug: string = existing.slug;
+  const currentPath = getStoredPath(existing);
   const parsedPatch: FirestoreBlogPagePatch = {};
 
   if (patch.titel !== undefined) parsedPatch.titel = patch.titel; // slug not recalculated
+  const nextSlug = patch.slug !== undefined ? normalizePath(patch.slug) : currentSlug;
+  if (!nextSlug || nextSlug.includes("/")) throw new Error("Der Slug muss genau ein gültiges URL-Segment enthalten");
+  const nextParentId = patch.parentId !== undefined ? patch.parentId : existing.parentId;
+  if (patch.slug !== undefined || patch.parentId !== undefined) {
+    const { path: nextPath, pages } = await resolvePagePath(nextSlug, nextParentId, id);
+    parsedPatch.slug = nextSlug;
+    parsedPatch.path = nextPath;
+    parsedPatch.parentId = nextParentId || null;
+
+    if (nextPath !== currentPath) {
+      const descendants = pages
+        .filter((page) => page.id !== id && getStoredPath(page).startsWith(`${currentPath}/`))
+        .sort((a, b) => getStoredPath(a).length - getStoredPath(b).length);
+      const movedIds = new Set(descendants.map((page) => page.id));
+      for (const descendant of descendants) {
+        const descendantPath = `${nextPath}${getStoredPath(descendant).slice(currentPath.length)}`;
+        const collision = pages.find(
+          (page) =>
+            page.id !== id &&
+            !movedIds.has(page.id) &&
+            getStoredPath(page) === descendantPath,
+        );
+        if (collision) {
+          throw new Error(`Die Unterseiten-URL /blog/${descendantPath} ist bereits vergeben`);
+        }
+      }
+      const batch = writeBatch(database);
+      descendants.forEach((page) => {
+        const descendantPath = `${nextPath}${getStoredPath(page).slice(currentPath.length)}`;
+        batch.update(doc(database, COLLECTION, page.id), {
+          path: descendantPath,
+          updatedAt: Date.now(),
+        });
+        invalidateCaches(page.subcategorySlug, page.slug, getStoredPath(page));
+      });
+      if (descendants.length) await batch.commit();
+    }
+  }
   if (patch.description !== undefined) parsedPatch.description = patch.description;
   if (patch.thumbnailUrl !== undefined) parsedPatch.thumbnailUrl = patch.thumbnailUrl || null;
   if (patch.keywords !== undefined) parsedPatch.keywords = patch.keywords || [];
@@ -376,7 +534,7 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
   parsedPatch.updatedAt = Date.now();
 
   await updateDoc(ref, removeUndefinedDeep(parsedPatch));
-  invalidateCaches(existing.subcategorySlug, currentSlug);
+  invalidateCaches(existing.subcategorySlug, currentSlug, currentPath);
   revalidateBlogRoutes(existing.subcategorySlug, currentSlug);
   return true;
 }
@@ -385,9 +543,13 @@ export async function deleteBlogPage(id: string): Promise<boolean> {
   const ref = doc(database, COLLECTION, id);
   const snap = await getDoc(ref);
   if (!snap.exists()) return false;
-  const data = snap.data() as { subcategorySlug: string; slug: string };
+  const data = snap.data() as BlogPage;
+  const pages = await getAllBlogPagesRaw();
+  if (pages.some((page) => page.parentId === id)) {
+    throw new Error("Diese Seite besitzt Unterseiten. Bitte verschiebe oder lösche diese zuerst.");
+  }
   await deleteDoc(ref);
-  invalidateCaches(data.subcategorySlug, data.slug);
+  invalidateCaches(data.subcategorySlug, data.slug, getStoredPath(data));
   revalidateBlogRoutes(data.subcategorySlug, data.slug);
   return true;
 }

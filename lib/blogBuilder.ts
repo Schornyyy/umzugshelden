@@ -66,6 +66,17 @@ export function createBlogBlock(type: BlogBlockType): BlogPageBlock {
         buttonStyle: "primary",
         style: { ...base.style, alignment: "center" },
       };
+    case "carousel":
+      return {
+        ...base,
+        heading: "Bildergalerie",
+        carouselSlides: [],
+        carouselAutoplay: false,
+        carouselInterval: 5000,
+        carouselShowArrows: true,
+        carouselShowDots: true,
+        style: { ...base.style, width: "wide", padding: "medium" },
+      };
     case "spacer":
       return { ...base, spacerHeight: 48, style: { padding: "none" } };
     case "divider":

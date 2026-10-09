@@ -643,6 +643,13 @@ function formatCurrency(value: number) {
   return currencyFormatter.format(Number.isFinite(value) ? value : 0);
 }
 
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("de-DE", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(value) ? value : 0);
+}
+
 function toNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
@@ -1249,6 +1256,9 @@ type CalculationRow = {
   id: string;
   label: string;
   formula: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
   value: number;
 };
 
@@ -1268,116 +1278,176 @@ function getCalculationRows(
   const positionLabels = calculation.positionLabels ?? {};
   const resolveLabel = (id: string, fallback: string) =>
     positionLabels[id] ?? fallback;
-  const useServiceRows =
-    calculation.autoEstimate && recommendation.serviceShares.length > 0;
-  const totalLabourHours = recommendation.serviceShares.reduce(
-    (total, share) => total + share.labourHours,
-    0
-  );
-  const shareTotals = recommendation.serviceShares.reduce(
-    (totals, share) => ({
-      material: totals.material + share.materialCost,
-      disposal: totals.disposal + share.disposalCost,
-      storage: totals.storage + share.storageCost,
-      logistics: totals.logistics + share.logisticsCost,
-    }),
-    { material: 0, disposal: 0, storage: 0, logistics: 0 }
-  );
-  const serviceRows: CalculationRow[] = recommendation.serviceShares.map(
-    (share) => {
-      const personalPart =
-        totalLabourHours > 0
-          ? pricing.employeeCost * (share.labourHours / totalLabourHours)
-          : 0;
-      const materialPart =
-        shareTotals.material > 0
-          ? calculation.materialCost * (share.materialCost / shareTotals.material)
-          : 0;
-      const disposalPart =
-        shareTotals.disposal > 0
-          ? calculation.disposalCost * (share.disposalCost / shareTotals.disposal)
-          : 0;
-      const storagePart =
-        shareTotals.storage > 0
-          ? calculation.storageCost * (share.storageCost / shareTotals.storage)
-          : 0;
-      const logisticsPart =
-        shareTotals.logistics > 0
-          ? calculation.logisticsCost *
-            (share.logisticsCost / shareTotals.logistics)
-          : 0;
-      const id = `service:${share.service}`;
-      return {
-        id,
-        label: resolveLabel(
-          id,
-          serviceOptions.find((option) => option.id === share.service)?.label ??
-            share.service
-        ),
-        formula: [
-          `${share.labourHours.toFixed(1)} Std. Arbeitszeit (${formatCurrency(personalPart)})`,
-          ...(materialPart > 0 ? [`Material ${formatCurrency(materialPart)}`] : []),
-          ...(disposalPart > 0 ? [`Entsorgung ${formatCurrency(disposalPart)}`] : []),
-          ...(storagePart > 0 ? [`Lagerkosten ${formatCurrency(storagePart)}`] : []),
-          ...(logisticsPart > 0
-            ? [`Lift/Halteverbotszone ${formatCurrency(logisticsPart)}`]
-            : []),
-        ].join(" + "),
-        value:
-          personalPart + materialPart + disposalPart + storagePart + logisticsPart,
-      };
-    }
-  );
-  const materialFormula = calculation.autoEstimate
-    ? recommendation.materials.length > 0
-      ? recommendation.materials
-          .map(
-            (item) =>
-              `${item.packageQuantity} × ${item.packageLabel} ${item.name} (${formatCurrency(item.netTotal)} netto)`
-          )
-          .join(" + ")
-      : "Kein Materialbedarf"
-    : "Manuell festgelegter Betrag";
   const clearanceVolume = calculation.planning.disposalVolumeM3 || volume;
   const storageVolume = calculation.planning.storageVolumeM3 || volume;
-  const disposalParts = [
-    ...(calculation.planning.clearanceDisposalIncluded
+  const disposalBase =
+    calculation.planning.clearanceContainerCount * rates.containerRate +
+    (calculation.planning.clearanceDisposalIncluded
+      ? clearanceVolume * rates.disposalRatePerM3 +
+        calculation.planning.clearanceHazardousVolumeM3 *
+          rates.hazardousDisposalRatePerM3
+      : 0);
+  const appliedClearanceCredit = Math.min(
+    disposalBase,
+    calculation.planning.clearanceCredit
+  );
+  const parkingUnits = calculation.planning.parkingRequired
+    ? (calculation.planning.serviceTypes.some(
+        (service) => service === "move" || service === "seniorMove"
+      )
+        ? 1
+        : 0) +
+      (calculation.planning.serviceTypes.includes("clearance") ? 1 : 0)
+    : 0;
+  const materialTotal = recommendation.materials.reduce(
+    (total, item) => total + item.netTotal,
+    0
+  );
+  const materialRows: CalculationRow[] =
+    calculation.autoEstimate && recommendation.materials.length > 0
+      ? recommendation.materials.map((item) => {
+          const value =
+            materialTotal > 0
+              ? calculation.materialCost * (item.netTotal / materialTotal)
+              : 0;
+          return {
+            id: `material:${item.id}`,
+            label: resolveLabel(`material:${item.id}`, item.name),
+            formula: `${item.packageQuantity} × ${item.packageLabel}`,
+            quantity: item.packageQuantity,
+            unit: item.packageLabel,
+            unitPrice:
+              item.packageQuantity > 0 ? value / item.packageQuantity : 0,
+            value,
+          };
+        })
+      : calculation.materialCost > 0
+        ? [{
+            id: "material",
+            label: resolveLabel("material", "Material"),
+            formula: "Manuell festgelegter Betrag",
+            quantity: 1,
+            unit: "Pauschale",
+            unitPrice: calculation.materialCost,
+            value: calculation.materialCost,
+          }]
+        : [];
+  const disposalRows: CalculationRow[] =
+    calculation.autoEstimate
       ? [
-          `${clearanceVolume} m³ × ${formatCurrency(rates.disposalRatePerM3)}`,
-          ...(calculation.planning.clearanceHazardousVolumeM3 > 0
-            ? [`${calculation.planning.clearanceHazardousVolumeM3} m³ Sondermüll × ${formatCurrency(rates.hazardousDisposalRatePerM3)}`]
+          ...(calculation.planning.clearanceDisposalIncluded && clearanceVolume > 0
+            ? [{
+                id: "disposal",
+                label: resolveLabel("disposal", "Entsorgung"),
+                formula: `${clearanceVolume} m³ × ${formatCurrency(rates.disposalRatePerM3)}`,
+                quantity: clearanceVolume,
+                unit: "m³",
+                unitPrice: rates.disposalRatePerM3,
+                value: clearanceVolume * rates.disposalRatePerM3,
+              }]
+            : []),
+          ...(calculation.planning.clearanceDisposalIncluded &&
+          calculation.planning.clearanceHazardousVolumeM3 > 0
+            ? [{
+                id: "hazardousDisposal",
+                label: resolveLabel("hazardousDisposal", "Sondermüll"),
+                formula: `${calculation.planning.clearanceHazardousVolumeM3} m³ × ${formatCurrency(rates.hazardousDisposalRatePerM3)}`,
+                quantity: calculation.planning.clearanceHazardousVolumeM3,
+                unit: "m³",
+                unitPrice: rates.hazardousDisposalRatePerM3,
+                value:
+                  calculation.planning.clearanceHazardousVolumeM3 *
+                  rates.hazardousDisposalRatePerM3,
+              }]
+            : []),
+          ...(calculation.planning.clearanceContainerCount > 0
+            ? [{
+                id: "container",
+                label: resolveLabel("container", "Container"),
+                formula: `${calculation.planning.clearanceContainerCount} × ${formatCurrency(rates.containerRate)}`,
+                quantity: calculation.planning.clearanceContainerCount,
+                unit: "Stück",
+                unitPrice: rates.containerRate,
+                value:
+                  calculation.planning.clearanceContainerCount *
+                  rates.containerRate,
+              }]
+            : []),
+          ...(appliedClearanceCredit > 0
+            ? [{
+                id: "clearanceCredit",
+                label: resolveLabel("clearanceCredit", "Wertanrechnung"),
+                formula: "Gutschrift",
+                quantity: 1,
+                unit: "Pauschale",
+                unitPrice: -appliedClearanceCredit,
+                value: -appliedClearanceCredit,
+              }]
             : []),
         ]
-      : []),
-    ...(calculation.planning.clearanceContainerCount > 0
-      ? [`${calculation.planning.clearanceContainerCount} Container × ${formatCurrency(rates.containerRate)}`]
-      : []),
-  ].join(" + ");
-  const disposalFormula = calculation.autoEstimate
-    ? `${disposalParts || "Ohne Entsorgung"}${calculation.planning.clearanceCredit > 0 ? ` - ${formatCurrency(calculation.planning.clearanceCredit)} Wertanrechnung` : ""}`
-    : "Manuell festgelegter Betrag";
-  const logisticsFormula = calculation.autoEstimate
-    ? [
-        ...(calculation.planning.furnitureLiftRequired
-          ? [`${Math.ceil(Math.max(1, calculation.planning.moveTrips) / 2)} Tag(e) Möbellift × ${formatCurrency(rates.furnitureLiftDailyRate)}`]
-          : []),
-        ...(calculation.planning.parkingRequired
-          ? [`Halteverbotszone ${formatCurrency(rates.parkingPermitRate)}`]
-          : []),
-      ].join(" + ")
-    : "Manuell festgelegter Betrag";
+      : calculation.disposalCost > 0
+        ? [{
+            id: "disposal",
+            label: resolveLabel("disposal", "Entsorgung"),
+            formula: "Manuell festgelegter Betrag",
+            quantity: 1,
+            unit: "Pauschale",
+            unitPrice: calculation.disposalCost,
+            value: calculation.disposalCost,
+          }]
+        : [];
+  const logisticsRows: CalculationRow[] =
+    calculation.autoEstimate
+      ? [
+          ...(calculation.planning.furnitureLiftRequired
+            ? [{
+                id: "furnitureLift",
+                label: resolveLabel("furnitureLift", "Möbellift"),
+                formula: `${Math.ceil(Math.max(1, calculation.planning.moveTrips) / 2)} Tag(e) × ${formatCurrency(rates.furnitureLiftDailyRate)}`,
+                quantity: Math.ceil(
+                  Math.max(1, calculation.planning.moveTrips) / 2
+                ),
+                unit: "Tag",
+                unitPrice: rates.furnitureLiftDailyRate,
+                value:
+                  Math.ceil(Math.max(1, calculation.planning.moveTrips) / 2) *
+                  rates.furnitureLiftDailyRate,
+              }]
+            : []),
+          ...(parkingUnits > 0
+            ? [{
+                id: "parking",
+                label: resolveLabel("parking", "Halteverbotszone"),
+                formula: `${parkingUnits} × ${formatCurrency(rates.parkingPermitRate)}`,
+                quantity: parkingUnits,
+                unit: "Pauschale",
+                unitPrice: rates.parkingPermitRate,
+                value: parkingUnits * rates.parkingPermitRate,
+              }]
+            : []),
+        ]
+      : calculation.logisticsCost > 0
+        ? [{
+            id: "logistics",
+            label: resolveLabel("logistics", "Lift & Halteverbotszone"),
+            formula: "Manuell festgelegter Betrag",
+            quantity: 1,
+            unit: "Pauschale",
+            unitPrice: calculation.logisticsCost,
+            value: calculation.logisticsCost,
+          }]
+        : [];
 
   return [
-    ...(useServiceRows
-      ? serviceRows
-      : [
-          {
-            id: "personal",
-            label: resolveLabel("personal", "Personal"),
-            formula: `${calculation.employees} Mitarbeiter × ${calculation.hoursPerEmployee} Std. × ${formatCurrency(rates.employeeHourlyRate)}`,
-            value: pricing.employeeCost,
-          },
-        ]),
+    ...(pricing.employeeCost > 0 ? [{
+      id: "personal",
+      label: resolveLabel("personal", "Umzugshelfer"),
+      formula: `${calculation.employees} Umzugshelfer × ${calculation.hoursPerEmployee} Std. × ${formatCurrency(rates.employeeHourlyRate)}`,
+      quantity: calculation.employees,
+      unit: `${calculation.hoursPerEmployee} Std./Helfer`,
+      unitPrice: rates.employeeHourlyRate,
+      value: pricing.employeeCost,
+    }] : []),
     ...calculation.planning.vehicleSelections.flatMap((selection) => {
       const vehicle = vehicleOptions.find(
         (option) => option.id === selection.vehicleId
@@ -1387,40 +1457,60 @@ function getCalculationRows(
         id: `vehicle:${vehicle.id}`,
         label: resolveLabel(`vehicle:${vehicle.id}`, vehicle.name),
         formula: `${selection.quantity} Fahrzeug(e) × ${calculation.vehicleDays} Tag(e) × ${formatCurrency(vehicle.dailyRate)}`,
+        quantity: selection.quantity,
+        unit: `${calculation.vehicleDays} Tag(e)`,
+        unitPrice: vehicle.dailyRate,
         value: selection.quantity * calculation.vehicleDays * vehicle.dailyRate,
       }];
     }),
-    {
+    ...(pricing.mileageCost > 0 ? [{
       id: "mileage",
       label: resolveLabel("mileage", "Fahrtstrecke"),
       formula: `${calculation.kilometers} km × ${formatCurrency(rates.kilometerRate)}`,
+      quantity: calculation.kilometers,
+      unit: "km",
+      unitPrice: rates.kilometerRate,
       value: pricing.mileageCost,
-    },
-    {
+    }] : []),
+    ...(rates.planningFee > 0 ? [{
       id: "planningFee",
       label: resolveLabel("planningFee", "Planungs- & Auftragspauschale"),
       formula: "Festbetrag",
+      quantity: 1,
+      unit: "Pauschale",
+      unitPrice: rates.planningFee,
       value: rates.planningFee,
-    },
-    ...(!useServiceRows && calculation.materialCost > 0
-      ? [{ id: "material", label: resolveLabel("material", "Material"), formula: materialFormula, value: calculation.materialCost }]
+    }] : []),
+    ...materialRows,
+    ...disposalRows,
+    ...(calculation.storageCost > 0
+      ? [{
+          id: "storage",
+          label: resolveLabel("storage", "Einlagerung"),
+          formula: calculation.autoEstimate
+            ? `${storageVolume} m³ × ${Math.max(1, calculation.planning.storageMonths)} Monat(e) × ${formatCurrency(rates.storageRatePerM3Month)}`
+            : "Manuell festgelegter Betrag",
+          quantity: calculation.autoEstimate
+            ? storageVolume * Math.max(1, calculation.planning.storageMonths)
+            : 1,
+          unit: calculation.autoEstimate ? "m³/Monat" : "Pauschale",
+          unitPrice: calculation.autoEstimate
+            ? rates.storageRatePerM3Month
+            : calculation.storageCost,
+          value: calculation.storageCost,
+        }]
       : []),
-    ...(!useServiceRows && calculation.disposalCost > 0
-      ? [{ id: "disposal", label: resolveLabel("disposal", "Entsorgung"), formula: disposalFormula, value: calculation.disposalCost }]
-      : []),
-    ...(!useServiceRows && calculation.storageCost > 0
-      ? [{ id: "storage", label: resolveLabel("storage", "Einlagerung"), formula: calculation.autoEstimate ? `${storageVolume} m³ × ${Math.max(1, calculation.planning.storageMonths)} Monat(e) × ${formatCurrency(rates.storageRatePerM3Month)}` : "Manuell festgelegter Betrag", value: calculation.storageCost }]
-      : []),
-    ...(!useServiceRows && calculation.logisticsCost > 0
-      ? [{ id: "logistics", label: resolveLabel("logistics", "Lift & Halteverbotszone"), formula: logisticsFormula, value: calculation.logisticsCost }]
-      : []),
+    ...logisticsRows,
     ...(calculation.otherCost > 0
-      ? [{ id: "other", label: resolveLabel("other", "Weitere Kosten"), formula: "Manueller Betrag", value: calculation.otherCost }]
+      ? [{ id: "other", label: resolveLabel("other", "Weitere Kosten"), formula: "Manueller Betrag", quantity: 1, unit: "Pauschale", unitPrice: calculation.otherCost, value: calculation.otherCost }]
       : []),
     ...calculation.planning.extraServices.map((service) => ({
       id: `extra:${service.id}`,
       label: service.name || "Zusatzleistung",
       formula: `${service.quantity} × ${formatCurrency(service.unitPrice)}`,
+      quantity: service.quantity,
+      unit: "Stück",
+      unitPrice: service.unitPrice,
       value: service.quantity * service.unitPrice,
     })),
   ];
@@ -2384,6 +2474,9 @@ export default function OfferPlanner() {
       .map(
         (row) => `<tr>
           <td><strong>${escapePrintHtml(row.label)}</strong>${costEstimatePrintOptions.calculationDetails ? `<span>${escapePrintHtml(row.formula)}</span>` : ""}</td>
+          <td>${formatNumber(row.quantity)}</td>
+          <td>${escapePrintHtml(row.unit)}</td>
+          <td>${formatCurrency(row.unitPrice)}</td>
           <td>${formatCurrency(row.value)}</td>
         </tr>`
       )
@@ -2474,11 +2567,13 @@ export default function OfferPlanner() {
         .facts strong { display: block; margin-top: 2px; color: #0D2650; }
         table { width: 100%; border-collapse: collapse; }
         th { border-bottom: 2px solid #E87722; padding: 8px 7px; color: #0D2650; font-size: 8pt; text-align: left; text-transform: uppercase; }
-        th:last-child { text-align: right; }
+        th:nth-child(n+2) { text-align: right; }
         td { border-bottom: 1px solid #e8edf3; padding: 9px 7px; vertical-align: top; }
         td strong { display: block; color: #0D2650; }
         td span { display: block; margin-top: 2px; color: #62728c; font-size: 8.5pt; }
-        td:last-child { width: 34mm; color: #0D2650; font-weight: 700; text-align: right; white-space: nowrap; }
+        td:nth-child(n+2) { text-align: right; }
+        td:nth-child(2), td:nth-child(4), td:last-child { white-space: nowrap; }
+        td:last-child { color: #0D2650; font-weight: 700; }
         .totals { width: 92mm; margin: 16px 0 0 auto; border: 1px solid #dbe1ea; border-radius: 4px; padding: 12px 14px; break-inside: avoid; }
         .total-row { display: flex; justify-content: space-between; gap: 18px; padding: 4px 0; color: #52647f; }
         .total-row strong { color: #0D2650; white-space: nowrap; }
@@ -2512,7 +2607,7 @@ export default function OfferPlanner() {
         ${siteDetailsHtml}
         ${scopeHtml}
         <h2>Leistungen und Kosten</h2>
-        <table><thead><tr><th>Position / Berechnung</th><th>Betrag</th></tr></thead><tbody>${rowsHtml}</tbody></table>
+        <table><thead><tr><th>Position / Berechnung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis</th><th>Gesamt</th></tr></thead><tbody>${rowsHtml}</tbody></table>
         <section class="totals">
           <div class="total-row"><span>Direkte Kosten</span><strong>${formatCurrency(pricing.directCost)}</strong></div>
           <div class="total-row"><span>Aufschlag (${rates.surchargePercent}%)</span><strong>${formatCurrency(pricing.surcharge)}</strong></div>

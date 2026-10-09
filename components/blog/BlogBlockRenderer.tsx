@@ -1,6 +1,7 @@
 "use client";
 
 import { RichTextRender } from "@/components/RichTextRender";
+import BlogCarousel from "@/components/blog/BlogCarousel";
 import type { BlogPageBlock } from "@/types/blog/BlogPage";
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
@@ -36,15 +37,32 @@ function BlockFrame({
   const style = block.style;
   const inlineStyle: CSSProperties = {
     backgroundColor: style?.backgroundColor,
+    backgroundImage: style?.backgroundImage
+      ? `linear-gradient(${style.overlayColor || "#000000"}${Math.round((style.overlayOpacity || 0) * 2.55).toString(16).padStart(2, "0")}, ${style.overlayColor || "#000000"}${Math.round((style.overlayOpacity || 0) * 2.55).toString(16).padStart(2, "0")}), url(${JSON.stringify(style.backgroundImage)})`
+      : undefined,
+    backgroundPosition: style?.backgroundPosition,
+    backgroundSize: style?.backgroundImage ? "cover" : undefined,
+    backgroundRepeat: style?.backgroundImage ? "no-repeat" : undefined,
     color: style?.textColor,
     textAlign: style?.alignment,
+    fontSize: style?.textSize,
+    paddingTop: style?.paddingTop,
+    paddingBottom: style?.paddingBottom,
+    marginTop: style?.marginTop,
+    marginBottom: style?.marginBottom,
+    minHeight: style?.minHeight,
+    borderRadius: style?.borderRadiusPx,
   };
 
   return (
     <section
       className={`mx-auto w-full ${widthClasses[style?.width || "normal"]} ${
         paddingClasses[style?.padding || "medium"]
-      } ${radiusClasses[style?.borderRadius || "none"]}`}
+      } ${radiusClasses[style?.borderRadius || "none"]} ${
+        style?.hideOnMobile ? "max-md:hidden" : ""
+      } ${style?.hideOnTablet ? "md:max-lg:hidden" : ""} ${
+        style?.hideOnDesktop ? "lg:hidden" : ""
+      }`}
       style={inlineStyle}>
       {children}
     </section>
@@ -59,7 +77,10 @@ function Heading({
   headingColor?: string;
 }) {
   const className = "font-bold leading-tight";
-  const style = { color: block.style?.textColor || headingColor };
+  const style = {
+    color: block.style?.textColor || headingColor,
+    fontSize: block.style?.headingSize,
+  };
   if (block.headingLevel === 4) {
     return <h4 className={`${className} text-xl`} style={style}>{block.heading}</h4>;
   }
@@ -131,6 +152,7 @@ export function BlogBlockRenderer({
   accentColor?: string;
   headingColor?: string;
 }) {
+  const blockAccentColor = block.style?.accentColor || accentColor;
   if (block.type === "spacer") {
     return <div aria-hidden='true' style={{ height: block.spacerHeight || 48 }} />;
   }
@@ -155,7 +177,7 @@ export function BlogBlockRenderer({
             )}
             <RichTextRender value={block.content} />
             {block.buttonUrl && (
-              <BlockButton block={block} accentColor={accentColor} />
+              <BlockButton block={block} accentColor={blockAccentColor} />
             )}
           </div>
         </div>
@@ -163,7 +185,7 @@ export function BlogBlockRenderer({
       {block.type === "quote" && (
         <blockquote
           className='border-l-4 py-2 pl-6 text-xl italic leading-relaxed'
-          style={{ borderColor: accentColor }}>
+          style={{ borderColor: blockAccentColor }}>
           <p>{block.quote}</p>
           {block.attribution && (
             <footer className='mt-3 text-sm not-italic opacity-70'>
@@ -173,7 +195,10 @@ export function BlogBlockRenderer({
         </blockquote>
       )}
       {block.type === "button" && (
-        <BlockButton block={block} accentColor={accentColor} />
+        <BlockButton block={block} accentColor={blockAccentColor} />
+      )}
+      {block.type === "carousel" && (
+        <BlogCarousel block={block} accentColor={blockAccentColor} />
       )}
       {block.type === "divider" && (
         <hr className='border-0 border-t border-current opacity-20' />

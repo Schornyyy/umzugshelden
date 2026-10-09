@@ -1,5 +1,5 @@
 import React from "react";
-import { getBlogPageBySlug } from "@/actions/blogPageActions";
+import { getBlogPageBySlug, listAllBlogPages } from "@/actions/blogPageActions";
 import { getBlogSubcategoryBySlug } from "@/actions/blogSubcategoryActions";
 import BlogPageEditorClient from "./BlogPageEditorClient";
 import { notFound } from "next/navigation";
@@ -16,6 +16,7 @@ export default async function BlogPageEditorPage({ params }: Props) {
   const subcat = await getBlogSubcategoryBySlug(subcategory);
   if (!subcat) return notFound();
   const page = await getBlogPageBySlug(subcategory, slug);
+  const allPages = await listAllBlogPages();
 
   return (
     <div className='p-6 space-y-6'>
@@ -31,6 +32,10 @@ export default async function BlogPageEditorPage({ params }: Props) {
         initialData={page}
         subcategorySlug={subcat.slug}
         mainCategory={subcat.mainCategory}
+        requestedSlug={slug}
+        availableParents={allPages
+          .filter((item) => item.id !== page?.id)
+          .map((item) => ({ id: item.id, titel: item.titel, path: item.path || item.slug }))}
       />
     </div>
   );

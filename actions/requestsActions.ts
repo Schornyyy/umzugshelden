@@ -71,6 +71,7 @@ export async function createRequest(
 			},
 		],
 		appointments: [],
+		orders: [],
 		createdAt,
 		updatedAt: createdAt,
 	};
@@ -169,4 +170,3 @@ export async function addRequestNotice(
 	await updateDoc(docRef, { notices: updated.notices });
 	return updated;
 }
-

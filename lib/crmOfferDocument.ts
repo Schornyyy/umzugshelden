@@ -438,13 +438,23 @@ export function createOfferDocumentHtml(
   const hoursPerEmployee = safeNumber(offer.hoursPerEmployee);
   const vehicleDays = safeNumber(offer.vehicleDays);
   const kilometers = safeNumber(offer.kilometers);
-  const rows: Array<{ label: string; formula: string; value: number }> = [];
+  const rows: Array<{
+    label: string;
+    formula: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    value: number;
+  }> = [];
 
   const employeeCost = employees * hoursPerEmployee * employeeHourlyRate;
   if (employeeCost > 0) {
     rows.push({
-      label: "Personal",
-      formula: `${formatNumber(employees)} Mitarbeiter × ${formatNumber(hoursPerEmployee)} Std. × ${formatCurrency(employeeHourlyRate)}`,
+      label: "Umzugshelfer",
+      formula: `${formatNumber(employees)} Umzugshelfer × ${formatNumber(hoursPerEmployee)} Std. × ${formatCurrency(employeeHourlyRate)}`,
+      quantity: employees,
+      unit: `${formatNumber(hoursPerEmployee)} Std./Helfer`,
+      unitPrice: employeeHourlyRate,
       value: employeeCost,
     });
   }
@@ -455,6 +465,9 @@ export function createOfferDocumentHtml(
     rows.push({
       label: vehicle.name,
       formula: `${formatNumber(selection.quantity)} Fahrzeug(e) × ${formatNumber(vehicleDays)} Tag(e) × ${formatCurrency(vehicle.dailyRate)}`,
+      quantity: selection.quantity,
+      unit: `${formatNumber(vehicleDays)} Tag(e)`,
+      unitPrice: vehicle.dailyRate,
       value: selection.quantity * vehicleDays * vehicle.dailyRate,
     });
   }
@@ -464,13 +477,23 @@ export function createOfferDocumentHtml(
     rows.push({
       label: "Fahrtstrecke",
       formula: `${formatNumber(kilometers)} km × ${formatCurrency(safeNumber(rates.kilometerRate))}`,
+      quantity: kilometers,
+      unit: "km",
+      unitPrice: safeNumber(rates.kilometerRate),
       value: mileageCost,
     });
   }
 
   const planningFee = safeNumber(rates.planningFee);
   if (planningFee > 0) {
-    rows.push({ label: "Planungs- & Auftragspauschale", formula: "Festbetrag", value: planningFee });
+    rows.push({
+      label: "Planungs- & Auftragspauschale",
+      formula: "Festbetrag",
+      quantity: 1,
+      unit: "Pauschale",
+      unitPrice: planningFee,
+      value: planningFee,
+    });
   }
 
   const costRows: Array<[string, number | undefined]> = [
@@ -482,7 +505,16 @@ export function createOfferDocumentHtml(
   ];
   for (const [label, amount] of costRows) {
     const value = safeNumber(amount);
-    if (value > 0) rows.push({ label, formula: "Laut Angebotsplanung", value });
+    if (value > 0) {
+      rows.push({
+        label,
+        formula: "Laut Angebotsplanung",
+        quantity: 1,
+        unit: "Pauschale",
+        unitPrice: value,
+        value,
+      });
+    }
   }
 
   for (const service of planning.extraServices ?? []) {
@@ -491,6 +523,9 @@ export function createOfferDocumentHtml(
     rows.push({
       label: service.name || "Zusatzleistung",
       formula: `${formatNumber(service.quantity)} × ${formatCurrency(service.unitPrice)}`,
+      quantity: safeNumber(service.quantity),
+      unit: "Stück",
+      unitPrice: safeNumber(service.unitPrice),
       value,
     });
   }
@@ -523,7 +558,7 @@ export function createOfferDocumentHtml(
     .join("") : '<p class="muted">Der konkrete Leistungsumfang wurde noch nicht festgelegt.</p>'}</div>`;
   const costRowsHtml = rows
     .map(
-      (row) => `<tr><td><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.formula)}</span></td><td>${formatCurrency(row.value)}</td></tr>`
+      (row) => `<tr><td><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.formula)}</span></td><td>${formatNumber(row.quantity)}</td><td>${escapeHtml(row.unit)}</td><td>${formatCurrency(row.unitPrice)}</td><td>${formatCurrency(row.value)}</td></tr>`
     )
     .join("");
   const rooms = (planning.rooms ?? []).filter((room) => room.items?.length);
@@ -576,11 +611,12 @@ h3 { margin: 0 0 7px; color: #0d2650; font-size: 10.5pt; }
 .scope-item li + li { margin-top: 3px; }
 table { width: 100%; border-collapse: collapse; }
 th { border-bottom: 2px solid #e87722; padding: 7px; color: #0d2650; font-size: 8pt; text-align: left; text-transform: uppercase; }
-th:last-child, td:last-child { text-align: right; }
+th:nth-child(n+2), td:nth-child(n+2) { text-align: right; }
 td { border-bottom: 1px solid #e8edf3; padding: 8px 7px; vertical-align: top; }
 td strong { display: block; color: #0d2650; }
 td span { display: block; margin-top: 2px; color: #62728c; font-size: 8.5pt; }
-td:last-child { width: 35mm; font-weight: 700; white-space: nowrap; }
+td:nth-child(2), td:nth-child(4), td:last-child { white-space: nowrap; }
+td:last-child { font-weight: 700; }
 .totals { width: 92mm; margin: 16px 0 0 auto; border: 1px solid #dbe1ea; padding: 11px 13px; break-inside: avoid; }
 .total-row { display: flex; justify-content: space-between; gap: 15px; padding: 4px 0; color: #52647f; }
 .total-row strong { color: #0d2650; white-space: nowrap; }
@@ -600,7 +636,7 @@ tr, .header, .card, .totals { break-inside: avoid; }
 <section class="grid"><div class="card"><p class="label">Kunde</p><strong>${escapeHtml(customer.company || customer.name)}</strong>${customer.company ? `<div class="muted">${escapeHtml(customer.name)}</div>` : ""}<div class="muted">${customerAddress || "Adresse nicht angegeben"}<br>${escapeHtml(customer.email || "E-Mail nicht angegeben")}<br>${escapeHtml(customer.phone || "Telefon nicht angegeben")}${customer.customerNumber ? `<br>Kundennummer: ${escapeHtml(customer.customerNumber)}` : ""}</div></div><div class="card"><p class="label">Projekt</p><strong>${escapeHtml(services || "Leistung nach Vereinbarung")}</strong><div class="muted">Wunschtermin: ${escapeHtml(planning.date || "noch offen")}${offer.packageName ? `<br>Paket: ${escapeHtml(offer.packageName)}` : ""}</div></div></section>
 ${planning.oldAddress || planning.newAddress ? `<section class="grid"><div class="card"><p class="label">Auszug / Einsatzort</p><strong>${escapeHtml(planning.oldAddress || "Nicht angegeben")}</strong><div class="muted">Etage: ${escapeHtml(planning.oldFloor || "-")} · Aufzug: ${planning.oldElevator ? "vorhanden" : "nicht vorhanden"}</div></div><div class="card"><p class="label">Einzug / Zielort</p><strong>${escapeHtml(planning.newAddress || "Nicht angegeben")}</strong><div class="muted">Etage: ${escapeHtml(planning.newFloor || "-")} · Aufzug: ${planning.newElevator ? "vorhanden" : "nicht vorhanden"}</div></div></section>` : ""}
 ${scopeHtml}
-<h2>Leistungen und Kosten</h2><table><thead><tr><th>Position / Berechnung</th><th>Betrag</th></tr></thead><tbody>${costRowsHtml || '<tr><td>Leistung nach Vereinbarung</td><td>-</td></tr>'}</tbody></table>
+<h2>Leistungen und Kosten</h2><table><thead><tr><th>Position / Berechnung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis</th><th>Gesamt</th></tr></thead><tbody>${costRowsHtml || '<tr><td>Leistung nach Vereinbarung</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'}</tbody></table>
 <section class="totals"><div class="total-row"><span>Direkte Kosten</span><strong>${formatCurrency(directCost)}</strong></div><div class="total-row"><span>Aufschlag (${formatNumber(surchargePercent)} %)</span><strong>${formatCurrency(surcharge)}</strong></div>${discount > 0 ? `<div class="total-row"><span>Rabatt (${formatNumber(discountPercent)} %)</span><strong>-${formatCurrency(discount)}</strong></div>` : ""}<div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(netTotal)}</strong></div><div class="total-row"><span>MwSt. (${formatNumber(vatPercent)} %)</span><strong>${formatCurrency(vat)}</strong></div><div class="total-row gross"><span>Gesamtbetrag brutto</span><strong>${formatCurrency(grossTotal)}</strong></div></section>
 ${inventoryHtml}${planning.notes ? `<div class="notes"><strong>Hinweise zur Ausführung:</strong><br>${escapeHtml(planning.notes).replaceAll("\n", "<br>")}</div>` : ""}
 <div class="terms"><p><strong>Zahlungsbedingung:</strong> ${escapeHtml(offer.paymentTerms?.trim() || DEFAULT_OFFER_PAYMENT_TERMS)}</p><p><strong>Vertragsschluss:</strong> Dieses Angebot ist freibleibend. Ein Vertrag kommt durch unsere Auftragsbestätigung oder den Beginn der Leistungserbringung zustande.</p><p><strong>Grundlage:</strong> Es gelten unsere AGB unter umzugshelden.io/agb.</p></div>

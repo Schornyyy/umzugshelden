@@ -50,6 +50,7 @@ const BLOCK_LIBRARY: BlockLibraryItem[] = [
   { type: "imageText", label: "Bild + Text", description: "Zweispaltige Sektion", icon: Rows3 },
   { type: "quote", label: "Zitat", description: "Zitat mit Quelle", icon: Quote },
   { type: "button", label: "Button", description: "Interner oder externer Link", icon: MousePointerClick },
+  { type: "carousel", label: "Carousel", description: "Slider mit Bildern und Inhalten", icon: ImageIcon },
   { type: "divider", label: "Trennlinie", description: "Inhalte gliedern", icon: Minus },
   { type: "spacer", label: "Abstand", description: "Vertikaler Freiraum", icon: BetweenHorizontalStart },
 ];
@@ -69,8 +70,29 @@ function BlockInspector({
   block: BlogPageBlock;
   onChange: (patch: Partial<BlogPageBlock>) => void;
 }) {
+  const carouselSlides =
+    block.carouselSlides ||
+    block.slides?.map((slide) => ({
+      imageUrl: slide.image,
+      imageAlt: slide.imageAlt,
+      heading: slide.heading,
+      text: slide.text,
+      linkLabel: slide.linkLabel,
+      linkUrl: slide.linkUrl,
+    })) ||
+    [];
   const updateStyle = (patch: Partial<BlogBlockStyle>) =>
     onChange({ style: { ...block.style, ...patch } });
+  const updateCarouselSlide = (
+    index: number,
+    patch: Partial<NonNullable<BlogPageBlock["carouselSlides"]>[number]>,
+  ) => {
+    onChange({
+      carouselSlides: carouselSlides.map((slide, slideIndex) =>
+        slideIndex === index ? { ...slide, ...patch } : slide,
+      ),
+    });
+  };
 
   return (
     <div className='space-y-6'>
@@ -245,6 +267,132 @@ function BlockInspector({
           </div>
         )}
 
+        {block.type === "carousel" && (
+          <div className='space-y-5'>
+            <label>
+              <span className={LABEL_CLASS}>Überschrift</span>
+              <input
+                className={INPUT_CLASS}
+                value={block.heading || ""}
+                onChange={(event) => onChange({ heading: event.target.value })}
+              />
+            </label>
+            <div className='grid grid-cols-2 gap-3'>
+              <label className='flex items-center gap-2 text-xs text-slate-700'>
+                <input
+                  type='checkbox'
+                  checked={block.carouselAutoplay ?? block.autoplay ?? false}
+                  onChange={(event) => onChange({ carouselAutoplay: event.target.checked })}
+                />
+                Automatisch wechseln
+              </label>
+              <label>
+                <span className={LABEL_CLASS}>Intervall</span>
+                <select
+                  className={INPUT_CLASS}
+                  value={block.carouselInterval || block.interval || 5000}
+                  onChange={(event) => onChange({ carouselInterval: Number(event.target.value) })}>
+                  <option value={3000}>3 Sekunden</option>
+                  <option value={5000}>5 Sekunden</option>
+                  <option value={7000}>7 Sekunden</option>
+                  <option value={10000}>10 Sekunden</option>
+                </select>
+              </label>
+              <label className='flex items-center gap-2 text-xs text-slate-700'>
+                <input
+                  type='checkbox'
+                  checked={(block.carouselShowArrows ?? block.showArrows) !== false}
+                  onChange={(event) => onChange({ carouselShowArrows: event.target.checked })}
+                />
+                Pfeile anzeigen
+              </label>
+              <label className='flex items-center gap-2 text-xs text-slate-700'>
+                <input
+                  type='checkbox'
+                  checked={(block.carouselShowDots ?? block.showDots) !== false}
+                  onChange={(event) => onChange({ carouselShowDots: event.target.checked })}
+                />
+                Punkte anzeigen
+              </label>
+            </div>
+            <div className='space-y-4 border-t border-slate-200 pt-4'>
+              <div className='flex items-center justify-between'>
+                <p className='text-xs font-semibold uppercase text-slate-400'>
+                  Slides ({carouselSlides.length})
+                </p>
+                <button
+                  type='button'
+                  className='rounded bg-slate-900 px-3 py-1.5 text-xs font-medium text-white'
+                  onClick={() =>
+                    onChange({
+                      carouselSlides: [
+                        ...carouselSlides,
+                        { imageUrl: "", imageAlt: "" },
+                      ],
+                    })
+                  }>
+                  Slide hinzufügen
+                </button>
+              </div>
+              {carouselSlides.map((slide, index) => (
+                <div key={index} className='space-y-3 rounded border border-slate-200 p-3'>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-xs font-semibold'>Slide {index + 1}</span>
+                    <button
+                      type='button'
+                      className='text-xs text-red-600'
+                      onClick={() =>
+                        onChange({
+                          carouselSlides: carouselSlides.filter(
+                            (_, slideIndex) => slideIndex !== index,
+                          ),
+                        })
+                      }>
+                      Entfernen
+                    </button>
+                  </div>
+                  <div>
+                    <span className={LABEL_CLASS}>Bild</span>
+                    {slide.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={slide.imageUrl} alt='' className='mb-2 aspect-video w-full rounded object-cover' />
+                    )}
+                    <MediathekDialog
+                      btnName={slide.imageUrl ? "Bild ändern" : "Bild wählen"}
+                      onSelect={(selection) => {
+                        const imageUrl = Array.isArray(selection) ? selection[0] : selection;
+                        if (imageUrl) updateCarouselSlide(index, { imageUrl });
+                      }}
+                    />
+                  </div>
+                  <label>
+                    <span className={LABEL_CLASS}>Alternativtext</span>
+                    <input className={INPUT_CLASS} value={slide.imageAlt} onChange={(event) => updateCarouselSlide(index, { imageAlt: event.target.value })} />
+                  </label>
+                  <label>
+                    <span className={LABEL_CLASS}>Slide-Überschrift</span>
+                    <input className={INPUT_CLASS} value={slide.heading || ""} onChange={(event) => updateCarouselSlide(index, { heading: event.target.value || undefined })} />
+                  </label>
+                  <label>
+                    <span className={LABEL_CLASS}>Text</span>
+                    <textarea rows={3} className={INPUT_CLASS} value={slide.text || ""} onChange={(event) => updateCarouselSlide(index, { text: event.target.value || undefined })} />
+                  </label>
+                  <div className='grid grid-cols-2 gap-2'>
+                    <label>
+                      <span className={LABEL_CLASS}>Link-Text</span>
+                      <input className={INPUT_CLASS} value={slide.linkLabel || ""} onChange={(event) => updateCarouselSlide(index, { linkLabel: event.target.value || undefined })} />
+                    </label>
+                    <label>
+                      <span className={LABEL_CLASS}>Linkziel</span>
+                      <input className={INPUT_CLASS} placeholder='/kontakt' value={slide.linkUrl || ""} onChange={(event) => updateCarouselSlide(index, { linkUrl: event.target.value || undefined })} />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {block.type === "spacer" && (
           <label>
             <span className={LABEL_CLASS}>Höhe: {block.spacerHeight || 48}px</span>
@@ -353,6 +501,108 @@ function BlockInspector({
                 onChange={(event) => updateStyle({ textColor: event.target.value })}
               />
             </label>
+          </div>
+          <div>
+            <span className={LABEL_CLASS}>Hintergrundbild</span>
+            <div className='flex items-center gap-2'>
+              <MediathekDialog
+                btnName={block.style?.backgroundImage ? "Bild ändern" : "Bild wählen"}
+                onSelect={(selection) => {
+                  const image = Array.isArray(selection) ? selection[0] : selection;
+                  if (image) updateStyle({ backgroundImage: image });
+                }}
+              />
+              {block.style?.backgroundImage && (
+                <button
+                  type='button'
+                  className='text-xs text-red-600'
+                  onClick={() => updateStyle({ backgroundImage: undefined })}>
+                  Entfernen
+                </button>
+              )}
+            </div>
+          </div>
+          {block.style?.backgroundImage && (
+            <div className='grid grid-cols-2 gap-3'>
+              <label>
+                <span className={LABEL_CLASS}>Bildposition</span>
+                <select
+                  className={INPUT_CLASS}
+                  value={block.style.backgroundPosition || "center"}
+                  onChange={(event) => updateStyle({ backgroundPosition: event.target.value as BlogBlockStyle["backgroundPosition"] })}>
+                  <option value='top'>Oben</option>
+                  <option value='center'>Mitte</option>
+                  <option value='bottom'>Unten</option>
+                </select>
+              </label>
+              <label>
+                <span className={LABEL_CLASS}>Overlay {block.style.overlayOpacity || 0}%</span>
+                <input
+                  type='range'
+                  min={0}
+                  max={100}
+                  className='w-full accent-slate-900'
+                  value={block.style.overlayOpacity || 0}
+                  onChange={(event) => updateStyle({ overlayOpacity: Number(event.target.value) })}
+                />
+              </label>
+            </div>
+          )}
+          <div className='grid grid-cols-2 gap-3'>
+            <label>
+              <span className={LABEL_CLASS}>Akzentfarbe</span>
+              <input
+                type='color'
+                className='h-10 w-full rounded border bg-white p-1'
+                value={block.style?.accentColor || "#16a34a"}
+                onChange={(event) => updateStyle({ accentColor: event.target.value })}
+              />
+            </label>
+            <label>
+              <span className={LABEL_CLASS}>Eckenradius: {block.style?.borderRadiusPx || 0}px</span>
+              <input type='range' min={0} max={64} className='w-full accent-slate-900' value={block.style?.borderRadiusPx || 0} onChange={(event) => updateStyle({ borderRadiusPx: Number(event.target.value) })} />
+            </label>
+          </div>
+          <div className='space-y-3 border-t border-slate-200 pt-4'>
+            <p className='text-xs font-semibold uppercase text-slate-400'>Typografie & Abstände</p>
+            {([
+              ["headingSize", "Überschrift", 16, 96, 36],
+              ["textSize", "Fließtext", 10, 32, 16],
+              ["paddingTop", "Innen oben", 0, 240, 24],
+              ["paddingBottom", "Innen unten", 0, 240, 24],
+              ["marginTop", "Außen oben", 0, 160, 0],
+              ["marginBottom", "Außen unten", 0, 160, 0],
+              ["minHeight", "Mindesthöhe", 0, 1200, 0],
+            ] as const).map(([key, label, min, max, fallback]) => (
+              <label key={key}>
+                <span className={LABEL_CLASS}>{label}: {block.style?.[key] ?? fallback}px</span>
+                <input
+                  type='range'
+                  min={min}
+                  max={max}
+                  value={block.style?.[key] ?? fallback}
+                  className='w-full accent-slate-900'
+                  onChange={(event) => updateStyle({ [key]: Number(event.target.value) })}
+                />
+              </label>
+            ))}
+          </div>
+          <div className='space-y-2 border-t border-slate-200 pt-4'>
+            <p className='text-xs font-semibold uppercase text-slate-400'>Responsive Sichtbarkeit</p>
+            {([
+              ["hideOnDesktop", "Auf Desktop ausblenden"],
+              ["hideOnTablet", "Auf Tablet ausblenden"],
+              ["hideOnMobile", "Auf Mobilgeräten ausblenden"],
+            ] as const).map(([key, label]) => (
+              <label key={key} className='flex items-center gap-2 text-xs text-slate-700'>
+                <input
+                  type='checkbox'
+                  checked={block.style?.[key] || false}
+                  onChange={(event) => updateStyle({ [key]: event.target.checked })}
+                />
+                {label}
+              </label>
+            ))}
           </div>
         </div>
       )}

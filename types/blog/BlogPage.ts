@@ -19,16 +19,33 @@ export type BlogBlockType =
   | "imageText"
   | "quote"
   | "button"
+  | "carousel"
   | "divider"
   | "spacer";
 
 export interface BlogBlockStyle {
   backgroundColor?: string;
+  backgroundImage?: string;
+  backgroundPosition?: "top" | "center" | "bottom";
+  overlayColor?: string;
+  overlayOpacity?: number;
   textColor?: string;
+  accentColor?: string;
   alignment?: "left" | "center" | "right";
   width?: "narrow" | "normal" | "wide" | "full";
   padding?: "none" | "small" | "medium" | "large";
   borderRadius?: "none" | "small" | "medium" | "large";
+  headingSize?: number;
+  textSize?: number;
+  paddingTop?: number;
+  paddingBottom?: number;
+  marginTop?: number;
+  marginBottom?: number;
+  minHeight?: number;
+  borderRadiusPx?: number;
+  hideOnDesktop?: boolean;
+  hideOnTablet?: boolean;
+  hideOnMobile?: boolean;
 }
 
 export interface BlogPageBlock {
@@ -47,6 +64,32 @@ export interface BlogPageBlock {
   buttonUrl?: string;
   buttonStyle?: "primary" | "secondary" | "outline";
   spacerHeight?: number;
+  carouselSlides?: {
+    imageUrl: string;
+    imageAlt: string;
+    heading?: string;
+    text?: string;
+    linkLabel?: string;
+    linkUrl?: string;
+  }[];
+  carouselAutoplay?: boolean;
+  carouselInterval?: number;
+  carouselShowArrows?: boolean;
+  carouselShowDots?: boolean;
+  slides?: {
+    image: string;
+    imageAlt: string;
+    imageTitle?: string;
+    imageCaption?: string;
+    heading?: string;
+    text?: string;
+    linkLabel?: string;
+    linkUrl?: string;
+  }[];
+  autoplay?: boolean;
+  interval?: number;
+  showArrows?: boolean;
+  showDots?: boolean;
   style?: BlogBlockStyle;
 }
 
@@ -69,7 +112,9 @@ export interface BlogPageSettings {
 
 export interface BlogPage {
   id: string;               // Firestore doc id
-  slug: string;             // stable slug (derived from initial titel)
+  slug: string;             // editable final URL segment
+  path?: string;            // complete path below /blog, without leading slash
+  parentId?: string | null; // optional parent page for arbitrary nesting
   titel: string;            // display title
   description: string;      // short description / teaser
   subcategorySlug: string;  // parent subcategory reference
