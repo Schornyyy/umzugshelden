@@ -164,6 +164,8 @@ async function createAiReport(
   const parsed = await generateGeminiJson({
     temperature: 0.2,
     timeoutMs: remainingApiTime(deadlineAt),
+    maxOutputTokens: 4_096,
+    thinkingBudget: 0,
     systemInstruction:
       `Du bist ein erfahrener deutscher SEO-, Content- und Conversion-Berater.
 targetUrl bezeichnet die zu optimierende Seite, alle anderen URLs sind Wettbewerber.
@@ -360,6 +362,21 @@ export async function POST(request: Request) {
     };
     return NextResponse.json({ success: true, run });
   } catch (error) {
+    const isTimeout =
+      error instanceof Error &&
+      error.message.includes("Zeitlimit überschritten");
+    if (isTimeout) {
+      console.warn("SEO analysis deferred after Gemini timeout");
+      return NextResponse.json(
+        {
+          success: false,
+          retryable: true,
+          error:
+            "Die KI-Auswertung benötigt einen weiteren Cron-Lauf und wird automatisch erneut versucht.",
+        },
+        { status: 503 },
+      );
+    }
     console.error("SEO analysis error", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json(

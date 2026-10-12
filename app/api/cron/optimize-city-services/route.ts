@@ -233,6 +233,35 @@ async function optimizeSingleCityService(
         "Die automatische SEO-Analyse",
       );
       if (analysisResult.errorMessage) {
+        if (
+          analysisResponse.status === 503 &&
+          analysisResult.data.retryable === true
+        ) {
+          const retryCount =
+            typeof candidate.state?.analysisRetryCount === "number"
+              ? candidate.state.analysisRetryCount + 1
+              : 1;
+          await stateReference.set(
+            {
+              ownerId,
+              citySlug: candidate.citySlug,
+              serviceKey: candidate.serviceKey,
+              analysisRetryCount: retryCount,
+              lastAnalysisRetryAt: Date.now(),
+              updatedAt: Date.now(),
+            },
+            { merge: true },
+          );
+          return NextResponse.json({
+            success: true,
+            pending: true,
+            stage: "analysis-retry",
+            retryCount,
+            pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
+            message:
+              "Die KI-Auswertung wurde zeitlich verschoben und beim nächsten Cron-Lauf automatisch erneut versucht.",
+          });
+        }
         throw new Error(analysisResult.errorMessage);
       }
       const analysisData = analysisResult.data;
@@ -276,6 +305,7 @@ async function optimizeSingleCityService(
           citySlug: candidate.citySlug,
           serviceKey: candidate.serviceKey,
           pendingAnalysisId: analysisId,
+          analysisRetryCount: 0,
           targetRank: targetRank ?? null,
           lastCheckedAt: now,
           updatedAt: now,
