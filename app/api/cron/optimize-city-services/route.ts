@@ -21,6 +21,11 @@ const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1_000;
 const INTERNAL_API_TIMEOUT_MS = 27_000;
 const STATE_COLLECTION = "cityServiceOptimizationStates";
 
+type InternalApiResult = {
+  data: Record<string, unknown>;
+  errorMessage?: string;
+};
+
 function safeDocumentPart(value: string) {
   return encodeURIComponent(value.trim().toLowerCase());
 }
@@ -40,6 +45,59 @@ function asTimestamp(value: unknown): number {
     return value.toMillis();
   }
   return 0;
+}
+
+function messageFromUnknown(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  for (const key of ["message", "error", "detail", "code"]) {
+    const message = messageFromUnknown(record[key]);
+    if (message) return message;
+  }
+  return undefined;
+}
+
+async function readInternalApiResponse(
+  response: Response,
+  operation: string,
+): Promise<InternalApiResult> {
+  const body = await response.text();
+  let data: Record<string, unknown> = {};
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        data = parsed as Record<string, unknown>;
+      }
+    } catch {
+      if (!response.ok) {
+        return {
+          data,
+          errorMessage: `${operation} antwortete mit HTTP ${response.status}: ${body.slice(0, 300)}`,
+        };
+      }
+    }
+  }
+  if (response.ok && data.success === true) return { data };
+
+  const upstreamMessage =
+    messageFromUnknown(data.error) ||
+    messageFromUnknown(data.message) ||
+    messageFromUnknown(data);
+  const requestId =
+    response.headers.get("x-vercel-id") ||
+    response.headers.get("x-vercel-trace");
+  return {
+    data,
+    errorMessage: [
+      `${operation} ist mit HTTP ${response.status} fehlgeschlagen`,
+      upstreamMessage,
+      requestId ? `Vercel-ID: ${requestId}` : undefined,
+    ]
+      .filter(Boolean)
+      .join(": "),
+  };
 }
 
 async function optimizeSingleCityService(
@@ -153,31 +211,53 @@ async function optimizeSingleCityService(
         : undefined;
 
     if (!analysisId) {
-      const analysisResponse = await fetch(`${origin}/api/admin/seo-analysis`, {
-        method: "POST",
-        headers: {
-          authorization,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          ownerId,
-          citySlug: candidate.citySlug,
-          pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
-          targetUrl: `${publicOrigin}/stadt/${encodeURIComponent(candidate.citySlug)}/${candidate.serviceKey}`,
-          keyword,
-          keywords: currentSeo.keywords,
-        }),
-        signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
-      });
-      const analysisData = await analysisResponse.json().catch(() => ({}));
-      if (!analysisResponse.ok || !analysisData.success) {
-        throw new Error(
-          analysisData.error ||
-            "Die automatische SEO-Analyse ist fehlgeschlagen.",
-        );
+      let analysisResponse: Response;
+      try {
+        analysisResponse = await fetch(`${origin}/api/admin/seo-analysis`, {
+          method: "POST",
+          headers: {
+            authorization,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            ownerId,
+            citySlug: candidate.citySlug,
+            pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
+            targetUrl: `${publicOrigin}/stadt/${encodeURIComponent(candidate.citySlug)}/${candidate.serviceKey}`,
+            keyword,
+            keywords: currentSeo.keywords,
+          }),
+          signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
+        });
+      } catch (error) {
+        if (
+          error instanceof DOMException &&
+          (error.name === "TimeoutError" || error.name === "AbortError")
+        ) {
+          throw new Error(
+            "Die interne SEO-Analyse hat nach 27 Sekunden nicht geantwortet.",
+            { cause: error },
+          );
+        }
+        throw error;
       }
-      analysisId = analysisData.run?.id as string | undefined;
-      targetRank = analysisData.run?.targetRank as number | undefined;
+      const analysisResult = await readInternalApiResponse(
+        analysisResponse,
+        "Die automatische SEO-Analyse",
+      );
+      if (analysisResult.errorMessage) {
+        throw new Error(analysisResult.errorMessage);
+      }
+      const analysisData = analysisResult.data;
+      const run =
+        analysisData.run &&
+        typeof analysisData.run === "object" &&
+        !Array.isArray(analysisData.run)
+          ? (analysisData.run as Record<string, unknown>)
+          : undefined;
+      analysisId = typeof run?.id === "string" ? run.id : undefined;
+      targetRank =
+        typeof run?.targetRank === "number" ? run.targetRank : undefined;
       if (!analysisId) {
         throw new Error("Die SEO-Analyse wurde ohne Analyse-ID beendet.");
       }
@@ -226,9 +306,11 @@ async function optimizeSingleCityService(
       });
     }
 
-    const generationResponse = await fetch(
-      `${origin}/api/admin/generate-city-service-page`,
-      {
+    let generationResponse: Response;
+    try {
+      generationResponse = await fetch(
+        `${origin}/api/admin/generate-city-service-page`,
+        {
         method: "POST",
         headers: {
           authorization,
@@ -251,14 +333,27 @@ async function optimizeSingleCityService(
         }),
         signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
       },
-    );
-    const generationData = await generationResponse.json().catch(() => ({}));
-    if (!generationResponse.ok || !generationData.success) {
-      throw new Error(
-        generationData.error ||
-          "Der automatische Verbesserungsvorschlag ist fehlgeschlagen.",
       );
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        (error.name === "TimeoutError" || error.name === "AbortError")
+      ) {
+        throw new Error(
+          "Die interne Seitengenerierung hat nach 27 Sekunden nicht geantwortet.",
+          { cause: error },
+        );
+      }
+      throw error;
     }
+    const generationResult = await readInternalApiResponse(
+      generationResponse,
+      "Der automatische Verbesserungsvorschlag",
+    );
+    if (generationResult.errorMessage) {
+      throw new Error(generationResult.errorMessage);
+    }
+    const generationData = generationResult.data;
     await stateReference.set(
       {
         pendingAnalysisId: null,
@@ -270,8 +365,14 @@ async function optimizeSingleCityService(
     return NextResponse.json({
       success: true,
       pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
-      proposalId: generationData.proposalId,
-      reviewUrl: generationData.reviewUrl,
+      proposalId:
+        typeof generationData.proposalId === "string"
+          ? generationData.proposalId
+          : undefined,
+      reviewUrl:
+        typeof generationData.reviewUrl === "string"
+          ? generationData.reviewUrl
+          : undefined,
       targetRank,
       message:
         "Ein neuer Vorschlag wurde gespeichert und wartet auf Freigabe.",
