@@ -3,7 +3,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { API_WORK_BUDGET_MS, remainingApiTime } from "@/lib/apiDeadline";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
-import { generateGeminiJson } from "@/lib/gemini";
+import {
+  GeminiInvalidJsonError,
+  generateGeminiJson,
+} from "@/lib/gemini";
 import { discoverSeoSearchResults } from "@/lib/googleSeoSearch";
 import { authorizeAdminOwnerOrCron } from "@/lib/adminApiAuth";
 import { analyzeSeoPage } from "@/lib/seoPageAnalyzer";
@@ -28,8 +31,8 @@ const requestSchema = z.object({
 
 const reportSchema = z.object({
   summary: z.string(),
-  strengths: z.array(z.string()),
-  competitorAdvantages: z.array(z.string()),
+  strengths: z.array(z.string()).max(6),
+  competitorAdvantages: z.array(z.string()).max(6),
   recommendations: z.array(
     z.object({
       priority: z.enum(["hoch", "mittel", "niedrig"]),
@@ -41,7 +44,7 @@ const reportSchema = z.object({
         .nullish()
         .transform((value) => value ?? undefined),
     })
-  ),
+  ).max(10),
   suggestedTitle: z.string(),
   suggestedMetaDescription: z.string(),
   suggestedH1: z.string(),
@@ -51,15 +54,15 @@ const reportSchema = z.object({
       goal: z.string(),
       keywords: z.array(z.string()),
     })
-  ),
+  ).max(12),
   suggestedFaqs: z.array(
     z.object({ question: z.string(), answerGuidance: z.string() })
-  ),
+  ).max(10),
   pageBlueprint: z.object({
     searchIntent: z.string(),
     targetAudience: z.string(),
     primaryKeyword: z.string(),
-    secondaryKeywords: z.array(z.string()),
+    secondaryKeywords: z.array(z.string()).max(12),
     recommendedWordCount: z.number().int().min(750).max(5_000),
     tone: z.string(),
     sections: z.array(
@@ -70,9 +73,9 @@ const reportSchema = z.object({
         heading: z.string(),
         purpose: z.string(),
         contentBrief: z.string(),
-        keyPoints: z.array(z.string()),
+        keyPoints: z.array(z.string()).max(6),
         targetWordCount: z.number().int().min(50).max(1_000),
-        keywords: z.array(z.string()),
+        keywords: z.array(z.string()).max(8),
         cta: z
           .string()
           .nullish()
@@ -81,15 +84,15 @@ const reportSchema = z.object({
     ).min(8).max(20),
     primaryCta: z.string(),
     secondaryCta: z.string(),
-    trustElements: z.array(z.string()),
+    trustElements: z.array(z.string()).max(8),
     internalLinkSuggestions: z.array(
       z.object({
         anchorText: z.string(),
         targetPage: z.string(),
         sectionOrder: z.number().int().positive(),
       })
-    ),
-    schemaRecommendations: z.array(z.string()),
+    ).max(12),
+    schemaRecommendations: z.array(z.string()).max(6),
   }),
 });
 
@@ -164,7 +167,7 @@ async function createAiReport(
   const parsed = await generateGeminiJson({
     temperature: 0.2,
     timeoutMs: remainingApiTime(deadlineAt),
-    maxOutputTokens: 4_096,
+    maxOutputTokens: 6_144,
     thinkingBudget: 0,
     systemInstruction:
       `Du bist ein erfahrener deutscher SEO-, Content- und Conversion-Berater.
@@ -185,6 +188,8 @@ Erstelle zusätzlich zu Analyse und Empfehlungen eine vollständige, direkt umse
 - Plane interne Links nutzerorientiert als Vertiefung konkreter Aussagen und nicht als isolierte Linkliste.
 - Gib konkrete Vertrauenselemente und geeignete Schema.org-Typen an.
 - Erstelle mindestens 8 substanzielle Seitenabschnitte. Vermeide generische oder doppelte Abschnitte.
+- Halte den JSON-Report kompakt: höchstens 6 Stärken, 6 Wettbewerbsvorteile, 10 Empfehlungen, 10 FAQ, 12 Nebenkeywords, 8 Vertrauenselemente und 12 interne Links.
+- Formuliere Analysefelder prägnant. Verwende pro Kernpunkt und Empfehlung höchstens zwei kurze Sätze.
 - Formuliere alles auf Deutsch, konkret für die übergebene Seite und ohne Erfolgsgarantien.
 ${pageKey.endsWith("/anstricharbeiten") ? `- Sonderregel Anstricharbeiten: Bezeichne das Unternehmen niemals als Malerbetrieb, Malerfachbetrieb, Malermeister oder Meisterbetrieb.
 - Plane ausschließlich zulassungsfreie Anstricharbeiten und Schönheitsreparaturen ohne meisterpflichtige Tätigkeiten.` : ""}
@@ -362,17 +367,20 @@ export async function POST(request: Request) {
     };
     return NextResponse.json({ success: true, run });
   } catch (error) {
-    const isTimeout =
-      error instanceof Error &&
-      error.message.includes("Zeitlimit überschritten");
-    if (isTimeout) {
-      console.warn("SEO analysis deferred after Gemini timeout");
+    const isRetryableAiError =
+      error instanceof GeminiInvalidJsonError ||
+      (error instanceof Error &&
+        error.message.includes("Zeitlimit überschritten"));
+    if (isRetryableAiError) {
+      console.warn("SEO analysis deferred after retryable Gemini response");
       return NextResponse.json(
         {
           success: false,
           retryable: true,
           error:
-            "Die KI-Auswertung benötigt einen weiteren Cron-Lauf und wird automatisch erneut versucht.",
+            error instanceof GeminiInvalidJsonError
+              ? "Die KI-Antwort war unvollständig und wird automatisch neu erzeugt."
+              : "Die KI-Auswertung benötigt einen weiteren Cron-Lauf und wird automatisch erneut versucht.",
         },
         { status: 503 },
       );

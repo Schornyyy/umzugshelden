@@ -13,6 +13,13 @@ type GeminiResponse = {
   };
 };
 
+export class GeminiInvalidJsonError extends Error {
+  constructor(options?: ErrorOptions) {
+    super("Die Gemini-Antwort konnte nicht verarbeitet werden", options);
+    this.name = "GeminiInvalidJsonError";
+  }
+}
+
 const GEMINI_REQUEST_TIMEOUT_MS = 20_000;
 
 function getGeminiConfig() {
@@ -118,7 +125,7 @@ export async function generateGeminiJson(input: {
   try {
     return JSON.parse(content);
   } catch (error) {
-    console.error("Gemini returned invalid JSON", error);
-    throw new Error("Die Gemini-Antwort konnte nicht verarbeitet werden");
+    console.warn("Gemini returned incomplete or invalid JSON");
+    throw new GeminiInvalidJsonError({ cause: error });
   }
 }
