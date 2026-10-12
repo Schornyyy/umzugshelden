@@ -13,7 +13,7 @@ const raleway = Raleway({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://umzugshelden.io"),
+  metadataBase: new URL("https://www.umzugshelden.io"),
   title: "Umzugshelden — Ihr zuverlässiger Umzugsservice",
   description:
     "Umzugshelden – Professioneller Umzugsservice: schnell, zuverlässig und günstig. Kostenlose Anfrage stellen!",

@@ -7,6 +7,7 @@ import {
   saveCityLandingTemplate,
 } from "@/actions/cityServicePageActions";
 import CityServiceBlockEditor from "@/components/admin/city/CityServiceBlockEditor";
+import { CitySeoAnalysisTab } from "@/components/admin/city/CitySeoAnalysisTab";
 import MediathekDialog from "@/components/utils/MediathekDialog";
 import type {
   CityLandingPage,
@@ -14,7 +15,9 @@ import type {
   CityServiceBlock,
   CityServiceSeoSettings,
 } from "@/types/city/CityServicePage";
-import { Eye, LayoutTemplate, Save } from "lucide-react";
+import type { GeneratedCityPageDraft } from "@/types/city/CityPageGeneration";
+import { auth } from "@/config/firebase";
+import { Eye, LayoutTemplate, Loader2, Save, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -38,8 +41,12 @@ export default function CityLandingContentEditor({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedMessage, setGeneratedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"content" | "seo">("content");
+  const [activeTab, setActiveTab] = useState<"content" | "seo" | "analysis">(
+    "content",
+  );
   const [template, setTemplate] = useState<CityLandingTemplate | null>(null);
   const [page, setPage] = useState<CityLandingPage | null>(null);
   const [blocks, setBlocks] = useState<CityServiceBlock[]>([]);
@@ -108,19 +115,15 @@ export default function CityLandingContentEditor({
         setTemplate(next);
       } else {
         if (!cityName || !citySlug) throw new Error("Stadt fehlt.");
-        const next = await saveCityLandingPage(
-          ownerId,
-          cityName,
-          citySlug,
-          {
-            inheritTemplate,
-            blocks: inheritTemplate ? undefined : blocks,
-            seo: inheritSeo ? undefined : seo,
-            published,
-          },
-        );
+        const next = await saveCityLandingPage(ownerId, cityName, citySlug, {
+          inheritTemplate,
+          blocks: inheritTemplate ? undefined : blocks,
+          seo: inheritSeo ? undefined : seo,
+          published,
+        });
         setPage(next);
       }
+
       setSaved(true);
     } catch (saveError) {
       setError(
@@ -130,6 +133,74 @@ export default function CityLandingContentEditor({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleGenerate(analysisId?: string) {
+    if (
+      mode !== "page" ||
+      !cityName ||
+      !citySlug ||
+      !seo ||
+      !window.confirm(
+        analysisId
+          ? "Die KI baut die komplette Stadtseite nach diesem Blueprint neu auf. Der aktuelle, noch nicht gespeicherte Entwurf wird ersetzt. Fortfahren?"
+          : "Die KI ersetzt den aktuellen, noch nicht gespeicherten Entwurf. Fortfahren?",
+      )
+    ) {
+      return;
+    }
+    setGenerating(true);
+    setSaved(false);
+    setGeneratedMessage(null);
+    setError(null);
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token)
+        throw new Error(
+          "Keine aktive Anmeldung gefunden. Bitte neu einloggen.",
+        );
+      const response = await fetch("/api/admin/generate-city-page", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          ownerId,
+          cityName,
+          citySlug,
+          keywords: seo.keywords,
+          currentImage: seo.image,
+          currentImageAlt: seo.imageAlt,
+          analysisId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Die KI-Seitenerstellung ist fehlgeschlagen.",
+        );
+      }
+      const draft = data.draft as GeneratedCityPageDraft;
+      setBlocks(cloneBlocks(draft.blocks));
+      setSeo({ ...draft.seo, keywords: [...draft.seo.keywords] });
+      setInheritTemplate(false);
+      setInheritSeo(false);
+      setActiveTab("content");
+      setGeneratedMessage(
+        data.usedAnalysis
+          ? "KI-Entwurf aus der letzten SEO-Konkurrenzanalyse erstellt. Bitte prüfen und speichern."
+          : "KI-Entwurf erstellt. Für einen präziseren Vergleich zuerst eine SEO-Auswertung durchführen.",
+      );
+    } catch (generationError) {
+      setError(
+        generationError instanceof Error
+          ? generationError.message
+          : "Die KI-Seitenerstellung ist fehlgeschlagen.",
+      );
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -147,7 +218,9 @@ export default function CityLandingContentEditor({
 
   if (loading) return <div className='p-8 text-sm text-slate-500'>Lädt...</div>;
   if (!template || !seo) {
-    return <div className='p-8 text-sm text-red-600'>{error || "Keine Daten"}</div>;
+    return (
+      <div className='p-8 text-sm text-red-600'>{error || "Keine Daten"}</div>
+    );
   }
 
   const previewUrl = `/stadt/${encodeURIComponent(citySlug || "olpe")}`;
@@ -173,6 +246,20 @@ export default function CityLandingContentEditor({
           </p>
         </div>
         <div className='ml-auto flex items-center gap-2'>
+          {mode === "page" && (
+            <button
+              type='button'
+              onClick={() => handleGenerate()}
+              disabled={generating || saving}
+              className='inline-flex h-10 items-center gap-2 rounded border border-violet-300 bg-violet-50 px-4 text-sm font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50'>
+              {generating ? (
+                <Loader2 className='h-4 w-4 animate-spin' />
+              ) : (
+                <Sparkles className='h-4 w-4' />
+              )}
+              {generating ? "KI erstellt Seite..." : "Mit KI neu erstellen"}
+            </button>
+          )}
           <Link
             href={previewUrl}
             target='_blank'
@@ -200,6 +287,11 @@ export default function CityLandingContentEditor({
       {saved && (
         <div className='border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-800'>
           Gespeichert und öffentliche Stadtseite aktualisiert.
+        </div>
+      )}
+      {generatedMessage && (
+        <div className='border-l-4 border-violet-500 bg-violet-50 px-4 py-3 text-sm text-violet-800'>
+          {generatedMessage}
         </div>
       )}
 
@@ -250,7 +342,13 @@ export default function CityLandingContentEditor({
       )}
 
       <nav className='flex border-b border-slate-200'>
-        {(["content", "seo"] as const).map((tab) => (
+        {(
+          [
+            "content",
+            "seo",
+            ...(mode === "page" ? ["analysis" as const] : []),
+          ] as const
+        ).map((tab) => (
           <button
             key={tab}
             type='button'
@@ -260,7 +358,11 @@ export default function CityLandingContentEditor({
                 ? "border-slate-950 text-slate-950"
                 : "border-transparent text-slate-500"
             }`}>
-            {tab === "content" ? "Inhalte" : "SEO & Veröffentlichung"}
+            {tab === "content"
+              ? "Inhalte"
+              : tab === "seo"
+                ? "SEO & Veröffentlichung"
+                : "SEO-Auswertung & KI"}
           </button>
         ))}
       </nav>
@@ -274,7 +376,8 @@ export default function CityLandingContentEditor({
                   Diese Stadtseite verwendet noch die globale Vorlage.
                 </p>
                 <p className='mt-0.5 text-xs text-amber-800'>
-                  Aktiviere eigene Inhalte, um FAQ-Fragen und andere Abschnitte zu bearbeiten.
+                  Aktiviere eigene Inhalte, um FAQ-Fragen und andere Abschnitte
+                  zu bearbeiten.
                 </p>
               </div>
               <button
@@ -297,58 +400,145 @@ export default function CityLandingContentEditor({
         <div className='grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]'>
           <section className='space-y-5'>
             <label className='block'>
-              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>Meta-Titel</span>
-              <input className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100' value={seo.title} disabled={seoDisabled} onChange={(event) => setSeo({ ...seo, title: event.target.value })} />
+              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>
+                Meta-Titel
+              </span>
+              <input
+                className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
+                value={seo.title}
+                disabled={seoDisabled}
+                onChange={(event) =>
+                  setSeo({ ...seo, title: event.target.value })
+                }
+              />
             </label>
             <label className='block'>
-              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>Meta-Description</span>
-              <textarea rows={4} className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100' value={seo.description} disabled={seoDisabled} onChange={(event) => setSeo({ ...seo, description: event.target.value })} />
+              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>
+                Meta-Description
+              </span>
+              <textarea
+                rows={4}
+                className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
+                value={seo.description}
+                disabled={seoDisabled}
+                onChange={(event) =>
+                  setSeo({ ...seo, description: event.target.value })
+                }
+              />
             </label>
             <div className='grid gap-4 sm:grid-cols-2'>
               <div>
-                <span className='mb-1.5 block text-xs font-semibold text-slate-600'>Social-Bild</span>
+                <span className='mb-1.5 block text-xs font-semibold text-slate-600'>
+                  Social-Bild
+                </span>
                 {!seoDisabled && (
                   <MediathekDialog
                     btnName='Aus Mediathek wählen'
                     onSelect={(selection) => {
-                      const image = Array.isArray(selection) ? selection[0] : selection;
+                      const image = Array.isArray(selection)
+                        ? selection[0]
+                        : selection;
                       if (image) setSeo({ ...seo, image });
                     }}
                   />
                 )}
-                <p className='mt-2 truncate text-xs text-slate-500' title={seo.image}>{seo.image}</p>
+                <p
+                  className='mt-2 truncate text-xs text-slate-500'
+                  title={seo.image}>
+                  {seo.image}
+                </p>
               </div>
               <label>
-                <span className='mb-1.5 block text-xs font-semibold text-slate-600'>Bild-Alternativtext</span>
-                <input className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100' value={seo.imageAlt} disabled={seoDisabled} onChange={(event) => setSeo({ ...seo, imageAlt: event.target.value })} />
+                <span className='mb-1.5 block text-xs font-semibold text-slate-600'>
+                  Bild-Alternativtext
+                </span>
+                <input
+                  className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
+                  value={seo.imageAlt}
+                  disabled={seoDisabled}
+                  onChange={(event) =>
+                    setSeo({ ...seo, imageAlt: event.target.value })
+                  }
+                />
               </label>
             </div>
             <label className='block'>
-              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>Schema-Beschreibung</span>
-              <textarea rows={3} className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100' value={seo.schemaDescription} disabled={seoDisabled} onChange={(event) => setSeo({ ...seo, schemaDescription: event.target.value })} />
+              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>
+                Schema-Beschreibung
+              </span>
+              <textarea
+                rows={3}
+                className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
+                value={seo.schemaDescription}
+                disabled={seoDisabled}
+                onChange={(event) =>
+                  setSeo({ ...seo, schemaDescription: event.target.value })
+                }
+              />
             </label>
             <label className='block'>
-              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>Keywords, kommagetrennt</span>
-              <textarea rows={3} className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100' value={seo.keywords.join(", ")} disabled={seoDisabled} onChange={(event) => setSeo({ ...seo, keywords: event.target.value.split(",").map((keyword) => keyword.trim()).filter(Boolean) })} />
+              <span className='mb-1.5 block text-xs font-semibold text-slate-600'>
+                Keywords, kommagetrennt
+              </span>
+              <textarea
+                rows={3}
+                className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
+                value={seo.keywords.join(", ")}
+                disabled={seoDisabled}
+                onChange={(event) =>
+                  setSeo({
+                    ...seo,
+                    keywords: event.target.value
+                      .split(",")
+                      .map((keyword) => keyword.trim())
+                      .filter(Boolean),
+                  })
+                }
+              />
             </label>
           </section>
           <aside className='space-y-5 border-l border-slate-200 pl-6'>
             {mode === "page" && (
               <label className='flex items-center gap-3'>
-                <input type='checkbox' checked={published} onChange={(event) => setPublished(event.target.checked)} className='h-4 w-4 accent-emerald-600' />
-                <span className='text-sm font-semibold text-slate-800'>Seite veröffentlicht</span>
+                <input
+                  type='checkbox'
+                  checked={published}
+                  onChange={(event) => setPublished(event.target.checked)}
+                  className='h-4 w-4 accent-emerald-600'
+                />
+                <span className='text-sm font-semibold text-slate-800'>
+                  Seite veröffentlicht
+                </span>
               </label>
             )}
             <div>
-              <p className='text-xs font-semibold uppercase text-slate-400'>Platzhalter</p>
+              <p className='text-xs font-semibold uppercase text-slate-400'>
+                Platzhalter
+              </p>
               <div className='mt-3 flex flex-wrap gap-2'>
                 {["{city}", "{region}", "{nearbyCities}"].map((token) => (
-                  <code key={token} className='rounded bg-slate-100 px-2 py-1 text-xs text-slate-700'>{token}</code>
+                  <code
+                    key={token}
+                    className='rounded bg-slate-100 px-2 py-1 text-xs text-slate-700'>
+                    {token}
+                  </code>
                 ))}
               </div>
             </div>
           </aside>
         </div>
+      )}
+
+      {activeTab === "analysis" && mode === "page" && citySlug && (
+        <CitySeoAnalysisTab
+          ownerId={ownerId}
+          citySlug={citySlug}
+          pageLabel={`Stadtseite ${cityName || ""}`.trim()}
+          targetUrl={`https://www.umzugshelden.io${previewUrl}`}
+          defaultKeyword={`Umzugsunternehmen ${cityName || ""}`.trim()}
+          onGeneratePage={handleGenerate}
+          generatingPage={generating}
+        />
       )}
     </div>
   );

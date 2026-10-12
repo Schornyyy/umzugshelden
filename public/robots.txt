@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Host
-Host: https://umzugshelden.io
+Host: https://www.umzugshelden.io
 
 # Sitemaps
-Sitemap: https://umzugshelden.io/sitemap.xml
+Sitemap: https://www.umzugshelden.io/sitemap.xml

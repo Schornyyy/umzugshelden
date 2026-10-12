@@ -13,6 +13,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { Eye, Save } from "lucide-react";
 import BlogVisualBuilder from "./BlogVisualBuilder";
+import CityServiceBlockEditor from "@/components/admin/city/CityServiceBlockEditor";
+import { createCityServiceBlock } from "@/lib/cityServiceBlockFactory";
+import type {
+  CityServiceBlock,
+  CityServiceKey,
+} from "@/types/city/CityServicePage";
 import {
   legacySectionsToBlocks,
   normalizeBlogPageSettings,
@@ -71,6 +77,22 @@ export default function BlogPageEditorClient({
       ? initialData.blocks
       : legacySectionsToBlocks(initialData?.sections || [])
   );
+  const [serviceBlocks, setServiceBlocks] = useState<CityServiceBlock[]>(
+    () =>
+      initialData?.serviceBlocks?.length
+        ? initialData.serviceBlocks
+        : initialData
+          ? []
+          : [createCityServiceBlock("intro")],
+  );
+  const [serviceKey] = useState<CityServiceKey>(
+    initialData?.serviceKey ||
+      (mainCategory === "entrümpelung"
+        ? "entruempelung"
+        : mainCategory === "streicharbeit"
+          ? "anstricharbeiten"
+          : "umzugsservice"),
+  );
   const [settings, setSettings] = useState<BlogPageSettings>(
     normalizeBlogPageSettings(initialData?.settings)
   );
@@ -101,6 +123,9 @@ export default function BlogPageEditorClient({
             .filter((k) => k.length > 0),
           meta_description: metaDescription || null,
           blocks,
+          serviceBlocks: serviceBlocks.length ? serviceBlocks : undefined,
+          serviceKey,
+          cityName: initialData.cityName,
           settings,
           faq,
           visible,
@@ -121,6 +146,8 @@ export default function BlogPageEditorClient({
           meta_description: metaDescription || undefined,
           sections: [],
           blocks,
+          serviceBlocks: serviceBlocks.length ? serviceBlocks : undefined,
+          serviceKey,
           settings,
           faq,
           visible,
@@ -144,6 +171,8 @@ export default function BlogPageEditorClient({
     keywords,
     metaDescription,
     blocks,
+    serviceBlocks,
+    serviceKey,
     settings,
     faq,
     visible,
@@ -208,15 +237,37 @@ export default function BlogPageEditorClient({
       {error && <div className='text-red-600 text-sm'>{error}</div>}
 
       {activeTab === "content" && (
-        <BlogVisualBuilder
-          blocks={blocks}
-          accentColor={settings.accentColor}
-          headingColor={settings.headingColor}
-          onChange={(nextBlocks) => {
-            setBlocks(nextBlocks);
-            setSaved(false);
-          }}
-        />
+        serviceBlocks.length ? (
+          <CityServiceBlockEditor
+            blocks={serviceBlocks}
+            onChange={(nextBlocks) => {
+              setServiceBlocks(nextBlocks);
+              setSaved(false);
+            }}
+            cityName={initialData?.cityName || "Olpe"}
+            citySlug={(initialData?.cityName || "Olpe").toLocaleLowerCase("de")}
+            serviceKey={serviceKey}
+            primaryKeyword={keywords.split(",")[0]?.trim() || titel}
+          />
+        ) : (
+          <div className='space-y-4'>
+            <button
+              type='button'
+              onClick={() => setServiceBlocks([createCityServiceBlock("intro")])}
+              className='rounded bg-violet-700 px-4 py-2 text-sm font-semibold text-white'>
+              Zum Service-Seiten-Editor wechseln
+            </button>
+            <BlogVisualBuilder
+              blocks={blocks}
+              accentColor={settings.accentColor}
+              headingColor={settings.headingColor}
+              onChange={(nextBlocks) => {
+                setBlocks(nextBlocks);
+                setSaved(false);
+              }}
+            />
+          </div>
+        )
       )}
 
       {activeTab === "seo" && (

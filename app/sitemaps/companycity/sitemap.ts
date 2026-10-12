@@ -8,7 +8,7 @@ import {
 } from "@/actions/cityServicePageActions";
 import type { MetadataRoute } from "next";
 
-const BASE_URL = "https://umzugshelden.io";
+const BASE_URL = "https://www.umzugshelden.io";
 
 function createEntry(
   path: string,

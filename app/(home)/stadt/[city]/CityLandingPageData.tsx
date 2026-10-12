@@ -43,9 +43,7 @@ function joinGerman(values: readonly string[]) {
 }
 
 async function loadCityLandingData(cityParam: string) {
-  const cityName = getCanonicalCityName(
-    deslugify(decodeCitySlug(cityParam)),
-  );
+  const cityName = getCanonicalCityName(deslugify(decodeCitySlug(cityParam)));
   if (!rawCities.some((city) => slugify(city) === slugify(cityName))) {
     return null;
   }
@@ -159,9 +157,9 @@ export async function buildCityLandingMetadata({
   );
   const socialImage = new URL(
     data.resolved.seo.image,
-    "https://umzugshelden.io",
+    "https://www.umzugshelden.io",
   ).toString();
-  const url = `https://umzugshelden.io/stadt/${encodeURIComponent(data.citySlug)}`;
+  const url = `https://www.umzugshelden.io/stadt/${encodeURIComponent(data.citySlug)}`;
   const keywords = data.resolved.seo.keywords.flatMap((keyword) => {
     const resolvedKeyword = resolveCityServiceText(keyword, data.context);
     return [

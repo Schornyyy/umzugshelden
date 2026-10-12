@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     title: "Datenschutzerklärung | Umzugshelden",
     description:
       "Datenschutzerklärung von Umzugshelden. Transparente und DSGVO-konforme Angaben zur Verarbeitung personenbezogener Daten.",
-    url: "https://umzugshelden.io/datenschutz",
+    url: "https://www.umzugshelden.io/datenschutz",
     siteName: "Umzugshelden",
     locale: "de_DE",
     type: "website",

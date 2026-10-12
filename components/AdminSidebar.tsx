@@ -25,6 +25,7 @@ import {
   ClipboardList,
   FileText,
   Inbox,
+  ListChecks,
   MapPinned,
   PackageCheck,
   UsersRound,
@@ -53,6 +54,13 @@ const data = {
           title: "Städte",
           url: "/citys",
           icon: MapPinned,
+        },
+        {
+          title: "Freigaben",
+          url: "/citys/freigaben",
+          icon: ListChecks,
+          exact: true,
+          subItem: true,
         },
         {
           title: "Blogs",
@@ -141,9 +149,21 @@ export function AdminSideBar({
                       isActive={
                         "exact" in item && item.exact
                           ? pathname === `/admin/${companyData?.id}${item.url}`
-                          : pathname.startsWith(`/admin/${companyData?.id}${item.url}`)
+                          : pathname.startsWith(
+                                `/admin/${companyData?.id}${item.url}`,
+                              ) &&
+                            !(
+                              item.url === "/citys" &&
+                              pathname.startsWith(
+                                `/admin/${companyData?.id}/citys/freigaben`,
+                              )
+                            )
                       }
-                      className='h-11 rounded-md px-3 text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
+                      className={`h-11 rounded-md text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white ${
+                        "subItem" in item && item.subItem
+                          ? "ml-5 w-[calc(100%-1.25rem)] px-3 text-xs"
+                          : "px-3"
+                      }`}>
                       <Link
                         href={`/admin/${companyData?.id}${item.url}`}
                         onClick={() => setOpenMobile(false)}>

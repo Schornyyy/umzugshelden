@@ -4,6 +4,7 @@ import CityServiceCarousel from "@/components/city/CityServiceCarousel";
 import SemanticHeading from "@/components/SemanticHeading";
 import { Button } from "@/components/ui/button";
 import FAQBlock from "@/components/utils/FAQBlock";
+import { renderInlineMarkdown } from "@/components/utils/InlineMarkdownText";
 import {
   getDefaultCityServiceName,
   getDefaultCityServiceSummary,
@@ -217,14 +218,15 @@ function HeroTitle({
   title: string;
   primaryKeyword: string;
 }) {
-  const keywordIndex = title.indexOf(primaryKeyword);
-  if (keywordIndex < 0) return title;
+  const normalizedTitle = title.replace(/\*\*/gu, "");
+  const keywordIndex = normalizedTitle.indexOf(primaryKeyword);
+  if (keywordIndex < 0) return renderInlineMarkdown(title);
 
   return (
     <>
-      {title.slice(0, keywordIndex)}
+      {normalizedTitle.slice(0, keywordIndex)}
       <span className='text-primary'>{primaryKeyword}</span>
-      {title.slice(keywordIndex + primaryKeyword.length)}
+      {normalizedTitle.slice(keywordIndex + primaryKeyword.length)}
     </>
   );
 }
@@ -240,6 +242,7 @@ export default function CityServiceBlocksRenderer({
   selectedBlockId,
 }: Props) {
   const text = (value: string) => resolveCityServiceText(value, context);
+  const richText = (value: string) => renderInlineMarkdown(text(value));
   const visibleBlocks = blocks.filter((block) => block.enabled);
 
   return (
@@ -293,10 +296,10 @@ export default function CityServiceBlocksRenderer({
                   <div className='grid grid-cols-1 items-center gap-12 lg:grid-cols-2'>
                     <div className='order-2 rounded border border-white/10 bg-[#0b1f3a] p-6 shadow-2xl lg:order-1 lg:p-8'>
                       <h2 className='mb-3 font-sans text-xl font-semibold text-white'>
-                        {text(block.formTitle)}
+                        {richText(block.formTitle)}
                       </h2>
                       <p className='mb-5 font-body text-sm text-gray-300'>
-                        {text(block.formText)}
+                        {richText(block.formText)}
                       </p>
                       <ContactForm dark />
                     </div>
@@ -307,8 +310,8 @@ export default function CityServiceBlocksRenderer({
                           primaryKeyword={context.primaryKeyword}
                         />
                       </h1>
-                      <p className='font-body text-lg text-gray-300'>
-                        {text(block.description)}
+                      <p className='whitespace-pre-line font-body text-lg text-gray-300'>
+                        {richText(block.description)}
                       </p>
                       <div>
                         <Link
@@ -331,7 +334,7 @@ export default function CityServiceBlocksRenderer({
                 </div>
                 {block.imageCaption && (
                   <p className='absolute bottom-3 right-4 z-10 max-w-md text-right font-body text-xs text-white/70'>
-                    {text(block.imageCaption)}
+                    {richText(block.imageCaption)}
                   </p>
                 )}
               </section>
@@ -347,10 +350,10 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className='font-sans text-3xl font-bold text-navy'>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
-                  <p className='mt-5 font-body text-lg leading-relaxed text-gray-600'>
-                    {text(block.text)}
+                  <p className='mt-5 whitespace-pre-line font-body text-lg leading-relaxed text-gray-600'>
+                    {richText(block.text)}
                   </p>
                 </div>
               </section>
@@ -377,25 +380,25 @@ export default function CityServiceBlocksRenderer({
                     </div>
                     {block.imageCaption && (
                       <figcaption className='mt-2 font-body text-sm text-gray-500'>
-                        {text(block.imageCaption)}
+                        {richText(block.imageCaption)}
                       </figcaption>
                     )}
                   </figure>
                   <div className={imageRight ? "lg:order-1" : ""}>
                     {block.eyebrow && (
                       <p className='font-sans text-sm font-semibold uppercase text-primary'>
-                        {text(block.eyebrow)}
+                        {richText(block.eyebrow)}
                       </p>
                     )}
                     <SemanticHeading
                       level={block.headingLevel}
                       className='mt-3 font-sans text-3xl font-bold leading-tight text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                     <div className='mt-6 space-y-4 font-body leading-relaxed text-gray-600'>
                       {block.paragraphs.map((paragraph, index) => (
                         <p key={`${block.id}-paragraph-${index}`}>
-                          {text(paragraph)}
+                          {richText(paragraph)}
                         </p>
                       ))}
                     </div>
@@ -403,7 +406,7 @@ export default function CityServiceBlocksRenderer({
                       <Link
                         href={block.ctaUrl}
                         className='mt-7 inline-flex font-sans font-semibold text-primary hover:underline'>
-                        {text(block.ctaLabel)}
+                        {richText(block.ctaLabel)}
                       </Link>
                     )}
                   </div>
@@ -420,12 +423,12 @@ export default function CityServiceBlocksRenderer({
                 <div className='container mx-auto grid max-w-6xl grid-cols-1 gap-12 px-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-start'>
                   <div>
                     <p className='font-sans text-sm font-semibold uppercase text-primary'>
-                      {text(block.eyebrow)}
+                      {richText(block.eyebrow)}
                     </p>
                     <SemanticHeading
                       level={block.headingLevel}
                       className='mt-3 font-sans text-3xl font-bold leading-tight text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                     <div className='mt-6 space-y-4 font-body leading-relaxed text-gray-600'>
                       {localSeo.localParagraphs.map((paragraph) => (
@@ -464,18 +467,18 @@ export default function CityServiceBlocksRenderer({
                   <div className={block.numbered ? "max-w-3xl" : "mx-auto max-w-3xl text-center"}>
                     {block.eyebrow && (
                       <p className='font-sans text-sm font-semibold uppercase text-primary'>
-                        {text(block.eyebrow)}
+                        {richText(block.eyebrow)}
                       </p>
                     )}
                     <SemanticHeading
                       level={block.headingLevel}
                       className={`mt-3 font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                     {block.intro && (
                       <p
                         className={`mt-3 font-body ${isNavy ? "text-gray-300" : "text-gray-600"}`}>
-                        {text(block.intro)}
+                        {richText(block.intro)}
                       </p>
                     )}
                   </div>
@@ -498,11 +501,11 @@ export default function CityServiceBlocksRenderer({
                         )}
                         <h3
                           className={`mt-3 font-sans text-xl font-semibold ${isNavy ? "text-white" : "text-navy"}`}>
-                          {text(card.title)}
+                          {richText(card.title)}
                         </h3>
                         <p
                           className={`mt-3 font-body text-sm leading-relaxed ${isNavy ? "text-gray-300" : "text-gray-600"}`}>
-                          {text(card.text)}
+                          {richText(card.text)}
                         </p>
                       </article>
                     ))}
@@ -522,12 +525,12 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className={`font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
                   {block.intro && (
                     <p
                       className={`mt-3 font-body ${isNavy ? "text-gray-300" : "text-gray-600"}`}>
-                      {text(block.intro)}
+                      {richText(block.intro)}
                     </p>
                   )}
                   <ul
@@ -542,7 +545,7 @@ export default function CityServiceBlocksRenderer({
                         />
                         <span
                           className={`font-body leading-relaxed ${isNavy ? "text-gray-300" : "text-gray-700"}`}>
-                          {text(item)}
+                          {richText(item)}
                         </span>
                       </li>
                     ))}
@@ -562,11 +565,11 @@ export default function CityServiceBlocksRenderer({
                     <SemanticHeading
                       level={block.headingLevel}
                       className='font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                     {block.intro && (
                       <p className='mt-3 font-body text-gray-600'>
-                        {text(block.intro)}
+                        {richText(block.intro)}
                       </p>
                     )}
                   </div>
@@ -579,7 +582,7 @@ export default function CityServiceBlocksRenderer({
                           {String(index + 1).padStart(2, "0")}
                         </span>
                         <p className='mt-3 font-sans font-semibold text-navy'>
-                          {text(step)}
+                          {richText(step)}
                         </p>
                       </li>
                     ))}
@@ -598,16 +601,16 @@ export default function CityServiceBlocksRenderer({
                   <div>
                     {block.eyebrow && (
                       <p className='font-sans text-sm font-semibold uppercase text-primary'>
-                        {text(block.eyebrow)}
+                        {richText(block.eyebrow)}
                       </p>
                     )}
                     <SemanticHeading
                       level={block.headingLevel}
                       className='mt-3 font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                     <p className='mt-5 font-body leading-relaxed text-gray-600'>
-                      {text(block.text)}
+                      {richText(block.text)}
                     </p>
                     <ul className='mt-7 space-y-4'>
                       {block.factors.map((factor, index) => (
@@ -619,7 +622,7 @@ export default function CityServiceBlocksRenderer({
                             size={20}
                           />
                           <span className='font-body text-gray-700'>
-                            {text(factor)}
+                            {richText(factor)}
                           </span>
                         </li>
                       ))}
@@ -627,14 +630,14 @@ export default function CityServiceBlocksRenderer({
                   </div>
                   <div className='bg-white p-7 shadow-sm'>
                     <h3 className='font-sans text-2xl font-semibold text-navy'>
-                      {text(block.ctaTitle)}
+                      {richText(block.ctaTitle)}
                     </h3>
                     <p className='mt-3 font-body leading-relaxed text-gray-600'>
-                      {text(block.ctaText)}
+                      {richText(block.ctaText)}
                     </p>
                     <Link href='#kontakt'>
                       <Button className='mt-6 rounded bg-primary px-6 py-3 font-sans font-semibold text-white hover:bg-primary/90'>
-                        {text(block.ctaLabel)}
+                        {richText(block.ctaLabel)}
                       </Button>
                     </Link>
                   </div>
@@ -671,10 +674,10 @@ export default function CityServiceBlocksRenderer({
                       <SemanticHeading
                         level={block.headingLevel}
                         className='font-sans text-3xl font-bold text-navy'>
-                        {text(block.heading)}
+                        {richText(block.heading)}
                       </SemanticHeading>
                       <p className='font-body text-gray-600'>
-                        {text(block.text)}
+                        {richText(block.text)}
                       </p>
                       <div className='flex flex-col gap-4'>
                         {block.showPhone && (
@@ -730,10 +733,10 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className='font-sans text-3xl font-bold text-navy'>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
                   <p className='mt-3 font-body text-gray-600'>
-                    {text(block.intro)}
+                    {richText(block.intro)}
                   </p>
                   <ul className='mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'>
                     {nearbyCities.map((nearby) => (
@@ -782,7 +785,7 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className='font-sans text-2xl font-bold text-navy'>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
                   <ul className='mt-6 flex flex-wrap gap-3'>
                     {otherServices.map((key) => (
@@ -811,28 +814,28 @@ export default function CityServiceBlocksRenderer({
                   <div className='max-w-3xl'>
                     {block.eyebrow && (
                       <p className='font-sans text-sm font-semibold uppercase text-primary'>
-                        {text(block.eyebrow)}
+                        {richText(block.eyebrow)}
                       </p>
                     )}
                     <SemanticHeading
                       level={block.headingLevel}
                       className={`mt-2 font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                     <p className={`mt-4 font-body leading-relaxed ${isNavy ? "text-gray-300" : "text-gray-600"}`}>
-                      {text(block.text)}
+                      {richText(block.text)}
                     </p>
                   </div>
                   <div className='flex shrink-0 flex-wrap gap-3'>
                     <Link href={block.primaryUrl}>
                       <Button className='rounded bg-primary px-6 font-sans font-semibold text-white hover:bg-primary/90'>
-                        {text(block.primaryLabel)}
+                        {richText(block.primaryLabel)}
                       </Button>
                     </Link>
                     {block.secondaryLabel && block.secondaryUrl && (
                       <Link href={block.secondaryUrl}>
                         <Button variant='outline' className={`rounded px-6 font-sans font-semibold ${isNavy ? "border-white bg-transparent text-white hover:bg-white/10" : "border-navy bg-transparent text-navy"}`}>
-                          {text(block.secondaryLabel)}
+                          {richText(block.secondaryLabel)}
                         </Button>
                       </Link>
                     )}
@@ -851,14 +854,14 @@ export default function CityServiceBlocksRenderer({
                     <SemanticHeading
                       level={block.headingLevel}
                       className={`mb-10 text-center font-sans text-3xl font-bold ${isNavy ? "text-white" : "text-navy"}`}>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
                   )}
                   <dl className={`grid grid-cols-2 gap-px overflow-hidden rounded bg-slate-200 ${cardColumns[block.columns]}`}>
                     {block.items.map((item, index) => (
                       <div key={`${block.id}-stat-${index}`} className={isNavy ? "bg-navy-light p-6 text-center" : "bg-white p-6 text-center"}>
-                        <dt className='font-sans text-3xl font-bold text-primary md:text-4xl'>{text(item.value)}</dt>
-                        <dd className={`mt-2 font-body text-sm ${isNavy ? "text-gray-300" : "text-gray-600"}`}>{text(item.label)}</dd>
+                        <dt className='font-sans text-3xl font-bold text-primary md:text-4xl'>{richText(item.value)}</dt>
+                        <dd className={`mt-2 font-body text-sm ${isNavy ? "text-gray-300" : "text-gray-600"}`}>{richText(item.label)}</dd>
                       </div>
                     ))}
                   </dl>
@@ -875,7 +878,7 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className={`text-center font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
                   <div className={`mt-10 grid gap-6 ${singleToTripleColumns[block.columns]}`}>
                     {block.items.map((item, index) => (
@@ -886,13 +889,13 @@ export default function CityServiceBlocksRenderer({
                             <StarIcon key={starIndex} className={`h-4 w-4 ${starIndex < item.rating ? "fill-primary text-primary" : "text-gray-300"}`} />
                           ))}
                         </div>
-                        <blockquote className={`mt-4 font-body leading-relaxed ${isNavy ? "text-gray-200" : "text-gray-700"}`}>„{text(item.quote)}“</blockquote>
+                        <blockquote className={`mt-4 font-body leading-relaxed ${isNavy ? "text-gray-200" : "text-gray-700"}`}>„{richText(item.quote)}“</blockquote>
                         <figcaption className='mt-5 flex items-center gap-3'>
                           {item.avatar && (
                             <Image src={item.avatar} alt={text(item.name)} width={48} height={48} className='h-12 w-12 rounded-full object-cover' />
                           )}
                           <span>
-                            <strong className={`block font-sans text-sm ${isNavy ? "text-white" : "text-navy"}`}>{text(item.name)}</strong>
+                            <strong className={`block font-sans text-sm ${isNavy ? "text-white" : "text-navy"}`}>{richText(item.name)}</strong>
                             {(item.role || item.source) && <span className={`mt-1 block text-xs ${isNavy ? "text-gray-400" : "text-gray-500"}`}>{[item.role, item.source].filter(Boolean).map((value) => text(value!)).join(" · ")}</span>}
                           </span>
                         </figcaption>
@@ -912,9 +915,9 @@ export default function CityServiceBlocksRenderer({
                     <SemanticHeading
                       level={block.headingLevel}
                       className='font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
-                    {block.intro && <p className='mt-3 font-body text-gray-600'>{text(block.intro)}</p>}
+                    {block.intro && <p className='mt-3 font-body text-gray-600'>{richText(block.intro)}</p>}
                   </div>
                   <div className={`mt-10 grid grid-cols-1 gap-4 ${cardColumns[block.columns]}`}>
                     {block.images.map((image, index) => (
@@ -922,7 +925,7 @@ export default function CityServiceBlocksRenderer({
                         <div className={`relative overflow-hidden rounded ${galleryAspect[block.aspectRatio]}`}>
                           <Image src={image.src} alt={text(image.alt)} title={image.title ? text(image.title) : undefined} fill sizes='(max-width: 768px) 100vw, 33vw' className='object-cover' />
                         </div>
-                        {image.caption && <figcaption className='mt-2 font-body text-sm text-gray-500'>{text(image.caption)}</figcaption>}
+                        {image.caption && <figcaption className='mt-2 font-body text-sm text-gray-500'>{richText(image.caption)}</figcaption>}
                       </figure>
                     ))}
                   </div>
@@ -941,9 +944,9 @@ export default function CityServiceBlocksRenderer({
                     <SemanticHeading
                       level={block.headingLevel}
                       className='font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
-                    {block.text && <p className='mt-3 font-body text-gray-600'>{text(block.text)}</p>}
+                    {block.text && <p className='mt-3 font-body text-gray-600'>{richText(block.text)}</p>}
                   </div>
                   {(embedUrl || isLocalVideo || editorMode) && (
                     <div className='mt-8 aspect-video overflow-hidden rounded bg-slate-950 shadow-lg'>
@@ -956,7 +959,7 @@ export default function CityServiceBlocksRenderer({
                       )}
                     </div>
                   )}
-                  {block.caption && <p className='mt-3 text-center font-body text-sm text-gray-500'>{text(block.caption)}</p>}
+                  {block.caption && <p className='mt-3 text-center font-body text-sm text-gray-500'>{richText(block.caption)}</p>}
                 </div>
               </section>
             );
@@ -969,7 +972,7 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className='text-center font-sans text-2xl font-bold text-navy'>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
                   <div className={`mt-8 grid items-center gap-6 ${logoColumns[block.columns]}`}>
                     {block.logos.map((logo, index) => {
@@ -993,17 +996,17 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className='font-sans text-3xl font-bold text-navy md:text-4xl'>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
-                  {block.intro && <p className='mt-3 font-body text-gray-600'>{text(block.intro)}</p>}
+                  {block.intro && <p className='mt-3 font-body text-gray-600'>{richText(block.intro)}</p>}
                   <div className='mt-8 divide-y divide-slate-200 border-y border-slate-200'>
                     {block.items.map((item, index) => (
                       <details key={`${block.id}-accordion-${index}`} className='group bg-white px-5 py-1'>
                         <summary className='flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-sans font-semibold text-navy'>
-                          {text(item.title)}
+                          {richText(item.title)}
                           <ChevronDownIcon className='h-5 w-5 shrink-0 text-primary transition-transform group-open:rotate-180' />
                         </summary>
-                        <p className='pb-5 font-body leading-relaxed text-gray-600'>{text(item.content)}</p>
+                        <p className='pb-5 font-body leading-relaxed text-gray-600'>{richText(item.content)}</p>
                       </details>
                     ))}
                   </div>
@@ -1041,7 +1044,7 @@ export default function CityServiceBlocksRenderer({
                     <Image src={image.src} alt={text(image.alt)} title={image.title ? text(image.title) : undefined} fill sizes='(max-width: 1024px) 50vw, 30vw' className='object-cover' />
                     {image.caption && (
                       <span className='absolute inset-x-0 bottom-0 z-10 bg-black/65 px-3 py-2 font-body text-xs text-white'>
-                        {text(image.caption)}
+                        {richText(image.caption)}
                       </span>
                     )}
                   </div>
@@ -1062,7 +1065,7 @@ export default function CityServiceBlocksRenderer({
                       <Image src={image.src} alt={text(image.alt)} title={image.title ? text(image.title) : undefined} fill sizes='(max-width: 1024px) 70vw, 35vw' className='object-cover' />
                       {image.caption && (
                         <span className='absolute inset-x-0 bottom-0 z-10 bg-black/65 px-3 py-2 font-body text-xs text-white'>
-                          {text(image.caption)}
+                          {richText(image.caption)}
                         </span>
                       )}
                     </div>
@@ -1075,13 +1078,13 @@ export default function CityServiceBlocksRenderer({
                 <div className='container mx-auto grid max-w-6xl grid-cols-1 items-center gap-12 px-4 lg:grid-cols-2'>
                   <div className={imageRight ? "lg:order-2" : ""}>{collage}</div>
                   <div className={imageRight ? "lg:order-1" : ""}>
-                    {block.eyebrow && <p className='font-sans text-sm font-semibold uppercase text-primary'>{text(block.eyebrow)}</p>}
+                    {block.eyebrow && <p className='font-sans text-sm font-semibold uppercase text-primary'>{richText(block.eyebrow)}</p>}
                     <SemanticHeading
                       level={block.headingLevel}
                       className='mt-3 font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
-                    <p className='mt-5 font-body leading-relaxed text-gray-600'>{text(block.text)}</p>
+                    <p className='mt-5 font-body leading-relaxed text-gray-600'>{richText(block.text)}</p>
                   </div>
                 </div>
               </section>
@@ -1106,9 +1109,9 @@ export default function CityServiceBlocksRenderer({
                     <SemanticHeading
                       level={block.headingLevel}
                       className='font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
-                    {block.intro && <p className='mt-3 font-body text-gray-600'>{text(block.intro)}</p>}
+                    {block.intro && <p className='mt-3 font-body text-gray-600'>{richText(block.intro)}</p>}
                   </div>
                   <div className={`mt-10 grid grid-cols-1 gap-6 ${cardColumns[block.columns]}`}>
                     {block.cards.map((card, index) => (
@@ -1117,9 +1120,9 @@ export default function CityServiceBlocksRenderer({
                           <Image src={card.image} alt={text(card.imageAlt)} fill sizes='(max-width: 768px) 100vw, 33vw' className='object-cover' />
                         </div>
                         <div className={block.overlay ? "absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 via-black/20 to-transparent p-6 text-white" : "p-6"}>
-                          <h3 className={`font-sans text-xl font-semibold ${block.overlay ? "text-white" : "text-navy"}`}>{text(card.title)}</h3>
-                          <p className={`mt-3 font-body text-sm leading-relaxed ${block.overlay ? "text-white/80" : "text-gray-600"}`}>{text(card.text)}</p>
-                          {card.linkLabel && card.linkUrl && <Link href={card.linkUrl} className='mt-4 font-sans text-sm font-semibold text-primary hover:underline'>{text(card.linkLabel)}</Link>}
+                          <h3 className={`font-sans text-xl font-semibold ${block.overlay ? "text-white" : "text-navy"}`}>{richText(card.title)}</h3>
+                          <p className={`mt-3 font-body text-sm leading-relaxed ${block.overlay ? "text-white/80" : "text-gray-600"}`}>{richText(card.text)}</p>
+                          {card.linkLabel && card.linkUrl && <Link href={card.linkUrl} className='mt-4 font-sans text-sm font-semibold text-primary hover:underline'>{richText(card.linkLabel)}</Link>}
                         </div>
                       </article>
                     ))}
@@ -1137,9 +1140,9 @@ export default function CityServiceBlocksRenderer({
                     <SemanticHeading
                       level={block.headingLevel}
                       className='font-sans text-3xl font-bold text-navy md:text-4xl'>
-                      {text(block.heading)}
+                      {richText(block.heading)}
                     </SemanticHeading>
-                    {block.intro && <p className='mt-3 font-body text-gray-600'>{text(block.intro)}</p>}
+                    {block.intro && <p className='mt-3 font-body text-gray-600'>{richText(block.intro)}</p>}
                   </div>
                   <div className={`mt-10 grid grid-cols-1 gap-6 ${cardColumns[block.columns]}`}>
                     {block.members.map((member, index) => (
@@ -1148,9 +1151,9 @@ export default function CityServiceBlocksRenderer({
                           <Image src={member.image} alt={text(member.imageAlt)} fill sizes='(max-width: 768px) 100vw, 33vw' className='object-cover' />
                         </div>
                         <div className='p-5 text-center'>
-                          <h3 className='font-sans text-lg font-semibold text-navy'>{text(member.name)}</h3>
-                          <p className='mt-1 font-sans text-sm font-semibold text-primary'>{text(member.role)}</p>
-                          {member.text && <p className='mt-3 font-body text-sm leading-relaxed text-gray-600'>{text(member.text)}</p>}
+                          <h3 className='font-sans text-lg font-semibold text-navy'>{richText(member.name)}</h3>
+                          <p className='mt-1 font-sans text-sm font-semibold text-primary'>{richText(member.role)}</p>
+                          {member.text && <p className='mt-3 font-body text-sm leading-relaxed text-gray-600'>{richText(member.text)}</p>}
                         </div>
                       </article>
                     ))}
@@ -1170,7 +1173,7 @@ export default function CityServiceBlocksRenderer({
                   <SemanticHeading
                     level={block.headingLevel}
                     className='mb-12 font-sans text-3xl font-bold text-navy md:text-4xl'>
-                    {text(block.heading)}
+                    {richText(block.heading)}
                   </SemanticHeading>
                   <div className='grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3'>
                     {block.serviceKeys.map((key) => {

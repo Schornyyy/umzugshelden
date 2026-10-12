@@ -25,16 +25,14 @@ export type CityServiceRouteProps = {
 
 function isAllowedCity(cityName: string) {
   return rawCities.some(
-    (city) =>
-      slugify(city).toLowerCase() === slugify(cityName).toLowerCase(),
+    (city) => slugify(city).toLowerCase() === slugify(cityName).toLowerCase(),
   );
 }
 
 function getCanonicalCityName(cityName: string) {
   return (
     rawCities.find(
-      (city) =>
-        slugify(city).toLowerCase() === slugify(cityName).toLowerCase(),
+      (city) => slugify(city).toLowerCase() === slugify(cityName).toLowerCase(),
     ) ?? cityName
   );
 }
@@ -75,9 +73,7 @@ function buildPageContext(
 }
 
 async function loadPageData(cityParam: string, serviceParam: string) {
-  const cityName = getCanonicalCityName(
-    deslugify(decodeCitySlug(cityParam)),
-  );
+  const cityName = getCanonicalCityName(deslugify(decodeCitySlug(cityParam)));
   const serviceKey = serviceParam.trim().toLowerCase();
 
   if (!isAllowedCity(cityName) || !isServiceKey(serviceKey)) return null;
@@ -223,9 +219,9 @@ export async function buildCityServiceMetadata({
   );
   const socialImage = new URL(
     data.resolved.seo.image,
-    "https://umzugshelden.io",
+    "https://www.umzugshelden.io",
   ).toString();
-  const url = `https://umzugshelden.io/stadt/${encodeURIComponent(data.citySlug)}/${data.serviceKey}`;
+  const url = `https://www.umzugshelden.io/stadt/${encodeURIComponent(data.citySlug)}/${data.serviceKey}`;
   const keywords = data.resolved.seo.keywords.flatMap((keyword) => {
     const resolvedKeyword = resolveCityServiceText(keyword, data.context);
     return [

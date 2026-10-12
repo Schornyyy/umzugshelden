@@ -31,10 +31,10 @@ export async function generateMetadata() {
       title: "Möbel Ab- und Aufbau Service | Umzugshelden",
       description:
         "Möbel abbauen, transportieren und wieder aufbauen – von IKEA bis zur Einbauküche. Erfahrenes Team, Festpreise.",
-      url: "https://umzugshelden.io/moebel-service",
+      url: "https://www.umzugshelden.io/moebel-service",
     },
     alternates: {
-      canonical: "https://umzugshelden.io/moebel-service",
+      canonical: "https://www.umzugshelden.io/moebel-service",
     },
   };
 }
@@ -136,28 +136,28 @@ const whys = [
 const steps = [
   {
     number: "01",
-    icon: <SearchIcon className="text-primary" size={28} />,
+    icon: <SearchIcon className='text-primary' size={28} />,
     title: "Anfrage & kostenloses Angebot",
     text: "Beschreiben Sie uns kurz, welche Möbel ab- oder aufgebaut werden sollen. Wir erstellen Ihnen schnell und unkompliziert ein verbindliches Festpreisangebot.",
     detail: "Telefonisch, per E-Mail oder über das Formular.",
   },
   {
     number: "02",
-    icon: <ClipboardListIcon className="text-primary" size={28} />,
+    icon: <ClipboardListIcon className='text-primary' size={28} />,
     title: "Vorab-Abstimmung",
     text: "Wir besprechen mit Ihnen Details: welche Möbel, in welchem Stockwerk, ob Transportwege berücksichtigt werden müssen und ob Anleitungen vorhanden sind.",
     detail: "Damit am Termin alles reibungslos läuft.",
   },
   {
     number: "03",
-    icon: <WrenchIcon className="text-primary" size={28} />,
+    icon: <WrenchIcon className='text-primary' size={28} />,
     title: "Professioneller Ab- oder Aufbau",
     text: "Unser Montageteam erscheint pünktlich mit allem nötigen Werkzeug. Möbel werden systematisch und sorgfältig montiert oder demontiert – ohne Kratzer und ohne Beschichtigungen.",
     detail: "Erfahrung mit allen gängigen Möbelmarken.",
   },
   {
     number: "04",
-    icon: <ThumbsUpIcon className="text-primary" size={28} />,
+    icon: <ThumbsUpIcon className='text-primary' size={28} />,
     title: "Kontrolle & Abschluss",
     text: "Nach dem Aufbau überprüfen wir gemeinsam mit Ihnen alle Möbelstücke auf Standfestigkeit, Ausrichtung und Vollständigkeit. Erst bei Ihrer Zufriedenheit ist der Auftrag abgeschlossen.",
     detail: "Kein Auftrag ohne Abnahme.",
@@ -304,8 +304,8 @@ const TipsSection = () => (
           So bereiten Sie sich optimal vor
         </h2>
         <p className='font-body text-gray-600 mt-3 max-w-2xl'>
-          Mit diesen einfachen Vorbereitungen läuft der Montagetermin reibungslos
-          – für Sie und unser Team.
+          Mit diesen einfachen Vorbereitungen läuft der Montagetermin
+          reibungslos – für Sie und unser Team.
         </p>
       </div>
       <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'>
@@ -346,7 +346,8 @@ const Hero = () => (
             Möbelmontage anfragen
           </h2>
           <p className='mb-5 font-body text-sm text-gray-300'>
-            Fotos Ihrer Möbel helfen uns, Aufwand und Termin schneller einzuschätzen.
+            Fotos Ihrer Möbel helfen uns, Aufwand und Termin schneller
+            einzuschätzen.
           </p>
           <ContactForm dark />
         </div>
@@ -356,8 +357,8 @@ const Hero = () => (
             schnell & sicher
           </h1>
           <p className='font-body text-gray-300 text-lg'>
-            Von IKEA bis zur Einbauküche – wir demontieren und montieren Ihre Möbel
-            professionell, zuverlässig und ohne Kratzer.
+            Von IKEA bis zur Einbauküche – wir demontieren und montieren Ihre
+            Möbel professionell, zuverlässig und ohne Kratzer.
           </p>
           <div>
             <Link href='#leistungen'>

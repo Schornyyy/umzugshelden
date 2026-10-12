@@ -21,7 +21,7 @@ type ServiceSchemaProps = {
   dateModified?: string;
 };
 
-const SITE_URL = "https://umzugshelden.io";
+const SITE_URL = "https://www.umzugshelden.io";
 const BUSINESS_ID = `${SITE_URL}/#business`;
 const WEBSITE_ID = `${SITE_URL}/#website`;
 const PHONE = "+4915168567708";
@@ -96,9 +96,7 @@ export function buildServiceSchema({
   );
   const serviceAreas = [
     ...localAreas,
-    ...(region
-      ? [{ "@type": "AdministrativeArea", name: region }]
-      : []),
+    ...(region ? [{ "@type": "AdministrativeArea", name: region }] : []),
   ];
   const cleanAlternateNames = uniqueText(alternateNames ?? []);
   const cleanOffers = uniqueText(offers ?? []);
@@ -144,9 +142,7 @@ export function buildServiceSchema({
       mainEntity: { "@id": serviceId },
       ...(dateModified ? { dateModified } : {}),
       ...(imageUrl ? { primaryImageOfPage: { "@id": imageId } } : {}),
-      ...(breadcrumbs?.length
-        ? { breadcrumb: { "@id": breadcrumbId } }
-        : {}),
+      ...(breadcrumbs?.length ? { breadcrumb: { "@id": breadcrumbId } } : {}),
     },
     {
       "@type": ["MovingCompany", "ProfessionalService"],

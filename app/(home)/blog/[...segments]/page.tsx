@@ -8,6 +8,8 @@ import {
   listBlogSubcategories,
 } from "@/actions/blogSubcategoryActions";
 import { BlogBlocksRenderer } from "@/components/blog/BlogBlockRenderer";
+import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
+import ContactForm from "@/components/ContactForm";
 import { RichTextRender } from "@/components/RichTextRender";
 import {
   Accordion,
@@ -16,6 +18,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { normalizeBlogPageSettings } from "@/lib/blogBuilder";
+import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
+import { getCityServiceSeoContent } from "@/lib/cityServiceSeo";
+import { getNearbyCities } from "@/statics/Lists";
 import type { AdminBlogMainCategory } from "@/types/blog/AdminBlogCategory";
 import type { BlogPage } from "@/types/blog/BlogPage";
 import type { Metadata } from "next";
@@ -173,6 +178,36 @@ async function BlogPageView({ page }: { page: BlogPage }) {
     normal: "max-w-6xl",
     wide: "max-w-7xl",
   }[settings.contentWidth];
+  const cityName = page.cityName || "Olpe";
+  const serviceKey = page.serviceKey || "umzugsservice";
+  const serviceName = getDefaultCityServiceName(serviceKey);
+  const nearbyCities = getNearbyCities(cityName);
+  const primaryKeyword = page.keywords?.[0] || serviceName;
+  const localSeo = getCityServiceSeoContent({
+    cityName,
+    serviceKey,
+    serviceName,
+    primaryKeyword,
+    nearbyCities,
+    nearbyLimit: 3,
+  });
+  const serviceContext = {
+    city: cityName,
+    service: serviceName,
+    primaryKeyword,
+    region: localSeo.regionName,
+    localIntro: localSeo.introText,
+    nearbyCities: nearbyCities
+      .slice(0, 3)
+      .map((city) => city.name)
+      .join(", "),
+  };
+  const renderedServiceBlocks = page.serviceBlocks?.filter(
+    (block) => block.type !== "cta",
+  );
+  const hasEmbeddedContact = renderedServiceBlocks?.some(
+    (block) => block.type === "contact" && block.enabled,
+  );
 
   return (
     <div
@@ -215,7 +250,16 @@ async function BlogPageView({ page }: { page: BlogPage }) {
           )}
         </header>
 
-        {page.blocks?.length ? (
+        {renderedServiceBlocks?.length ? (
+          <CityServiceBlocksRenderer
+            blocks={renderedServiceBlocks}
+            cityName={cityName}
+            citySlug={cityName.toLocaleLowerCase("de").replace(/\s+/gu, "-")}
+            serviceKey={serviceKey}
+            context={serviceContext}
+            localSeo={localSeo}
+          />
+        ) : page.blocks?.length ? (
           <BlogBlocksRenderer blocks={page.blocks} accentColor={settings.accentColor} headingColor={settings.headingColor} />
         ) : (
           <div className='mx-auto w-full max-w-4xl space-y-12 px-5 sm:px-10'>
@@ -246,13 +290,22 @@ async function BlogPageView({ page }: { page: BlogPage }) {
           </section>
         )}
 
-        {settings.showCta && (
-          <section className='mx-5 mb-10 flex flex-col gap-6 rounded-md p-8 text-white md:mx-10 md:flex-row md:items-center' style={{ backgroundColor: settings.accentColor }}>
-            <div className='flex-1 space-y-2'>
-              <h2 className='text-xl font-semibold'>{settings.ctaTitle}</h2>
-              <p className='text-sm opacity-90'>{settings.ctaText}</p>
+        {!hasEmbeddedContact && (
+          <section className='mx-5 mb-10 rounded-xl bg-navy p-6 text-white md:mx-10 md:p-10'>
+            <div className='grid items-start gap-8 lg:grid-cols-2'>
+              <div className='space-y-3'>
+                <h2 className='text-2xl font-bold text-primary md:text-3xl'>
+                  Jetzt kostenlos und unverbindlich anfragen
+                </h2>
+                <p className='text-sm leading-6 text-gray-300'>
+                  Beschreiben Sie kurz Ihr Vorhaben. Wir melden uns persönlich
+                  bei Ihnen und besprechen die nächsten Schritte.
+                </p>
+              </div>
+              <div className='rounded-xl bg-white/10 p-5'>
+                <ContactForm dark />
+              </div>
             </div>
-            <Link href={settings.ctaUrl} className='rounded bg-white px-5 py-3 text-sm font-medium text-slate-900'>{settings.ctaLabel}</Link>
           </section>
         )}
         <script

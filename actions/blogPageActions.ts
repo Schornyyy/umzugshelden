@@ -27,6 +27,10 @@ import type {
   BlogPageSettings,
 } from "@/types/blog/BlogPage";
 import type { AdminBlogMainCategory } from "@/types/blog/BlogSubcategory";
+import {
+  CITY_SERVICE_KEYS,
+  type CityServiceBlock,
+} from "@/types/city/CityServicePage";
 import { slugify } from "@/utils/slugify";
 
 const COLLECTION = "blogPages_umzugshelden";
@@ -163,6 +167,9 @@ const baseSchema = z.object({
   sections: z.array(sectionSchema).max(20).default([]),
   faq: z.array(faqSchema).max(30).default([]),
   blocks: z.array(blockSchema).max(100).optional(),
+  serviceBlocks: z.array(z.record(z.unknown())).max(100).optional(),
+  serviceKey: z.enum(CITY_SERVICE_KEYS).optional(),
+  cityName: z.string().trim().min(1).max(150).optional(),
   settings: settingsSchema.optional(),
   visible: z.boolean().default(false),
   slug: z.string().trim().min(1).max(120).optional(),
@@ -275,6 +282,9 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
     sections: input.sections || [],
     faq: input.faq || [],
     blocks: input.blocks,
+    serviceBlocks: input.serviceBlocks,
+    serviceKey: input.serviceKey,
+    cityName: input.cityName,
     settings: input.settings,
     visible: input.visible ?? false,
   });
@@ -301,6 +311,9 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
         sections: parsed.sections as BlogPageSection[],
         faq: parsed.faq as BlogPageFAQEntry[],
         blocks: parsed.blocks as BlogPageBlock[] | undefined,
+        serviceBlocks: parsed.serviceBlocks as CityServiceBlock[] | undefined,
+        serviceKey: parsed.serviceKey,
+        cityName: parsed.cityName,
         settings: parsed.settings as BlogPageSettings | undefined,
         slug,
         path,
@@ -327,6 +340,9 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
         sections: parsed.sections as BlogPageSection[],
         faq: parsed.faq as BlogPageFAQEntry[],
         blocks: parsed.blocks as BlogPageBlock[] | undefined,
+        serviceBlocks: parsed.serviceBlocks as CityServiceBlock[] | undefined,
+        serviceKey: parsed.serviceKey,
+        cityName: parsed.cityName,
         settings: parsed.settings as BlogPageSettings | undefined,
         visible: parsed.visible,
         createdAt: now,
@@ -351,6 +367,9 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
       sections: parsed.sections as BlogPageSection[],
       faq: parsed.faq as BlogPageFAQEntry[],
       blocks: parsed.blocks as BlogPageBlock[] | undefined,
+      serviceBlocks: parsed.serviceBlocks as CityServiceBlock[] | undefined,
+      serviceKey: parsed.serviceKey,
+      cityName: parsed.cityName,
       settings: parsed.settings as BlogPageSettings | undefined,
       visible: parsed.visible,
       createdAt: now,
@@ -389,6 +408,9 @@ export async function getBlogPageBySlug(subcategorySlug: string, slug: string): 
     sections: (data.sections || []) as BlogPageSection[],
     faq: (data.faq || []) as BlogPageFAQEntry[],
     blocks: data.blocks as BlogPageBlock[] | undefined,
+    serviceBlocks: data.serviceBlocks as CityServiceBlock[] | undefined,
+    serviceKey: data.serviceKey,
+    cityName: data.cityName,
     settings: data.settings as BlogPageSettings | undefined,
     visible: data.visible ?? false,
     createdAt: data.createdAt,
@@ -442,6 +464,9 @@ export async function listBlogPagesBySubcategory(subcategorySlug: string): Promi
       sections: data.sections || [],
       faq: data.faq || [],
       blocks: data.blocks as BlogPageBlock[] | undefined,
+      serviceBlocks: data.serviceBlocks as CityServiceBlock[] | undefined,
+      serviceKey: data.serviceKey,
+      cityName: data.cityName,
       settings: data.settings as BlogPageSettings | undefined,
       visible: data.visible ?? false,
       createdAt: data.createdAt,
@@ -526,6 +551,17 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
   }
   if (patch.blocks !== undefined) {
     parsedPatch.blocks = patch.blocks.map((block) => blockSchema.parse(block)) as BlogPageBlock[];
+  }
+  if (patch.serviceBlocks !== undefined) {
+    parsedPatch.serviceBlocks = z.array(z.record(z.unknown())).max(100).parse(
+      patch.serviceBlocks,
+    ) as CityServiceBlock[];
+  }
+  if (patch.serviceKey !== undefined) {
+    parsedPatch.serviceKey = z.enum(CITY_SERVICE_KEYS).parse(patch.serviceKey);
+  }
+  if (patch.cityName !== undefined) {
+    parsedPatch.cityName = z.string().trim().min(1).max(150).parse(patch.cityName);
   }
   if (patch.settings !== undefined) {
     parsedPatch.settings = settingsSchema.parse(patch.settings) as BlogPageSettings;

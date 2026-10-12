@@ -1,6 +1,7 @@
 import SemanticHeading from "@/components/SemanticHeading";
 import { FAQType } from "@/types/utils/FAQType";
 import React from "react";
+import { renderInlineMarkdown } from "@/components/utils/InlineMarkdownText";
 import {
   Accordion,
   AccordionContent,
@@ -40,13 +41,17 @@ const FAQBlock = ({
       <SemanticHeading
         level={headingLevel}
         className='font-sans text-md font-medium md:text-2xl'>
-        {title}
+        {renderInlineMarkdown(title)}
       </SemanticHeading>
       <Accordion type='single' collapsible>
         {faqs.map((faq, index) => (
           <AccordionItem key={index} value={`item-${index}`}>
-            <AccordionTrigger>{faq.question}</AccordionTrigger>
-            <AccordionContent>{faq.answer}</AccordionContent>
+            <AccordionTrigger>
+              {renderInlineMarkdown(faq.question)}
+            </AccordionTrigger>
+            <AccordionContent>
+              {renderInlineMarkdown(faq.answer)}
+            </AccordionContent>
           </AccordionItem>
         ))}
       </Accordion>

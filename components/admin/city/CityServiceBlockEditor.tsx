@@ -1392,6 +1392,7 @@ export default function CityServiceBlockEditor({
   );
   const [viewport, setViewport] = useState<BuilderViewport>("desktop");
   const [fullscreen, setFullscreen] = useState(false);
+  const [panelsCollapsed, setPanelsCollapsed] = useState(false);
   const pastRef = useRef<CityServiceBlock[][]>([]);
   const futureRef = useRef<CityServiceBlock[][]>([]);
   const [, forceHistoryRender] = useState(0);
@@ -1473,12 +1474,17 @@ export default function CityServiceBlockEditor({
 
   return (
     <div
-      className={`grid overflow-hidden border border-slate-300 bg-slate-100 xl:grid-cols-[240px_minmax(0,1fr)_380px] ${
+      className={`grid overflow-hidden border border-slate-300 bg-slate-100 ${
+        panelsCollapsed
+          ? "grid-cols-1"
+          : "xl:grid-cols-[240px_minmax(0,1fr)_380px]"
+      } ${
         fullscreen
           ? "fixed inset-0 z-40 h-[100dvh] rounded-none"
           : "rounded-md xl:h-[calc(100dvh-9rem)] xl:min-h-[760px]"
       }`}>
-      <aside className='min-h-0 border-b border-slate-200 bg-white xl:border-b-0 xl:border-r'>
+      {!panelsCollapsed && (
+        <aside className='min-h-0 border-b border-slate-200 bg-white xl:border-b-0 xl:border-r'>
         <nav className='grid grid-cols-2 border-b border-slate-200 p-2'>
           <button
             type='button'
@@ -1578,28 +1584,61 @@ export default function CityServiceBlockEditor({
             </Reorder.Group>
           )}
         </div>
-      </aside>
+        </aside>
+      )}
 
       <main className='flex min-h-0 min-w-0 flex-col bg-slate-200'>
         <header className='flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-300 bg-white px-3'>
           <div className='flex items-center gap-1'>
+            {!panelsCollapsed && (
+              <>
+                <button
+                  type='button'
+                  title='Rückgängig'
+                  aria-label='Rückgängig'
+                  disabled={readOnly || pastRef.current.length === 0}
+                  onClick={undo}
+                  className='flex h-9 w-9 items-center justify-center rounded text-slate-600 hover:bg-slate-100 disabled:opacity-30'>
+                  <Undo2 className='h-4 w-4' />
+                </button>
+                <button
+                  type='button'
+                  title='Wiederholen'
+                  aria-label='Wiederholen'
+                  disabled={readOnly || futureRef.current.length === 0}
+                  onClick={redo}
+                  className='flex h-9 w-9 items-center justify-center rounded text-slate-600 hover:bg-slate-100 disabled:opacity-30'>
+                  <Redo2 className='h-4 w-4' />
+                </button>
+              </>
+            )}
             <button
               type='button'
-              title='Rückgängig'
-              aria-label='Rückgängig'
-              disabled={readOnly || pastRef.current.length === 0}
-              onClick={undo}
-              className='flex h-9 w-9 items-center justify-center rounded text-slate-600 hover:bg-slate-100 disabled:opacity-30'>
-              <Undo2 className='h-4 w-4' />
-            </button>
-            <button
-              type='button'
-              title='Wiederholen'
-              aria-label='Wiederholen'
-              disabled={readOnly || futureRef.current.length === 0}
-              onClick={redo}
-              className='flex h-9 w-9 items-center justify-center rounded text-slate-600 hover:bg-slate-100 disabled:opacity-30'>
-              <Redo2 className='h-4 w-4' />
+              title={
+                panelsCollapsed
+                  ? "Bedienfelder einblenden"
+                  : "Alle Bedienfelder einklappen"
+              }
+              aria-label={
+                panelsCollapsed
+                  ? "Bedienfelder einblenden"
+                  : "Alle Bedienfelder einklappen"
+              }
+              aria-pressed={panelsCollapsed}
+              onClick={() => setPanelsCollapsed((current) => !current)}
+              className={`flex h-9 items-center justify-center gap-2 rounded px-2 text-xs font-semibold ${
+                panelsCollapsed
+                  ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                  : "text-slate-600 hover:bg-slate-100"
+              }`}>
+              {panelsCollapsed ? (
+                <PanelsTopLeft className='h-4 w-4' />
+              ) : (
+                <EyeOff className='h-4 w-4' />
+              )}
+              <span className='hidden sm:inline'>
+                {panelsCollapsed ? "Editor zeigen" : "Nur Vorschau"}
+              </span>
             </button>
           </div>
 
@@ -1652,7 +1691,8 @@ export default function CityServiceBlockEditor({
         </div>
       </main>
 
-      <aside className='min-h-0 overflow-y-auto border-t border-slate-200 bg-white p-5 xl:border-l xl:border-t-0'>
+      {!panelsCollapsed && (
+        <aside className='min-h-0 overflow-y-auto border-t border-slate-200 bg-white p-5 xl:border-l xl:border-t-0'>
         {selectedBlock ? (
           <BlockInspector
             block={selectedBlock}
@@ -1664,7 +1704,8 @@ export default function CityServiceBlockEditor({
             Wähle einen Block aus.
           </div>
         )}
-      </aside>
+        </aside>
+      )}
     </div>
   );
 }

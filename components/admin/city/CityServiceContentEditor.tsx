@@ -7,6 +7,7 @@ import {
   saveCityServiceTemplate,
 } from "@/actions/cityServicePageActions";
 import CityServiceBlockEditor from "@/components/admin/city/CityServiceBlockEditor";
+import { CitySeoAnalysisTab } from "@/components/admin/city/CitySeoAnalysisTab";
 import MediathekDialog from "@/components/utils/MediathekDialog";
 import type {
   CityServiceBlock,
@@ -15,7 +16,8 @@ import type {
   CityServiceSeoSettings,
   CityServiceTemplate,
 } from "@/types/city/CityServicePage";
-import { Eye, LayoutTemplate, Save } from "lucide-react";
+import { auth } from "@/config/firebase";
+import { Eye, LayoutTemplate, Loader2, Save, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -28,7 +30,15 @@ type Props = {
   citySlug?: string;
 };
 
-type Tab = "content" | "seo";
+type Tab = "content" | "seo" | "analysis";
+
+type OptimizationState = {
+  pendingProposalId: string | null;
+  targetRank: number | null;
+  suspendedForTopFive: boolean;
+  lastGeneratedAt: number | null;
+  lastAcceptedAt: number | null;
+};
 
 function cloneBlocks(blocks: CityServiceBlock[]) {
   return structuredClone(blocks);
@@ -45,6 +55,8 @@ export default function CityServiceContentEditor({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [generatedMessage, setGeneratedMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("content");
   const [template, setTemplate] = useState<CityServiceTemplate | null>(null);
@@ -56,6 +68,8 @@ export default function CityServiceContentEditor({
   const [inheritTemplate, setInheritTemplate] = useState(true);
   const [inheritSeo, setInheritSeo] = useState(true);
   const [published, setPublished] = useState(true);
+  const [optimizationState, setOptimizationState] =
+    useState<OptimizationState | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,7 +86,10 @@ export default function CityServiceContentEditor({
           if (cancelled) return;
           setTemplate(loadedTemplate);
           setBlocks(cloneBlocks(loadedTemplate.blocks));
-          setSeo({ ...loadedTemplate.seo, keywords: [...loadedTemplate.seo.keywords] });
+          setSeo({
+            ...loadedTemplate.seo,
+            keywords: [...loadedTemplate.seo.keywords],
+          });
           setServiceName(loadedTemplate.serviceName);
           setPrimaryKeyword(loadedTemplate.primaryKeyword);
         } else {
@@ -87,7 +104,10 @@ export default function CityServiceContentEditor({
           setTemplate(loaded.template);
           setPage(loaded.page);
           setBlocks(cloneBlocks(loaded.resolved.blocks));
-          setSeo({ ...loaded.resolved.seo, keywords: [...loaded.resolved.seo.keywords] });
+          setSeo({
+            ...loaded.resolved.seo,
+            keywords: [...loaded.resolved.seo.keywords],
+          });
           setServiceName(loaded.template.serviceName);
           setPrimaryKeyword(loaded.template.primaryKeyword);
           setInheritTemplate(loaded.page.inheritTemplate);
@@ -112,6 +132,37 @@ export default function CityServiceContentEditor({
       cancelled = true;
     };
   }, [cityName, citySlug, mode, ownerId, serviceKey]);
+
+  useEffect(() => {
+    if (mode !== "page" || !citySlug) return;
+    const resolvedCitySlug = citySlug;
+    let cancelled = false;
+    async function loadOptimizationState() {
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        if (!token) return;
+        const params = new URLSearchParams({
+          ownerId,
+          citySlug: resolvedCitySlug,
+          serviceKey,
+        });
+        const response = await fetch(
+          `/api/admin/city-service-optimization-status?${params}`,
+          { headers: { authorization: `Bearer ${token}` } },
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!cancelled && response.ok && data.success) {
+          setOptimizationState(data.state);
+        }
+      } catch (statusError) {
+        console.warn("Optimierungsstatus konnte nicht geladen werden", statusError);
+      }
+    }
+    loadOptimizationState();
+    return () => {
+      cancelled = true;
+    };
+  }, [citySlug, mode, ownerId, serviceKey]);
 
   async function handleSave() {
     if (!seo || !template) return;
@@ -143,6 +194,7 @@ export default function CityServiceContentEditor({
         );
         setPage(next);
       }
+
       setSaved(true);
     } catch (saveError) {
       setError(
@@ -152,6 +204,89 @@ export default function CityServiceContentEditor({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleGenerate(analysisId?: string) {
+    if (
+      mode !== "page" ||
+      !cityName ||
+      !citySlug ||
+      !seo ||
+      !window.confirm(
+        analysisId
+          ? "Die KI erstellt nach diesem Blueprint einen getrennten Freigabe-Entwurf. Die öffentliche Seite bleibt unverändert. Fortfahren?"
+          : "Die KI erstellt einen getrennten Freigabe-Entwurf. Die öffentliche Seite bleibt unverändert. Fortfahren?",
+      )
+    ) {
+      return;
+    }
+    setGenerating(true);
+    setSaved(false);
+    setGeneratedMessage(null);
+    setError(null);
+    const reviewWindow = window.open("about:blank", "_blank");
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token)
+        throw new Error(
+          "Keine aktive Anmeldung gefunden. Bitte neu einloggen.",
+        );
+      const response = await fetch("/api/admin/generate-city-service-page", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          ownerId,
+          cityName,
+          citySlug,
+          serviceKey,
+          serviceName,
+          primaryKeyword,
+          keywords: seo.keywords,
+          currentImage: seo.image,
+          currentImageAlt: seo.imageAlt,
+          currentBlocks: blocks,
+          currentSeo: seo,
+          analysisId,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Die KI-Seitenerstellung ist fehlgeschlagen.",
+        );
+      }
+      if (!data.reviewUrl) {
+        throw new Error("Für den KI-Vorschlag fehlt die Freigabe-Ansicht.");
+      }
+      if (reviewWindow) {
+        reviewWindow.opener = null;
+        reviewWindow.location.href = data.reviewUrl;
+      } else {
+        window.open(data.reviewUrl, "_blank", "noopener,noreferrer");
+      }
+      setOptimizationState((current) => ({
+        pendingProposalId: data.proposalId,
+        targetRank: current?.targetRank ?? null,
+        suspendedForTopFive: false,
+        lastGeneratedAt: Date.now(),
+        lastAcceptedAt: current?.lastAcceptedAt ?? null,
+      }));
+      setGeneratedMessage(
+        "Der neue Stand wurde getrennt gespeichert und in einem neuen Tab zur Freigabe geöffnet. Die öffentliche Seite ist unverändert.",
+      );
+    } catch (generationError) {
+      reviewWindow?.close();
+      setError(
+        generationError instanceof Error
+          ? generationError.message
+          : "Die KI-Seitenerstellung ist fehlgeschlagen.",
+      );
+    } finally {
+      setGenerating(false);
     }
   }
 
@@ -169,7 +304,9 @@ export default function CityServiceContentEditor({
 
   if (loading) return <div className='p-8 text-sm text-slate-500'>Lädt...</div>;
   if (!template || !seo) {
-    return <div className='p-8 text-sm text-red-600'>{error || "Keine Daten"}</div>;
+    return (
+      <div className='p-8 text-sm text-red-600'>{error || "Keine Daten"}</div>
+    );
   }
 
   const previewCity = citySlug || "olpe";
@@ -193,6 +330,20 @@ export default function CityServiceContentEditor({
           </p>
         </div>
         <div className='ml-auto flex items-center gap-2'>
+          {mode === "page" && (
+            <button
+              type='button'
+              onClick={() => handleGenerate()}
+              disabled={generating || saving}
+              className='inline-flex h-10 items-center gap-2 rounded border border-violet-300 bg-violet-50 px-4 text-sm font-medium text-violet-800 hover:bg-violet-100 disabled:opacity-50'>
+              {generating ? (
+                <Loader2 className='h-4 w-4 animate-spin' />
+              ) : (
+                <Sparkles className='h-4 w-4' />
+              )}
+              {generating ? "KI erstellt Seite..." : "Mit KI neu erstellen"}
+            </button>
+          )}
           <Link
             href={previewUrl}
             target='_blank'
@@ -222,6 +373,36 @@ export default function CityServiceContentEditor({
           Gespeichert und öffentliche Route aktualisiert.
         </div>
       )}
+      {generatedMessage && (
+        <div className='border-l-4 border-violet-500 bg-violet-50 px-4 py-3 text-sm text-violet-800'>
+          {generatedMessage}
+        </div>
+      )}
+      {mode === "page" &&
+        optimizationState?.pendingProposalId &&
+        citySlug && (
+          <div className='flex flex-wrap items-center gap-3 border-l-4 border-violet-500 bg-violet-50 px-4 py-3 text-sm text-violet-900'>
+            <span className='min-w-0 flex-1'>
+              Ein neuer KI-Stand wartet auf Freigabe. Die öffentliche Seite
+              wurde noch nicht verändert.
+            </span>
+            <Link
+              href={`/admin/${encodeURIComponent(userId || ownerId)}/citys/${encodeURIComponent(citySlug)}/services/${serviceKey}/optimierungen/${optimizationState.pendingProposalId}`}
+              target='_blank'
+              className='rounded bg-violet-700 px-3 py-2 text-xs font-semibold text-white'>
+              Vorschlag prüfen
+            </Link>
+          </div>
+        )}
+      {mode === "page" && optimizationState?.suspendedForTopFive && (
+        <div className='border-l-4 border-emerald-500 bg-emerald-50 px-4 py-3 text-sm text-emerald-900'>
+          Automatische Optimierung pausiert: Diese Seite wurde in der Suche
+          {optimizationState.targetRank
+            ? ` auf Position ${optimizationState.targetRank}`
+            : " in den Top 5"}{" "}
+          gefunden.
+        </div>
+      )}
 
       {mode === "page" && (
         <section className='grid gap-4 border-y border-slate-200 bg-white py-5 md:grid-cols-2'>
@@ -230,7 +411,9 @@ export default function CityServiceContentEditor({
               id='inherit-template'
               type='checkbox'
               checked={inheritTemplate}
-              onChange={(event) => changeTemplateInheritance(event.target.checked)}
+              onChange={(event) =>
+                changeTemplateInheritance(event.target.checked)
+              }
               className='mt-1 h-4 w-4 accent-emerald-600'
             />
             <label htmlFor='inherit-template'>
@@ -292,6 +475,18 @@ export default function CityServiceContentEditor({
           }`}>
           SEO & Veröffentlichung
         </button>
+        {mode === "page" && (
+          <button
+            type='button'
+            onClick={() => setActiveTab("analysis")}
+            className={`border-b-2 px-4 py-3 text-sm font-medium ${
+              activeTab === "analysis"
+                ? "border-violet-600 text-violet-700"
+                : "border-transparent text-slate-500"
+            }`}>
+            SEO-Auswertung & KI
+          </button>
+        )}
       </nav>
 
       {activeTab === "content" && (
@@ -303,7 +498,8 @@ export default function CityServiceContentEditor({
                   Diese Seite verwendet noch die globale Vorlage.
                 </p>
                 <p className='mt-0.5 text-xs text-amber-800'>
-                  Aktiviere eigene Inhalte, um jeden Abschnitt frei zu gestalten.
+                  Aktiviere eigene Inhalte, um jeden Abschnitt frei zu
+                  gestalten.
                 </p>
               </div>
               <button
@@ -365,7 +561,9 @@ export default function CityServiceContentEditor({
                 className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
                 value={seo.title}
                 disabled={mode === "page" && inheritSeo}
-                onChange={(event) => setSeo({ ...seo, title: event.target.value })}
+                onChange={(event) =>
+                  setSeo({ ...seo, title: event.target.value })
+                }
               />
             </label>
             <label className='block'>
@@ -377,7 +575,9 @@ export default function CityServiceContentEditor({
                 className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
                 value={seo.description}
                 disabled={mode === "page" && inheritSeo}
-                onChange={(event) => setSeo({ ...seo, description: event.target.value })}
+                onChange={(event) =>
+                  setSeo({ ...seo, description: event.target.value })
+                }
               />
             </label>
             <div className='grid gap-4 sm:grid-cols-2'>
@@ -389,12 +589,16 @@ export default function CityServiceContentEditor({
                   <MediathekDialog
                     btnName='Aus Mediathek wählen'
                     onSelect={(selection) => {
-                      const image = Array.isArray(selection) ? selection[0] : selection;
+                      const image = Array.isArray(selection)
+                        ? selection[0]
+                        : selection;
                       if (image) setSeo({ ...seo, image });
                     }}
                   />
                 )}
-                <p className='mt-2 truncate text-xs text-slate-500' title={seo.image}>
+                <p
+                  className='mt-2 truncate text-xs text-slate-500'
+                  title={seo.image}>
                   {seo.image}
                 </p>
               </div>
@@ -406,7 +610,9 @@ export default function CityServiceContentEditor({
                   className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
                   value={seo.imageAlt}
                   disabled={mode === "page" && inheritSeo}
-                  onChange={(event) => setSeo({ ...seo, imageAlt: event.target.value })}
+                  onChange={(event) =>
+                    setSeo({ ...seo, imageAlt: event.target.value })
+                  }
                 />
               </label>
             </div>
@@ -419,7 +625,9 @@ export default function CityServiceContentEditor({
                 className='w-full rounded border border-slate-300 px-3 py-2 text-sm disabled:bg-slate-100'
                 value={seo.schemaDescription}
                 disabled={mode === "page" && inheritSeo}
-                onChange={(event) => setSeo({ ...seo, schemaDescription: event.target.value })}
+                onChange={(event) =>
+                  setSeo({ ...seo, schemaDescription: event.target.value })
+                }
               />
             </label>
             <label className='block'>
@@ -463,8 +671,17 @@ export default function CityServiceContentEditor({
                 Platzhalter
               </p>
               <div className='mt-3 flex flex-wrap gap-2'>
-                {["{city}", "{service}", "{primaryKeyword}", "{region}", "{localIntro}", "{nearbyCities}"].map((token) => (
-                  <code key={token} className='rounded bg-slate-100 px-2 py-1 text-xs text-slate-700'>
+                {[
+                  "{city}",
+                  "{service}",
+                  "{primaryKeyword}",
+                  "{region}",
+                  "{localIntro}",
+                  "{nearbyCities}",
+                ].map((token) => (
+                  <code
+                    key={token}
+                    className='rounded bg-slate-100 px-2 py-1 text-xs text-slate-700'>
                     {token}
                   </code>
                 ))}
@@ -472,6 +689,18 @@ export default function CityServiceContentEditor({
             </div>
           </aside>
         </div>
+      )}
+      {activeTab === "analysis" && mode === "page" && citySlug && (
+        <CitySeoAnalysisTab
+          ownerId={ownerId}
+          citySlug={citySlug}
+          pageKey={`${citySlug}/${serviceKey}`}
+          pageLabel={`${serviceName} ${cityName || ""}`.trim()}
+          targetUrl={`https://www.umzugshelden.io${previewUrl}`}
+          defaultKeyword={`${primaryKeyword} ${cityName || ""}`.trim()}
+          onGeneratePage={handleGenerate}
+          generatingPage={generating}
+        />
       )}
     </div>
   );

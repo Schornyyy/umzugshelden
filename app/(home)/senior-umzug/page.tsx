@@ -38,12 +38,12 @@ export async function generateMetadata() {
       title: "Seniorenumzug Olpe & Umgebung | Umzugshelden",
       description:
         "Einfühlsamer Seniorenumzug im Kreis Olpe und 30 km Umkreis – mit Geduld, Erfahrung und Rundum-Service.",
-      url: "https://umzugshelden.io/senior-umzug",
+      url: "https://www.umzugshelden.io/senior-umzug",
       type: "website",
       locale: "de_DE",
     },
     alternates: {
-      canonical: "https://umzugshelden.io/senior-umzug",
+      canonical: "https://www.umzugshelden.io/senior-umzug",
     },
     robots: {
       index: true,
@@ -249,14 +249,38 @@ const ChallengesSection = () => (
 
 /* ─── CHECKLIST ─── */
 const checklistItems = [
-  { timing: "6 Wochen vorher", task: "Professionellen Umzugsdienst beauftragen und Termin festlegen" },
-  { timing: "4 Wochen vorher", task: "Neue Adresse bei Behörden, Kranken- und Pflegeversicherung ummelden" },
-  { timing: "4 Wochen vorher", task: "Nachsendeauftrag bei der Post einrichten" },
-  { timing: "3 Wochen vorher", task: "Arzt, Apotheke, Bank und Versorger informieren" },
-  { timing: "2 Wochen vorher", task: "Grundriss des neuen Zimmers/Wohnung besorgen für Einrichtungsplanung" },
-  { timing: "1 Woche vorher", task: "Liebste Gegenstände, Fotos und Dokumente separat und griffbereit sichern" },
-  { timing: "Am Umzugstag", task: "Essenzielle Erstausstattung (Medikamente, Kläimungstück, Zahnbürste) separat verpacken" },
-  { timing: "Nach dem Einzug", task: "Neue Umgebung gemeinsam erkunden und Lieblingsplätze einrichten" },
+  {
+    timing: "6 Wochen vorher",
+    task: "Professionellen Umzugsdienst beauftragen und Termin festlegen",
+  },
+  {
+    timing: "4 Wochen vorher",
+    task: "Neue Adresse bei Behörden, Kranken- und Pflegeversicherung ummelden",
+  },
+  {
+    timing: "4 Wochen vorher",
+    task: "Nachsendeauftrag bei der Post einrichten",
+  },
+  {
+    timing: "3 Wochen vorher",
+    task: "Arzt, Apotheke, Bank und Versorger informieren",
+  },
+  {
+    timing: "2 Wochen vorher",
+    task: "Grundriss des neuen Zimmers/Wohnung besorgen für Einrichtungsplanung",
+  },
+  {
+    timing: "1 Woche vorher",
+    task: "Liebste Gegenstände, Fotos und Dokumente separat und griffbereit sichern",
+  },
+  {
+    timing: "Am Umzugstag",
+    task: "Essenzielle Erstausstattung (Medikamente, Kläimungstück, Zahnbürste) separat verpacken",
+  },
+  {
+    timing: "Nach dem Einzug",
+    task: "Neue Umgebung gemeinsam erkunden und Lieblingsplätze einrichten",
+  },
 ];
 
 const ChecklistSection = () => (
@@ -327,14 +351,15 @@ const Hero = () => (
             Kostenlose Beratung anfordern
           </h2>
           <p className='mb-5 font-body text-sm text-gray-300'>
-            Wir nehmen uns Zeit für Ihre Situation und melden uns innerhalb von 24 Stunden.
+            Wir nehmen uns Zeit für Ihre Situation und melden uns innerhalb von
+            24 Stunden.
           </p>
           <ContactForm dark />
         </div>
         <div className='flex flex-col gap-6 text-center lg:text-left'>
           <h1 className='font-sans font-bold text-4xl md:text-6xl text-white leading-tight'>
-            <span className='text-primary'>Seniorenumzug</span> in Olpe &amp; 30 km
-            Umkreis
+            <span className='text-primary'>Seniorenumzug</span> in Olpe &amp; 30
+            km Umkreis
           </h1>
           <p className='font-body text-gray-300 text-lg'>
             Einfühlsam, geduldig und zuverlässig – die Umzugshelden begleiten

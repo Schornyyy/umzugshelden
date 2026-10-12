@@ -30,10 +30,10 @@ export async function generateMetadata() {
       title: "Anstricharbeiten für Wohnungsübergabe | Umzugshelden",
       description:
         "Schönheitsreparaturen, Streichen, Tapezieren – wir bereiten Ihre Wohnung optimal für die Übergabe vor.",
-      url: "https://umzugshelden.io/anstricharbeiten",
+      url: "https://www.umzugshelden.io/anstricharbeiten",
     },
     alternates: {
-      canonical: "https://umzugshelden.io/anstricharbeiten",
+      canonical: "https://www.umzugshelden.io/anstricharbeiten",
     },
   };
 }
@@ -135,28 +135,28 @@ const whys = [
 const steps = [
   {
     number: "01",
-    icon: <SearchIcon className="text-primary" size={28} />,
+    icon: <SearchIcon className='text-primary' size={28} />,
     title: "Kostenlose Besichtigung",
     text: "Wir kommen zu Ihnen und schauen uns die Wohnung an. So können wir genau einschätzen, welche Arbeiten nötig sind und ein verbindliches Festpreisangebot erstellen.",
     detail: "In der Regel 15–20 Minuten – kostenlos und unverbindlich.",
   },
   {
     number: "02",
-    icon: <ClipboardListIcon className="text-primary" size={28} />,
+    icon: <ClipboardListIcon className='text-primary' size={28} />,
     title: "Festpreisangebot & Terminvereinbarung",
     text: "Sie erhalten innerhalb von 24 Stunden ein schriftliches Angebot mit allen Leistungen und dem Endpreis. Nach Ihrer Bestätigung legen wir gemeinsam den Termin fest.",
     detail: "Transparent, fair und ohne versteckte Kosten.",
   },
   {
     number: "03",
-    icon: <PaintbrushIcon className="text-primary" size={28} />,
+    icon: <PaintbrushIcon className='text-primary' size={28} />,
     title: "Vorbereitung & Durchführung",
     text: "Unser Team schützt Böden, Türen und Einbauten, spachtelt alle Löcher und Risse und streicht dann zügig und sauber. Wir arbeiten mit hochwertigen Farben, die im Preis enthalten sind.",
     detail: "1–3 Tage je nach Wohnungsgröße.",
   },
   {
     number: "04",
-    icon: <KeyIcon className="text-primary" size={28} />,
+    icon: <KeyIcon className='text-primary' size={28} />,
     title: "Abnahme & Übergabe",
     text: "Nach Fertigstellung gehen wir gemeinsam alle Räume durch. Erst wenn Sie vollständig zufrieden sind, gilt der Auftrag als abgeschlossen – besenrein und übergabefertig.",
     detail: "Direkt bereit für Ihre Wohnungsübergabe.",
@@ -222,32 +222,33 @@ const SchoenheitsInfoSection = () => (
           </h2>
           <p className='font-body text-gray-600 leading-relaxed'>
             Als Mieter sind Sie laut Gesetz grundsätzlich{" "}
-            <strong className='text-navy'>nicht automatisch</strong> verpflichtet,
-            beim Auszug zu streichen. Eine Pflicht entsteht nur durch eine wirksame
-            Klausel im Mietvertrag. Viele solcher Klauseln wurden vom BGH inzwischen
-            für unwirksam erklärt – zum Beispiel starre Fristen wie &bdquo;spätestens alle
-            3 Jahre&ldquo;.
+            <strong className='text-navy'>nicht automatisch</strong>{" "}
+            verpflichtet, beim Auszug zu streichen. Eine Pflicht entsteht nur
+            durch eine wirksame Klausel im Mietvertrag. Viele solcher Klauseln
+            wurden vom BGH inzwischen für unwirksam erklärt – zum Beispiel
+            starre Fristen wie &bdquo;spätestens alle 3 Jahre&ldquo;.
           </p>
           <p className='font-body text-gray-600 leading-relaxed'>
             Falls Sie zur Renovierung verpflichtet sind, umfassen
-            Schönheitsreparaturen typischerweise das Streichen von Wänden und Decken,
-            das Erneuern von Tapeten sowie das Lackieren von Türen, Fensterrahmen und
-            Heizkörpern. Der Zustand muss dem normalen Gebrauch entsprechen – nicht
-            neuwertig sein.
+            Schönheitsreparaturen typischerweise das Streichen von Wänden und
+            Decken, das Erneuern von Tapeten sowie das Lackieren von Türen,
+            Fensterrahmen und Heizkörpern. Der Zustand muss dem normalen
+            Gebrauch entsprechen – nicht neuwertig sein.
           </p>
           <p className='font-body text-gray-600 leading-relaxed'>
-            Wir beraten Sie kurz dazu, was in Ihrem Fall sinnvoll ist, und erledigen
-            dann alles termingerecht zum Festpreis. So gehen Sie auf Nummer sicher und
-            vermeiden Abzüge von der Kaution.
+            Wir beraten Sie kurz dazu, was in Ihrem Fall sinnvoll ist, und
+            erledigen dann alles termingerecht zum Festpreis. So gehen Sie auf
+            Nummer sicher und vermeiden Abzüge von der Kaution.
           </p>
           <div className='bg-primary/10 border border-primary/20 rounded-xl p-5'>
             <p className='font-sans font-semibold text-navy text-sm mb-1'>
               Tipp von Umzugshelden
             </p>
             <p className='font-body text-gray-600 text-sm leading-relaxed'>
-              Auch wenn Sie rechtlich nicht streichen müssten – ein frischer Anstrich
-              beschleunigt die Übergabe erheblich und verhindert langwierige
-              Diskussionen mit dem Vermieter. In der Regel rechnet sich das.
+              Auch wenn Sie rechtlich nicht streichen müssten – ein frischer
+              Anstrich beschleunigt die Übergabe erheblich und verhindert
+              langwierige Diskussionen mit dem Vermieter. In der Regel rechnet
+              sich das.
             </p>
           </div>
         </div>
@@ -256,7 +257,9 @@ const SchoenheitsInfoSection = () => (
             <div
               key={item.title}
               className='bg-white rounded-xl p-5 border border-gray-100 shadow-sm'>
-              <p className='font-sans font-semibold text-navy mb-1'>{item.title}</p>
+              <p className='font-sans font-semibold text-navy mb-1'>
+                {item.title}
+              </p>
               <p className='font-body text-gray-600 text-sm leading-relaxed'>
                 {item.text}
               </p>
@@ -327,8 +330,8 @@ const IncludedSection = () => (
             </p>
             <p className='font-body text-gray-300 text-sm leading-relaxed'>
               Alle Leistungen stehen im Angebot. Keine Stundensätze, keine
-              überraschenden Mehrkosten – ein klar definierter Preis für ein klar
-              definiertes Ergebnis.
+              überraschenden Mehrkosten – ein klar definierter Preis für ein
+              klar definiertes Ergebnis.
             </p>
             <Link href='#kontakt' className='inline-block mt-4'>
               <Button className='font-sans bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded font-semibold text-sm'>
@@ -369,8 +372,8 @@ const Hero = () => (
             Wohnungsübergabe
           </h1>
           <p className='font-body text-gray-300 text-lg'>
-            Schönheitsreparaturen, Streichen, Tapezieren – wir bereiten Ihre Wohnung
-            professionell und termingerecht für die Übergabe vor.
+            Schönheitsreparaturen, Streichen, Tapezieren – wir bereiten Ihre
+            Wohnung professionell und termingerecht für die Übergabe vor.
           </p>
           <div>
             <Link href='#leistungen'>

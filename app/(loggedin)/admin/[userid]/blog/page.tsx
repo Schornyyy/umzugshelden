@@ -9,6 +9,8 @@ import type {
 import React from "react";
 import SubcategoryClient from "./subcategoryClient";
 import ThumbnailPickerField from "./ThumbnailPickerField";
+import BlogGenerationPanel from "@/components/admin/blog/BlogGenerationPanel";
+import { notFound } from "next/navigation";
 
 const MAIN_CATEGORIES: AdminBlogMainCategory[] = [
   "umzug",
@@ -23,11 +25,19 @@ async function fetchAll(): Promise<BlogSubcategory[]> {
   return listBlogSubcategories();
 }
 
-export default async function BlogAdminOverview() {
+export default async function BlogAdminOverview({
+  params,
+}: {
+  params: Promise<{ userid: string }>;
+}) {
+  const { userid } = await params;
+  const ownerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
+  if (!ownerId) notFound();
   const items = await fetchAll();
   return (
     <div className='p-6 space-y-8'>
       <h1 className='text-2xl font-semibold'>Blog Kategorien Übersicht</h1>
+      <BlogGenerationPanel ownerId={ownerId} userId={userid} />
       <CreateForm />
       <SubcategoryClient initialItems={items} />
     </div>

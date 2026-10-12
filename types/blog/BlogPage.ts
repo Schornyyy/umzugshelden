@@ -1,4 +1,8 @@
 import type { AdminBlogMainCategory } from './AdminBlogCategory';
+import type {
+  CityServiceBlock,
+  CityServiceKey,
+} from "@/types/city/CityServicePage";
 
 export interface BlogPageSection {
   titel: string;            // section heading
@@ -125,6 +129,9 @@ export interface BlogPage {
   sections: BlogPageSection[]; // ordered sections
   faq: BlogPageFAQEntry[];  // FAQ entries
   blocks?: BlogPageBlock[];  // visual builder blocks; legacy sections remain supported
+  serviceBlocks?: CityServiceBlock[]; // shared service-page visual builder
+  serviceKey?: CityServiceKey;
+  cityName?: string;
   settings?: BlogPageSettings;
   visible: boolean;         // publish flag
   createdAt: number;        // epoch ms

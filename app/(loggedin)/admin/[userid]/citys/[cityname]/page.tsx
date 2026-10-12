@@ -13,6 +13,7 @@ import { CityAdminTabs } from "@/components/admin/city/CityAdminTabs";
 import { CityFaqTab } from "@/components/admin/city/CityFaqTab";
 import { CitySectionsTab } from "@/components/admin/city/CitySectionsTab";
 import { CityMetaTab } from "@/components/admin/city/CityMetaTab";
+import { CitySeoAnalysisTab } from "@/components/admin/city/CitySeoAnalysisTab";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import { CITY_SERVICE_KEYS } from "@/types/city/CityServicePage";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
@@ -65,7 +66,7 @@ export default function CityFaqEditorPage() {
               city: cityReadable,
               faq: [],
             },
-            companyData ? companyData.id : ""
+            companyData ? companyData.id : "",
           );
           cp = {
             id,
@@ -124,7 +125,7 @@ export default function CityFaqEditorPage() {
     setState((s) => ({
       ...s,
       sections: s.sections.map((sec, i) =>
-        i === index ? { ...sec, ...patch } : sec
+        i === index ? { ...sec, ...patch } : sec,
       ),
     }));
   }
@@ -180,7 +181,7 @@ export default function CityFaqEditorPage() {
           title: state.title.trim() || undefined,
           description: state.description.trim() || undefined,
         },
-        companyData ? companyData.id : ""
+        companyData ? companyData.id : "",
       );
       setState((s) => ({
         ...s,
@@ -242,13 +243,13 @@ export default function CityFaqEditorPage() {
                 </Link>
                 <div className='grid gap-3 sm:grid-cols-2'>
                   {CITY_SERVICE_KEYS.map((serviceKey) => (
-                  <Link
-                    key={serviceKey}
-                    href={`/admin/${encodeURIComponent(companyData?.id || "")}/citys/${encodeURIComponent(slug)}/services/${serviceKey}`}
-                    className='flex min-h-16 items-center justify-between gap-3 rounded border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm hover:border-emerald-500 hover:bg-emerald-50/40'>
-                    <span>{getDefaultCityServiceName(serviceKey)}</span>
-                    <ArrowRight className='h-4 w-4 shrink-0 text-emerald-700' />
-                  </Link>
+                    <Link
+                      key={serviceKey}
+                      href={`/admin/${encodeURIComponent(companyData?.id || "")}/citys/${encodeURIComponent(slug)}/services/${serviceKey}`}
+                      className='flex min-h-16 items-center justify-between gap-3 rounded border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm hover:border-emerald-500 hover:bg-emerald-50/40'>
+                      <span>{getDefaultCityServiceName(serviceKey)}</span>
+                      <ArrowRight className='h-4 w-4 shrink-0 text-emerald-700' />
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -263,7 +264,7 @@ export default function CityFaqEditorPage() {
                 onChange={(i, patch) => {
                   const entries = Object.entries(patch) as [
                     keyof EditableFaq,
-                    string
+                    string,
                   ][];
                   if (entries.length) {
                     const [key, val] = entries[0];
@@ -295,6 +296,18 @@ export default function CityFaqEditorPage() {
                 titleValue={state.title}
                 descriptionValue={state.description}
                 onChange={(patch) => setState((s) => ({ ...s, ...patch }))}
+              />
+            ),
+          },
+          {
+            id: "seo-analysis",
+            label: "SEO-Auswertung & KI",
+            content: (
+              <CitySeoAnalysisTab
+                ownerId={companyData?.id || ""}
+                citySlug={slug}
+                targetUrl={`https://www.umzugshelden.io/stadt/${encodeURIComponent(slug)}`}
+                defaultKeyword={`Umzugsunternehmen ${cityReadable}`}
               />
             ),
           },

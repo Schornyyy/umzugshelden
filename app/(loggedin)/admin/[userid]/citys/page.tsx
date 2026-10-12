@@ -6,6 +6,7 @@ import { slugify } from "@/utils/slugify";
 import { redirectUser } from "@/actions/userActions";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import CityServiceMigrationPanel from "@/components/admin/city/CityServiceMigrationPanel";
+import CityServiceOptimizationTrigger from "@/components/admin/city/CityServiceOptimizationTrigger";
 
 const PAGE_SIZE = 24;
 
@@ -150,7 +151,10 @@ export default function AdminCitiesPage() {
     <div className='mx-auto max-w-5xl py-2 md:px-6 md:py-8'>
       <h1 className='mb-5 text-2xl font-bold'>Städte Übersicht</h1>
       {companyData && ownerId && (
-        <CityServiceMigrationPanel ownerId={ownerId} userId={companyData.id} />
+        <>
+          <CityServiceOptimizationTrigger ownerId={ownerId} />
+          <CityServiceMigrationPanel ownerId={ownerId} userId={companyData.id} />
+        </>
       )}
       {companyData && !ownerId && (
         <p className='mb-6 text-sm text-red-600'>

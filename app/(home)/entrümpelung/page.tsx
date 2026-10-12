@@ -41,12 +41,12 @@ export async function generateMetadata() {
       title: "Entrümpelung Olpe & Umgebung | Umzugshelden",
       description:
         "Schnelle, diskrete und günstige Entrümpelung im Kreis Olpe und 30 km Umkreis – mit besenreiner Übergabe.",
-      url: "https://umzugshelden.io/entrümpelung",
+      url: "https://www.umzugshelden.io/entrümpelung",
       type: "website",
       locale: "de_DE",
     },
     alternates: {
-      canonical: "https://umzugshelden.io/entrümpelung",
+      canonical: "https://www.umzugshelden.io/entrümpelung",
     },
   };
 }
@@ -239,7 +239,9 @@ const PricingSection = () => (
           <p className='font-body text-gray-600 leading-relaxed'>
             Eine Pauschalaussage zum Preis ist bei Entrümpelungen schwierig, da
             der Aufwand stark variiert. Deshalb bieten wir{" "}
-            <strong className='text-navy'>immer eine kostenlose Besichtigung</strong>{" "}
+            <strong className='text-navy'>
+              immer eine kostenlose Besichtigung
+            </strong>{" "}
             an, bevor wir ein verbindliches Festpreisangebot erstellen. Keine
             Schätzungen, keine Stundensätze.
           </p>
@@ -249,7 +251,10 @@ const PricingSection = () => (
           <div className='flex flex-col gap-4'>
             {pricingFactors.map((f) => (
               <div key={f.title} className='flex gap-3 items-start'>
-                <CheckIcon className='text-primary flex-shrink-0 mt-1' size={20} />
+                <CheckIcon
+                  className='text-primary flex-shrink-0 mt-1'
+                  size={20}
+                />
                 <div>
                   <p className='font-sans font-semibold text-navy'>{f.title}</p>
                   <p className='font-body text-gray-600 text-sm'>{f.text}</p>
@@ -264,11 +269,11 @@ const PricingSection = () => (
               Wertanrechnung: So funktioniert das
             </p>
             <p className='font-body text-gray-300 text-sm leading-relaxed mb-4'>
-              Wenn verwertbare Gegenstände vorhanden sind – Metalle, gut erhaltene
-              Möbel, Antiquitäten oder Elektrogeräte – können diese gegen den
-              Entrümpelungspreis verrechnet werden. In manchen Fällen übersteigt der
-              Wert sogar die Entsorgungskosten. Wir zeigen Ihnen transparent, was
-              womit verrechnet wird.
+              Wenn verwertbare Gegenstände vorhanden sind – Metalle, gut
+              erhaltene Möbel, Antiquitäten oder Elektrogeräte – können diese
+              gegen den Entrümpelungspreis verrechnet werden. In manchen Fällen
+              übersteigt der Wert sogar die Entsorgungskosten. Wir zeigen Ihnen
+              transparent, was womit verrechnet wird.
             </p>
             <div className='flex flex-col gap-2'>
               {[
@@ -290,7 +295,8 @@ const PricingSection = () => (
             </p>
             <p className='font-body text-gray-600 text-sm leading-relaxed'>
               Nach der Besichtigung erhalten Sie am selben oder nächsten Tag ein
-              verbindliches Festpreisangebot – inklusive aller Entsorgungskosten.
+              verbindliches Festpreisangebot – inklusive aller
+              Entsorgungskosten.
             </p>
             <Link href='#kontakt' className='inline-block mt-4'>
               <Button className='font-sans bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded font-semibold text-sm'>
@@ -355,8 +361,8 @@ const DisposalSection = () => (
       </div>
       <p className='font-body text-gray-500 text-sm text-center mt-8 max-w-xl mx-auto'>
         Unser Ziel: möglichst wenig landet auf der Deponie. Nachhaltigkeit ist
-        uns nicht nur ein Schlagwort – wir dokumentieren die Entsorgungswege
-        auf Wunsch.
+        uns nicht nur ein Schlagwort – wir dokumentieren die Entsorgungswege auf
+        Wunsch.
       </p>
     </div>
   </section>
@@ -379,14 +385,15 @@ const Hero = () => (
             Entrümpelung anfragen
           </h2>
           <p className='mb-5 font-body text-sm text-gray-300'>
-            Teilen Sie uns Umfang und Wunschtermin mit – Bilder helfen bei der ersten Einschätzung.
+            Teilen Sie uns Umfang und Wunschtermin mit – Bilder helfen bei der
+            ersten Einschätzung.
           </p>
           <ContactForm dark />
         </div>
         <div className='flex flex-col gap-6 text-center lg:text-left'>
           <h1 className='font-sans font-bold text-4xl md:text-6xl text-white leading-tight'>
-            <span className='text-primary'>Entrümpelung</span> in Olpe &amp; 30 km
-            Umkreis
+            <span className='text-primary'>Entrümpelung</span> in Olpe &amp; 30
+            km Umkreis
           </h1>
           <p className='font-body text-gray-300 text-lg'>
             Wohnungsentrümpelung, Haushaltsauflösung oder Kellerentrümpelung –

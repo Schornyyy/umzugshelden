@@ -126,7 +126,7 @@ export const OFFER_ISSUER = {
   country: "Deutschland",
   email: "info@umzugshelden.io",
   phone: "+49 151 68567708",
-  website: "https://umzugshelden.io",
+  website: "https://www.umzugshelden.io",
 } as const;
 
 export const DEFAULT_OFFER_PAYMENT_TERMS =

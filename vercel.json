@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/optimize-city-services",
+      "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/optimize-city-services",
+      "schedule": "20 3 * * *"
+    }
+  ]
+}
