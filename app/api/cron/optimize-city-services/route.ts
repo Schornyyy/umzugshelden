@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import {
-  authorizeAdminOwner,
-  authorizeCronRequest,
-} from "@/lib/adminApiAuth";
+import { authorizeAdminOwner } from "@/lib/adminApiAuth";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { createDefaultCityServiceTemplate } from "@/lib/cityServiceDefaults";
+import { POST as runSeoAnalysis } from "@/app/api/admin/seo-analysis/route";
+import { POST as runCityServiceGeneration } from "@/app/api/admin/generate-city-service-page/route";
 import { rawCities } from "@/statics/Lists";
 import {
   CITY_SERVICE_KEYS,
@@ -18,7 +17,6 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1_000;
-const INTERNAL_API_TIMEOUT_MS = 27_000;
 const STATE_COLLECTION = "cityServiceOptimizationStates";
 
 type InternalApiResult = {
@@ -97,21 +95,6 @@ async function readInternalApiResponse(
     ]
       .filter(Boolean)
       .join(": "),
-  };
-}
-
-function internalApiHeaders(authorization: string): HeadersInit {
-  const protectionBypassSecret =
-    process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
-  return {
-    authorization,
-    "content-type": "application/json",
-    ...(protectionBypassSecret
-      ? {
-          "x-vercel-protection-bypass": protectionBypassSecret,
-          "x-vercel-set-bypass-cookie": "true",
-        }
-      : {}),
   };
 }
 
@@ -205,13 +188,13 @@ async function optimizeSingleCityService(
         ? page.blocks
         : template.blocks;
     const currentSeo = { ...template.seo, ...page?.seo };
-    const configuredSiteOrigin =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/u, "");
     const publicOrigin =
-      configuredSiteOrigin || "https://www.umzugshelden.io";
-    const requestOrigin = new URL(request.url).origin;
-    const internalApiOrigin = configuredSiteOrigin || requestOrigin;
-    const authorization = request.headers.get("authorization")!;
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/u, "") ||
+      "https://www.umzugshelden.io";
+    const authorization =
+      source === "cron"
+        ? `Bearer ${process.env.CRON_SECRET?.trim() || ""}`
+        : request.headers.get("authorization") || "";
     const keyword =
       `${template.primaryKeyword} ${candidate.cityName}`.trim();
     const stateReference = database
@@ -228,13 +211,13 @@ async function optimizeSingleCityService(
         : undefined;
 
     if (!analysisId) {
-      let analysisResponse: Response;
-      try {
-        analysisResponse = await fetch(
-          `${internalApiOrigin}/api/admin/seo-analysis`,
-          {
+      const analysisResponse = await runSeoAnalysis(
+        new Request(`${publicOrigin}/api/admin/seo-analysis`, {
           method: "POST",
-          headers: internalApiHeaders(authorization),
+          headers: {
+            authorization,
+            "content-type": "application/json",
+          },
           body: JSON.stringify({
             ownerId,
             citySlug: candidate.citySlug,
@@ -243,35 +226,13 @@ async function optimizeSingleCityService(
             keyword,
             keywords: currentSeo.keywords,
           }),
-          signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
-          },
-        );
-      } catch (error) {
-        if (
-          error instanceof DOMException &&
-          (error.name === "TimeoutError" || error.name === "AbortError")
-        ) {
-          throw new Error(
-            "Die interne SEO-Analyse hat nach 27 Sekunden nicht geantwortet.",
-            { cause: error },
-          );
-        }
-        throw error;
-      }
+        }),
+      );
       const analysisResult = await readInternalApiResponse(
         analysisResponse,
         "Die automatische SEO-Analyse",
       );
       if (analysisResult.errorMessage) {
-        if (
-          analysisResponse.status === 401 &&
-          analysisResult.errorMessage.includes("Protected deployment") &&
-          !process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
-        ) {
-          throw new Error(
-            "Vercel Deployment Protection blockiert die interne SEO-Analyse. Hinterlegen Sie VERCEL_AUTOMATION_BYPASS_SECRET in Vercel oder geben Sie die Produktionsdomain für Automationszugriffe frei.",
-          );
-        }
         throw new Error(analysisResult.errorMessage);
       }
       const analysisData = analysisResult.data;
@@ -332,13 +293,13 @@ async function optimizeSingleCityService(
       });
     }
 
-    let generationResponse: Response;
-    try {
-      generationResponse = await fetch(
-        `${internalApiOrigin}/api/admin/generate-city-service-page`,
-        {
+    const generationResponse = await runCityServiceGeneration(
+      new Request(`${publicOrigin}/api/admin/generate-city-service-page`, {
         method: "POST",
-        headers: internalApiHeaders(authorization),
+        headers: {
+          authorization,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({
           ownerId,
           cityName: candidate.cityName,
@@ -354,35 +315,13 @@ async function optimizeSingleCityService(
           analysisId,
           source,
         }),
-        signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
-      },
-      );
-    } catch (error) {
-      if (
-        error instanceof DOMException &&
-        (error.name === "TimeoutError" || error.name === "AbortError")
-      ) {
-        throw new Error(
-          "Die interne Seitengenerierung hat nach 27 Sekunden nicht geantwortet.",
-          { cause: error },
-        );
-      }
-      throw error;
-    }
+      }),
+    );
     const generationResult = await readInternalApiResponse(
       generationResponse,
       "Der automatische Verbesserungsvorschlag",
     );
     if (generationResult.errorMessage) {
-      if (
-        generationResponse.status === 401 &&
-        generationResult.errorMessage.includes("Protected deployment") &&
-        !process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
-      ) {
-        throw new Error(
-          "Vercel Deployment Protection blockiert die interne Seitengenerierung. Hinterlegen Sie VERCEL_AUTOMATION_BYPASS_SECRET in Vercel oder geben Sie die Produktionsdomain für Automationszugriffe frei.",
-        );
-      }
       throw new Error(generationResult.errorMessage);
     }
     const generationData = generationResult.data;
@@ -425,12 +364,6 @@ async function optimizeSingleCityService(
 }
 
 export async function GET(request: Request) {
-  if (!authorizeCronRequest(request)) {
-    return NextResponse.json(
-      { success: false, error: "Nicht autorisiert" },
-      { status: 401 },
-    );
-  }
   const ownerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
   if (!ownerId) {
     return NextResponse.json(
