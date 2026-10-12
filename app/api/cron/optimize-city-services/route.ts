@@ -100,6 +100,21 @@ async function readInternalApiResponse(
   };
 }
 
+function internalApiHeaders(authorization: string): HeadersInit {
+  const protectionBypassSecret =
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+  return {
+    authorization,
+    "content-type": "application/json",
+    ...(protectionBypassSecret
+      ? {
+          "x-vercel-protection-bypass": protectionBypassSecret,
+          "x-vercel-set-bypass-cookie": "true",
+        }
+      : {}),
+  };
+}
+
 async function optimizeSingleCityService(
   request: Request,
   ownerId: string,
@@ -190,10 +205,12 @@ async function optimizeSingleCityService(
         ? page.blocks
         : template.blocks;
     const currentSeo = { ...template.seo, ...page?.seo };
-    const origin = new URL(request.url).origin;
+    const configuredSiteOrigin =
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/u, "");
     const publicOrigin =
-      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/u, "") ||
-      "https://www.umzugshelden.io";
+      configuredSiteOrigin || "https://www.umzugshelden.io";
+    const requestOrigin = new URL(request.url).origin;
+    const internalApiOrigin = configuredSiteOrigin || requestOrigin;
     const authorization = request.headers.get("authorization")!;
     const keyword =
       `${template.primaryKeyword} ${candidate.cityName}`.trim();
@@ -213,12 +230,11 @@ async function optimizeSingleCityService(
     if (!analysisId) {
       let analysisResponse: Response;
       try {
-        analysisResponse = await fetch(`${origin}/api/admin/seo-analysis`, {
+        analysisResponse = await fetch(
+          `${internalApiOrigin}/api/admin/seo-analysis`,
+          {
           method: "POST",
-          headers: {
-            authorization,
-            "content-type": "application/json",
-          },
+          headers: internalApiHeaders(authorization),
           body: JSON.stringify({
             ownerId,
             citySlug: candidate.citySlug,
@@ -228,7 +244,8 @@ async function optimizeSingleCityService(
             keywords: currentSeo.keywords,
           }),
           signal: AbortSignal.timeout(INTERNAL_API_TIMEOUT_MS),
-        });
+          },
+        );
       } catch (error) {
         if (
           error instanceof DOMException &&
@@ -246,6 +263,15 @@ async function optimizeSingleCityService(
         "Die automatische SEO-Analyse",
       );
       if (analysisResult.errorMessage) {
+        if (
+          analysisResponse.status === 401 &&
+          analysisResult.errorMessage.includes("Protected deployment") &&
+          !process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
+        ) {
+          throw new Error(
+            "Vercel Deployment Protection blockiert die interne SEO-Analyse. Hinterlegen Sie VERCEL_AUTOMATION_BYPASS_SECRET in Vercel oder geben Sie die Produktionsdomain für Automationszugriffe frei.",
+          );
+        }
         throw new Error(analysisResult.errorMessage);
       }
       const analysisData = analysisResult.data;
@@ -309,13 +335,10 @@ async function optimizeSingleCityService(
     let generationResponse: Response;
     try {
       generationResponse = await fetch(
-        `${origin}/api/admin/generate-city-service-page`,
+        `${internalApiOrigin}/api/admin/generate-city-service-page`,
         {
         method: "POST",
-        headers: {
-          authorization,
-          "content-type": "application/json",
-        },
+        headers: internalApiHeaders(authorization),
         body: JSON.stringify({
           ownerId,
           cityName: candidate.cityName,
@@ -351,6 +374,15 @@ async function optimizeSingleCityService(
       "Der automatische Verbesserungsvorschlag",
     );
     if (generationResult.errorMessage) {
+      if (
+        generationResponse.status === 401 &&
+        generationResult.errorMessage.includes("Protected deployment") &&
+        !process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
+      ) {
+        throw new Error(
+          "Vercel Deployment Protection blockiert die interne Seitengenerierung. Hinterlegen Sie VERCEL_AUTOMATION_BYPASS_SECRET in Vercel oder geben Sie die Produktionsdomain für Automationszugriffe frei.",
+        );
+      }
       throw new Error(generationResult.errorMessage);
     }
     const generationData = generationResult.data;
