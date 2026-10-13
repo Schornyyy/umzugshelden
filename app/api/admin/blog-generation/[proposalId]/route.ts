@@ -91,38 +91,77 @@ export async function PUT(
       const proposal = document.data()!;
       if (input.action === "accept") {
         const draft = proposal.draft;
-        publishedPath = `${draft.mainCategory}/${draft.subcategorySlug}/${draft.slug}`;
-        const duplicate = await database
-          .collection(BLOG_COLLECTION)
-          .where("path", "==", publishedPath)
-          .limit(1)
-          .get();
-        if (!duplicate.empty) {
-          throw new Error("Unter dieser Blog-URL existiert bereits ein Beitrag.");
-        }
         const now = Date.now();
-        const pageReference = database.collection(BLOG_COLLECTION).doc();
-        transaction.create(pageReference, {
-          titel: draft.title,
-          slug: draft.slug,
-          path: publishedPath,
-          parentId: null,
-          description: draft.description,
-          subcategorySlug: draft.subcategorySlug,
-          mainCategory: draft.mainCategory,
-          thumbnailUrl: null,
-          keywords: draft.keywords,
-          meta_description: draft.metaDescription,
-          sections: [],
-          faq: [],
-          blocks: [],
-          serviceBlocks: draft.blocks,
-          serviceKey: draft.serviceKey,
-          cityName: draft.cityName,
-          visible: true,
-          createdAt: now,
-          updatedAt: now,
-        });
+        const targetBlogId =
+          typeof proposal.targetBlogId === "string"
+            ? proposal.targetBlogId
+            : undefined;
+        if (targetBlogId) {
+          const pageReference = database
+            .collection(BLOG_COLLECTION)
+            .doc(targetBlogId);
+          const currentPage = await transaction.get(pageReference);
+          if (!currentPage.exists) {
+            throw new Error("Der zu optimierende Blogartikel existiert nicht mehr.");
+          }
+          const current = currentPage.data()!;
+          if (
+            Number(current.updatedAt || 0) >
+            Number(proposal.previousBlog?.updatedAt || 0)
+          ) {
+            throw new Error(
+              "Der Blogartikel wurde nach Erstellung des Vorschlags geändert.",
+            );
+          }
+          publishedPath = String(current.path || "");
+          transaction.set(
+            pageReference,
+            {
+              titel: draft.title,
+              description: draft.description,
+              keywords: draft.keywords,
+              meta_description: draft.metaDescription,
+              serviceBlocks: draft.blocks,
+              serviceKey: draft.serviceKey,
+              cityName: draft.cityName,
+              lastOptimizedAt: now,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        } else {
+          publishedPath = `${draft.mainCategory}/${draft.subcategorySlug}/${draft.slug}`;
+          const duplicate = await database
+            .collection(BLOG_COLLECTION)
+            .where("path", "==", publishedPath)
+            .limit(1)
+            .get();
+          if (!duplicate.empty) {
+            throw new Error("Unter dieser Blog-URL existiert bereits ein Beitrag.");
+          }
+          const pageReference = database.collection(BLOG_COLLECTION).doc();
+          transaction.create(pageReference, {
+            titel: draft.title,
+            slug: draft.slug,
+            path: publishedPath,
+            parentId: null,
+            description: draft.description,
+            subcategorySlug: draft.subcategorySlug,
+            mainCategory: draft.mainCategory,
+            thumbnailUrl: null,
+            keywords: draft.keywords,
+            meta_description: draft.metaDescription,
+            sections: [],
+            faq: [],
+            blocks: [],
+            serviceBlocks: draft.blocks,
+            serviceKey: draft.serviceKey,
+            cityName: draft.cityName,
+            visible: true,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
       }
       transaction.update(proposalReference, {
         status: input.action === "accept" ? "accepted" : "rejected",

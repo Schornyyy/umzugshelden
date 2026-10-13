@@ -1,7 +1,5 @@
 import "server-only";
 
-import { API_WORK_BUDGET_MS } from "@/lib/apiDeadline";
-
 type GeminiResponse = {
   candidates?: Array<{
     content?: {
@@ -21,6 +19,7 @@ export class GeminiInvalidJsonError extends Error {
 }
 
 const GEMINI_REQUEST_TIMEOUT_MS = 20_000;
+const GEMINI_MAX_REQUEST_TIMEOUT_MS = 55_000;
 
 function getGeminiConfig() {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -45,7 +44,7 @@ export async function generateGeminiJson(input: {
     1,
     Math.min(
       input.timeoutMs ?? GEMINI_REQUEST_TIMEOUT_MS,
-      API_WORK_BUDGET_MS,
+      GEMINI_MAX_REQUEST_TIMEOUT_MS,
     ),
   );
   let response: Response;

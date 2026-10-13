@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { API_WORK_BUDGET_MS, remainingApiTime } from "@/lib/apiDeadline";
+import { remainingApiTime } from "@/lib/apiDeadline";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import {
   GeminiInvalidJsonError,
@@ -18,8 +18,9 @@ import type {
 } from "@/types/city/SeoAnalysis";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
+const SEO_ANALYSIS_WORK_BUDGET_MS = 55_000;
 const requestSchema = z.object({
   ownerId: z.string().min(1).max(200),
   citySlug: z.string().min(1).max(200),
@@ -101,6 +102,166 @@ type BlogLinkCandidate = {
   url: string;
 };
 
+function isRetryableAiError(error: unknown) {
+  return (
+    error instanceof GeminiInvalidJsonError ||
+    (error instanceof Error &&
+      error.message.includes("Zeitlimit überschritten"))
+  );
+}
+
+function createFallbackReport(input: {
+  pageKey: string;
+  keywords: string[];
+  pages: SeoPageMetrics[];
+  blogLinks: BlogLinkCandidate[];
+}): SeoAiReport {
+  const target = input.pages[0];
+  const primaryKeyword = input.keywords[0] ?? input.pageKey.replace("/", " ");
+  const serviceName = input.pageKey
+    .split("/")
+    .at(-1)
+    ?.replaceAll("-", " ") ?? "Dienstleistung";
+  const recommendations: SeoAiReport["recommendations"] = [];
+
+  if (!target?.title || target.titleLength < 30 || target.titleLength > 65) {
+    recommendations.push({
+      priority: "hoch",
+      area: "Seitentitel",
+      finding: "Der Seitentitel ist nicht im empfohlenen Längenbereich.",
+      action: "Den Titel klar auf Dienstleistung, Stadt und Suchintention ausrichten.",
+    });
+  }
+  if (
+    !target?.metaDescription ||
+    target.metaDescriptionLength < 120 ||
+    target.metaDescriptionLength > 165
+  ) {
+    recommendations.push({
+      priority: "hoch",
+      area: "Meta-Description",
+      finding: "Die Meta-Description ist nicht optimal ausgefüllt.",
+      action: "Nutzen, lokalen Bezug und Handlungsaufforderung prägnant ergänzen.",
+    });
+  }
+  if (!target || target.headings.h1.length !== 1) {
+    recommendations.push({
+      priority: "hoch",
+      area: "Überschriften",
+      finding: "Die Seite besitzt nicht genau eine eindeutige H1.",
+      action: "Eine klare H1 für Dienstleistung und Stadt verwenden.",
+    });
+  }
+  if (!target || target.wordCount < 1_000) {
+    recommendations.push({
+      priority: "mittel",
+      area: "Inhalt",
+      finding: "Die Seite deckt die lokale Suchintention noch nicht umfassend ab.",
+      action: "Leistung, Ablauf, Kostenfaktoren, Vertrauen und FAQ substanziell ausbauen.",
+    });
+  }
+  if (!target || target.internalLinks < 3) {
+    recommendations.push({
+      priority: "mittel",
+      area: "Interne Verlinkung",
+      finding: "Es sind nur wenige kontextuelle interne Links vorhanden.",
+      action: "Passende Ratgeber direkt in hilfreichen Inhaltsabschnitten verlinken.",
+    });
+  }
+
+  const sectionDefinitions = [
+    ["H1", `${serviceName} vor Ort`, "Lokalen Nutzen und Anfrageweg sofort erklären"],
+    ["H2", "Leistungen im Überblick", "Leistungsumfang konkret abgrenzen"],
+    ["H2", "Planung und Vorbereitung", "Nutzern praktische Orientierung geben"],
+    ["H2", "So läuft die Zusammenarbeit ab", "Den Prozess transparent darstellen"],
+    ["H2", "Kostenfaktoren verständlich erklärt", "Preistreiber ohne erfundene Preise erklären"],
+    ["H2", "Vorteile und Vertrauen", "Nachprüfbare Stärken und Sicherheit vermitteln"],
+    ["H2", "Häufige Fragen", "Wichtige Einwände konkret beantworten"],
+    ["ohne Überschrift", "Persönliche Anfrage", "Mit einem klaren CTA abschließen"],
+  ] as const;
+  const internalLinks = input.blogLinks.slice(0, 8).map((link, index) => ({
+    anchorText: link.title,
+    targetPage: link.url,
+    sectionOrder: Math.min(7, index + 2),
+  }));
+
+  return {
+    summary:
+      "Automatische Basisanalyse der Zielseite. Die Empfehlungen beruhen auf den gemessenen Seitendaten, der Suchintention und verfügbaren internen Links.",
+    strengths:
+      target?.score && target.score >= 70
+        ? [`Technischer SEO-Ausgangswert von ${target.score} Punkten`]
+        : [],
+    competitorAdvantages: [],
+    recommendations:
+      recommendations.length > 0
+        ? recommendations
+        : [
+            {
+              priority: "niedrig",
+              area: "Interne Verlinkung",
+              finding: "Die grundlegenden Onpage-Signale sind vollständig.",
+              action: "Thematisch passende interne Links regelmäßig aktualisieren.",
+            },
+          ],
+    suggestedTitle:
+      target?.title && target.titleLength >= 30 && target.titleLength <= 65
+        ? target.title
+        : `${primaryKeyword} | Umzugshelden`,
+    suggestedMetaDescription:
+      target?.metaDescription &&
+      target.metaDescriptionLength >= 120 &&
+      target.metaDescriptionLength <= 165
+        ? target.metaDescription
+        : `${primaryKeyword}: persönlich geplant, transparent organisiert und passend zu Ihrem Bedarf. Jetzt kostenlos und unverbindlich bei den Umzugshelden anfragen.`,
+    suggestedH1: target?.headings.h1[0] ?? primaryKeyword,
+    contentOutline: sectionDefinitions.map(([, heading, goal]) => ({
+      heading,
+      goal,
+      keywords: [primaryKeyword],
+    })),
+    suggestedFaqs: [
+      {
+        question: `Wie läuft ${serviceName} ab?`,
+        answerGuidance: "Vorbereitung, persönliche Abstimmung und Durchführung konkret erläutern.",
+      },
+      {
+        question: `Welche Faktoren beeinflussen ${serviceName}?`,
+        answerGuidance: "Umfang, Zugänglichkeit, Zusatzleistungen und Termin nennen.",
+      },
+    ],
+    pageBlueprint: {
+      searchIntent: "Lokale Dienstleistung vergleichen und unverbindlich anfragen",
+      targetAudience: "Privatpersonen mit konkretem lokalem Unterstützungsbedarf",
+      primaryKeyword,
+      secondaryKeywords: input.keywords.slice(1, 12),
+      recommendedWordCount: 1_200,
+      tone: "seriös, hilfreich und persönlich",
+      sections: sectionDefinitions.map(([headingLevel, heading, purpose], index) => ({
+        order: index + 1,
+        sectionType: index === 0 ? "hero" : index === 6 ? "faq" : index === 7 ? "contact" : "text",
+        headingLevel,
+        heading,
+        purpose,
+        contentBrief: purpose,
+        keyPoints: [purpose, "Lokalen Bezug herstellen", "Konkreten Nutzwert bieten"],
+        targetWordCount: index === 0 || index === 7 ? 100 : 165,
+        keywords: [primaryKeyword],
+        cta: index === 0 || index === 7 ? "Kostenlos und unverbindlich anfragen" : undefined,
+      })),
+      primaryCta: "Kostenlos und unverbindlich anfragen",
+      secondaryCta: "Persönliche Beratung erhalten",
+      trustElements: [
+        "persönliche Planung",
+        "kombinierbare Leistungen",
+        "kostenlose und unverbindliche Anfrage",
+      ],
+      internalLinkSuggestions: internalLinks,
+      schemaRecommendations: ["Service", "FAQPage", "BreadcrumbList"],
+    },
+  };
+}
+
 async function getPublishedBlogLinks(): Promise<BlogLinkCandidate[]> {
   const snapshot = await getAdminDatabase()
     .collection("blogPages_umzugshelden")
@@ -174,6 +335,11 @@ async function createAiReport(
 targetUrl bezeichnet die zu optimierende Seite, alle anderen URLs sind Wettbewerber.
 Falls für targetUrl wegen eines Abruffehlers keine Messwerte vorhanden sind, benenne diese Einschränkung und behandle keine Wettbewerberseite als Zielseite.
 Vergleiche ausschließlich die gelieferten Messwerte und erfinde keine gemessenen Eigenschaften.
+Wenn keine auswertbare Wettbewerberseite vorliegt, ist das ein gültiger Analysefall und kein Fehler:
+- Bewerte die Zielseite eigenständig anhand ihrer Messwerte, Suchintention und Keywords.
+- Erfinde keine Wettbewerbsvorteile und lasse competitorAdvantages leer.
+- Entscheide selbst, welche Inhalte tatsächlich fehlen oder verbessert werden sollten. Erzwinge keine unbegründeten Textänderungen.
+- Priorisiere passende interne Links aus availableBlogLinks. Wenn inhaltlich nichts Wesentliches fehlt, konzentriere die Empfehlungen auf diese internen Links.
 
 Erstelle zusätzlich zu Analyse und Empfehlungen eine vollständige, direkt umsetzbare Seitenarchitektur für das bestmögliche SEO- und Conversion-Ergebnis:
 - Erstelle in diesem Schritt nur die grobe Seitenstruktur und detaillierte Content-Briefings, noch keine ausformulierten Seitentexte.
@@ -236,6 +402,9 @@ Antworte nur als JSON passend zu diesem Schema:
       targetUrl,
       targetKeywords: keywords,
       pages,
+      hasReadableCompetitors: pages.some(
+        (page) => page.url !== targetUrl,
+      ),
       availableBlogLinks: blogLinks,
     }),
   });
@@ -275,7 +444,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const deadlineAt = Date.now() + API_WORK_BUDGET_MS;
+  const deadlineAt = Date.now() + SEO_ANALYSIS_WORK_BUDGET_MS;
   let input: z.infer<typeof requestSchema>;
   try {
     input = requestSchema.parse(await request.json());
@@ -332,15 +501,35 @@ export async function POST(request: Request) {
         { status: 422 },
       );
     }
-    const report = await createAiReport(
-      input.citySlug,
-      input.pageKey,
-      keywords,
-      pages,
-      uniqueUrls[0],
-      blogLinks,
-      deadlineAt,
-    );
+    let analysisMode: "ai" | "measured-fallback" = "ai";
+    let analysisWarning: string | undefined;
+    let report: SeoAiReport;
+    try {
+      report = await createAiReport(
+        input.citySlug,
+        input.pageKey,
+        keywords,
+        pages,
+        uniqueUrls[0],
+        blogLinks,
+        deadlineAt,
+      );
+    } catch (error) {
+      if (!isRetryableAiError(error)) throw error;
+      console.warn(
+        "SEO AI report incomplete; using measured fallback report",
+        error,
+      );
+      analysisMode = "measured-fallback";
+      analysisWarning =
+        "Der KI-Bericht war nicht vollständig. Die Analyse wurde aus den gemessenen Seitendaten und verfügbaren internen Links erstellt.";
+      report = createFallbackReport({
+        pageKey: input.pageKey,
+        keywords,
+        pages,
+        blogLinks,
+      });
+    }
     const document = await getAdminDatabase().collection("seoAnalyses").add({
       ownerId: input.ownerId,
       citySlug: input.citySlug,
@@ -350,6 +539,8 @@ export async function POST(request: Request) {
       pages,
       failures,
       report,
+      analysisMode,
+      analysisWarning: analysisWarning ?? null,
       targetRank: searchDiscovery.targetRank ?? null,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -367,11 +558,7 @@ export async function POST(request: Request) {
     };
     return NextResponse.json({ success: true, run });
   } catch (error) {
-    const isRetryableAiError =
-      error instanceof GeminiInvalidJsonError ||
-      (error instanceof Error &&
-        error.message.includes("Zeitlimit überschritten"));
-    if (isRetryableAiError) {
+    if (isRetryableAiError(error)) {
       console.warn("SEO analysis deferred after retryable Gemini response");
       return NextResponse.json(
         {

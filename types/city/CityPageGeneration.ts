@@ -36,6 +36,10 @@ export interface CityServiceOptimizationProposal {
     updatedAt: number;
   };
   draft: GeneratedCityPageDraft;
+  generationMode?: "ai" | "analysis-fallback";
+  generationWarning?: string;
+  qualityScore?: number;
+  qualitySummary?: string;
   targetRank?: number;
   createdAt: string;
   decidedAt?: string;

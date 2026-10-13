@@ -4,9 +4,13 @@ import type { CityServiceBlock, CityServiceKey } from "@/types/city/CityServiceP
 export type BlogGenerationStage =
   | "keyword"
   | "research"
+  | "blueprint"
+  | "sections"
   | "content"
   | "expand"
   | "links"
+  | "quality"
+  | "section-repair"
   | "completed";
 
 export interface GeneratedBlogDraft {
@@ -26,10 +30,15 @@ export interface BlogGenerationProposal {
   id: string;
   ownerId: string;
   status: "pending" | "accepted" | "rejected";
+  operation?: "create" | "optimize";
+  targetBlogId?: string;
   serviceKey: CityServiceKey;
   cityName: string;
   keyword: string;
   draft: GeneratedBlogDraft;
+  qualityScore?: number;
+  qualitySummary?: string;
+  generationWarnings?: string[];
   createdAt: string;
   decidedAt?: string;
 }

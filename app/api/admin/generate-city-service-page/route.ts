@@ -1,10 +1,22 @@
 import { NextResponse } from "next/server";
+import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
-import { API_WORK_BUDGET_MS, remainingApiTime } from "@/lib/apiDeadline";
+import { remainingApiTime } from "@/lib/apiDeadline";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
-import { generateGeminiJson } from "@/lib/gemini";
+import {
+  GeminiInvalidJsonError,
+  generateGeminiJson,
+} from "@/lib/gemini";
 import { authorizeAdminOwnerOrCron } from "@/lib/adminApiAuth";
-import { generatePageFromSeoBlueprint } from "@/lib/seoBlueprintPageGenerator";
+import {
+  applySeoInternalLinkPass,
+  assessSeoPageQuality,
+  buildPageFromSeoSections,
+  createFallbackSeoSection,
+  generateSeoBlueprintSection,
+  type GeneratedSeoSection,
+  type SeoQualityAssessment,
+} from "@/lib/seoBlueprintPageGenerator";
 import type { GeneratedCityPageDraft } from "@/types/city/CityPageGeneration";
 import {
   CITY_SERVICE_IMAGE_PLACEHOLDER,
@@ -18,11 +30,14 @@ import {
   type CityServiceBlock,
   type CityServiceSeoSettings,
 } from "@/types/city/CityServicePage";
-import type { SeoAnalysisRun } from "@/types/city/SeoAnalysis";
+import type {
+  SeoAnalysisRun,
+} from "@/types/city/SeoAnalysis";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
+const CITY_SERVICE_GENERATION_WORK_BUDGET_MS = 55_000;
 const requestSchema = z.object({
   ownerId: z.string().trim().min(1).max(200),
   cityName: z.string().trim().min(1).max(150),
@@ -42,6 +57,28 @@ const requestSchema = z.object({
 const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1_000;
 const PROPOSAL_COLLECTION = "cityServiceOptimizationProposals";
 const STATE_COLLECTION = "cityServiceOptimizationStates";
+const GENERATION_JOB_COLLECTION = "cityServiceGenerationJobs";
+const MAX_QUALITY_REPAIRS = 2;
+
+type LoadedAnalysis = Pick<
+  SeoAnalysisRun,
+  "keywords" | "pages" | "report" | "targetRank"
+> & {
+  analysisWarning?: string;
+};
+
+type GenerationJobData = {
+  ownerId: string;
+  pageKey: string;
+  analysisId: string;
+  status: "running" | "completed";
+  sections?: Record<string, GeneratedSeoSection>;
+  linkedSections?: GeneratedSeoSection[];
+  quality?: SeoQualityAssessment;
+  repairAttempts?: number;
+  warnings?: string[];
+  proposalId?: string;
+};
 
 const shortText = z.string().trim().min(1).max(500);
 const longText = z.string().trim().min(1).max(8_000);
@@ -124,9 +161,13 @@ async function getLatestAnalysis(ownerId: string, pageKey: string) {
     keywords: data.keywords ?? [],
     pages: data.pages ?? [],
     report: data.report,
+    analysisWarning:
+      typeof data.analysisWarning === "string"
+        ? data.analysisWarning
+        : undefined,
     targetRank:
       typeof data.targetRank === "number" ? data.targetRank : undefined,
-  } as Pick<SeoAnalysisRun, "keywords" | "pages" | "report" | "targetRank">;
+  } as LoadedAnalysis;
 }
 
 async function getAnalysis(
@@ -153,9 +194,13 @@ async function getAnalysis(
     keywords: data.keywords ?? [],
     pages: data.pages ?? [],
     report: data.report,
+    analysisWarning:
+      typeof data.analysisWarning === "string"
+        ? data.analysisWarning
+        : undefined,
     targetRank:
       typeof data.targetRank === "number" ? data.targetRank : undefined,
-  } as Pick<SeoAnalysisRun, "keywords" | "pages" | "report" | "targetRank">;
+  } as LoadedAnalysis;
 }
 
 async function generateCopy(input: {
@@ -291,11 +336,25 @@ async function loadCurrentSnapshot(input: z.infer<typeof requestSchema>) {
 
 class OptimizationConflict extends Error {}
 
+function isRecoverableGenerationError(error: unknown) {
+  return (
+    error instanceof GeminiInvalidJsonError ||
+    (error instanceof Error &&
+      (error.message.includes("Zeitlimit") ||
+        error.message.startsWith("KI-Textpaket")))
+  );
+}
+
 async function saveProposal(input: {
   request: z.infer<typeof requestSchema>;
   draft: GeneratedCityPageDraft;
   previous: Awaited<ReturnType<typeof loadCurrentSnapshot>>;
   targetRank?: number;
+  generationMode: "ai" | "analysis-fallback";
+  generationWarning?: string;
+  qualityScore?: number;
+  qualitySummary?: string;
+  generationJobReference?: FirebaseFirestore.DocumentReference;
 }) {
   const database = getAdminDatabase();
   const stateId = optimizationStateId(
@@ -336,6 +395,10 @@ async function saveProposal(input: {
       status: "pending",
       previous: input.previous,
       draft: input.draft,
+      generationMode: input.generationMode,
+      generationWarning: input.generationWarning ?? null,
+      qualityScore: input.qualityScore ?? null,
+      qualitySummary: input.qualitySummary ?? null,
       targetRank: input.targetRank ?? null,
       createdAt: now,
     });
@@ -353,6 +416,18 @@ async function saveProposal(input: {
       },
       { merge: true },
     );
+    if (input.generationJobReference) {
+      transaction.set(
+        input.generationJobReference,
+        {
+          status: "completed",
+          proposalId: proposalReference.id,
+          completedAt: now,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+    }
   });
   return proposalReference.id;
 }
@@ -482,7 +557,8 @@ function createBlocks(
 }
 
 export async function POST(request: Request) {
-  const deadlineAt = Date.now() + API_WORK_BUDGET_MS;
+  const deadlineAt =
+    Date.now() + CITY_SERVICE_GENERATION_WORK_BUDGET_MS;
   try {
     const input = requestSchema.parse(await request.json());
     if (!(await authorizeAdminOwnerOrCron(request, input.ownerId))) {
@@ -509,27 +585,265 @@ export async function POST(request: Request) {
     }
     const previous = await loadCurrentSnapshot(input);
     let draft: GeneratedCityPageDraft;
+    let generationMode: "ai" | "analysis-fallback" = "ai";
+    let generationWarning = analysis?.analysisWarning;
     if (input.analysisId && !analysis?.report.pageBlueprint) {
       throw new Error(
         "Diese ältere Analyse enthält noch keinen vollständigen KI-Blueprint. Bitte eine neue SEO-Analyse starten.",
       );
     }
     if (analysis?.report.pageBlueprint) {
-      draft = await generatePageFromSeoBlueprint({
-        cityName: input.cityName,
-        pageLabel: `${input.serviceName} ${input.cityName}`,
-        image: input.currentImage,
-        imageAlt: input.currentImageAlt,
-        serviceKey: input.serviceKey,
-        currentBlocks: previous.blocks,
-        report: analysis.report,
-        blueprint: analysis.report.pageBlueprint,
-        deadlineAt,
-        verifiedClaims: [
-          "kostenlose und unverbindliche Anfrage",
-          "persönliche Planung",
-          "kombinierbare Leistungen",
-        ],
+      const blueprint = analysis.report.pageBlueprint;
+      const pageKey = `${input.citySlug}/${input.serviceKey}`;
+      const jobId = input.analysisId ?? optimizationStateId(
+        input.ownerId,
+        input.citySlug,
+        input.serviceKey,
+      );
+      const jobReference = getAdminDatabase()
+        .collection(GENERATION_JOB_COLLECTION)
+        .doc(jobId);
+      let jobSnapshot = await jobReference.get();
+      if (!jobSnapshot.exists) {
+        await jobReference.create({
+          ownerId: input.ownerId,
+          pageKey,
+          analysisId: input.analysisId ?? jobId,
+          status: "running",
+          sections: {},
+          repairAttempts: 0,
+          warnings: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } satisfies GenerationJobData & {
+          createdAt: number;
+          updatedAt: number;
+        });
+        jobSnapshot = await jobReference.get();
+      }
+      const job = jobSnapshot.data() as GenerationJobData;
+      if (job.ownerId !== input.ownerId || job.pageKey !== pageKey) {
+        throw new Error("Der gespeicherte Generierungsauftrag ist ungültig.");
+      }
+      if (job.status === "completed" && job.proposalId) {
+        return NextResponse.json({
+          success: true,
+          proposalId: job.proposalId,
+          generationMode: "ai",
+          reviewUrl: `/admin/${encodeURIComponent(input.ownerId)}/citys/${encodeURIComponent(input.citySlug)}/services/${input.serviceKey}/optimierungen/${job.proposalId}`,
+        });
+      }
+
+      const sectionsByOrder = job.sections ?? {};
+      const nextSection = [...blueprint.sections]
+        .sort((left, right) => left.order - right.order)
+        .find((section) => !sectionsByOrder[String(section.order)]);
+      if (nextSection) {
+        let generatedSection: GeneratedSeoSection;
+        let sectionWarning: string | undefined;
+        try {
+          generatedSection = await generateSeoBlueprintSection({
+            section: nextSection,
+            sectionIndex: blueprint.sections.findIndex(
+              (section) => section.order === nextSection.order,
+            ),
+            sectionCount: blueprint.sections.length,
+            pageLabel: `${input.serviceName} ${input.cityName}`,
+            cityName: input.cityName,
+            blueprint,
+            report: analysis.report,
+            verifiedClaims: [
+              "kostenlose und unverbindliche Anfrage",
+              "persönliche Planung",
+              "kombinierbare Leistungen",
+            ],
+            serviceKey: input.serviceKey,
+            deadlineAt,
+          });
+        } catch (error) {
+          if (!isRecoverableGenerationError(error)) throw error;
+          console.warn(
+            "SEO section generation incomplete; using section fallback",
+            nextSection.order,
+            error,
+          );
+          generatedSection = createFallbackSeoSection(nextSection);
+          sectionWarning = `Sektion ${nextSection.order} wurde aus dem geprüften SEO-Briefing aufgebaut, weil die KI-Textantwort unvollständig war.`;
+        }
+        await jobReference.update({
+          [`sections.${nextSection.order}`]: generatedSection,
+          ...(sectionWarning
+            ? { warnings: FieldValue.arrayUnion(sectionWarning) }
+            : {}),
+          updatedAt: Date.now(),
+        });
+        return NextResponse.json({
+          success: true,
+          pending: true,
+          stage: "section",
+          sectionOrder: nextSection.order,
+          completedSections: Object.keys(sectionsByOrder).length + 1,
+          totalSections: blueprint.sections.length,
+        });
+      }
+
+      const orderedSections = blueprint.sections.map(
+        (section) => sectionsByOrder[String(section.order)],
+      );
+      if (!job.linkedSections) {
+        const linked = await applySeoInternalLinkPass({
+          sections: orderedSections,
+          blueprint,
+          pageLabel: `${input.serviceName} ${input.cityName}`,
+          deadlineAt,
+        });
+        await jobReference.update({
+          linkedSections: linked.sections,
+          ...(linked.warning
+            ? { warnings: FieldValue.arrayUnion(linked.warning) }
+            : {}),
+          updatedAt: Date.now(),
+        });
+        return NextResponse.json({
+          success: true,
+          pending: true,
+          stage: "internal-links",
+          completedSections: blueprint.sections.length,
+          totalSections: blueprint.sections.length,
+        });
+      }
+
+      if (!job.quality) {
+        const quality = await assessSeoPageQuality({
+          sections: job.linkedSections,
+          blueprint,
+          report: analysis.report,
+          pageLabel: `${input.serviceName} ${input.cityName}`,
+          deadlineAt,
+        });
+        await jobReference.update({
+          quality,
+          updatedAt: Date.now(),
+        });
+        return NextResponse.json({
+          success: true,
+          pending: true,
+          stage: "quality-check",
+          qualityScore: quality.score,
+        });
+      }
+
+      const repairAttempts = job.repairAttempts ?? 0;
+      const repairIssue = job.quality.issues.find(
+        (issue) => issue.severity !== "niedrig",
+      );
+      if (
+        job.quality.score < 85 &&
+        repairIssue &&
+        repairAttempts < MAX_QUALITY_REPAIRS
+      ) {
+        const sectionBlueprint = blueprint.sections.find(
+          (section) => section.order === repairIssue.sectionOrder,
+        );
+        if (sectionBlueprint) {
+          let repairedSection: GeneratedSeoSection;
+          try {
+            repairedSection = await generateSeoBlueprintSection({
+              section: sectionBlueprint,
+              sectionIndex: blueprint.sections.findIndex(
+                (section) => section.order === sectionBlueprint.order,
+              ),
+              sectionCount: blueprint.sections.length,
+              pageLabel: `${input.serviceName} ${input.cityName}`,
+              cityName: input.cityName,
+              blueprint,
+              report: analysis.report,
+              verifiedClaims: [
+                "kostenlose und unverbindliche Anfrage",
+                "persönliche Planung",
+                "kombinierbare Leistungen",
+              ],
+              serviceKey: input.serviceKey,
+              deadlineAt,
+              correction: `${repairIssue.problem} Reparaturauftrag: ${repairIssue.instruction}`,
+            });
+          } catch (error) {
+            if (!isRecoverableGenerationError(error)) throw error;
+            repairedSection = createFallbackSeoSection(sectionBlueprint);
+            await jobReference.update({
+              warnings: FieldValue.arrayUnion(
+                `Die Qualitätsreparatur für Sektion ${sectionBlueprint.order} wurde aus dem SEO-Briefing aufgebaut.`,
+              ),
+            });
+          }
+          await jobReference.update({
+            [`sections.${sectionBlueprint.order}`]: repairedSection,
+            linkedSections: FieldValue.delete(),
+            quality: FieldValue.delete(),
+            repairAttempts: repairAttempts + 1,
+            updatedAt: Date.now(),
+          });
+          return NextResponse.json({
+            success: true,
+            pending: true,
+            stage: "section-repair",
+            sectionOrder: sectionBlueprint.order,
+            repairAttempt: repairAttempts + 1,
+          });
+        }
+      }
+
+      generationWarning = [
+        analysis?.analysisWarning,
+        ...(job.warnings ?? []),
+        job.quality.score < 85
+          ? `Die abschließende SEO-Qualitätsprüfung erreichte ${job.quality.score} von 100 Punkten.`
+          : undefined,
+      ]
+        .filter((warning): warning is string => Boolean(warning))
+        .join(" ");
+      generationMode = job.warnings?.length
+        ? "analysis-fallback"
+        : "ai";
+      draft = buildPageFromSeoSections(
+        {
+          cityName: input.cityName,
+          pageLabel: `${input.serviceName} ${input.cityName}`,
+          image: input.currentImage,
+          imageAlt: input.currentImageAlt,
+          serviceKey: input.serviceKey,
+          currentBlocks: previous.blocks,
+          report: analysis.report,
+          blueprint,
+          verifiedClaims: [
+            "kostenlose und unverbindliche Anfrage",
+            "persönliche Planung",
+            "kombinierbare Leistungen",
+          ],
+        },
+        job.linkedSections,
+      );
+
+      const proposalId = await saveProposal({
+        request: input,
+        draft,
+        previous,
+        targetRank: analysis?.targetRank,
+        generationMode,
+        generationWarning: generationWarning || undefined,
+        qualityScore: job.quality.score,
+        qualitySummary: job.quality.summary,
+        generationJobReference: jobReference,
+      });
+      return NextResponse.json({
+        success: true,
+        draft,
+        usedAnalysis: true,
+        proposalId,
+        generationMode,
+        warning: generationWarning || undefined,
+        qualityScore: job.quality.score,
+        reviewUrl: `/admin/${encodeURIComponent(input.ownerId)}/citys/${encodeURIComponent(input.citySlug)}/services/${input.serviceKey}/optimierungen/${proposalId}`,
       });
     } else {
       const keywords = [
@@ -565,16 +879,32 @@ export async function POST(request: Request) {
       draft,
       previous,
       targetRank: analysis?.targetRank,
+      generationMode,
+      generationWarning,
     });
     return NextResponse.json({
       success: true,
       draft,
       usedAnalysis: Boolean(analysis),
       proposalId,
+      generationMode,
+      warning: generationWarning,
       reviewUrl: `/admin/${encodeURIComponent(input.ownerId)}/citys/${encodeURIComponent(input.citySlug)}/services/${input.serviceKey}/optimierungen/${proposalId}`,
     });
   } catch (error) {
     console.error("City service page generation error", error);
+    const isRetryableAiError = isRecoverableGenerationError(error);
+    if (isRetryableAiError) {
+      return NextResponse.json(
+        {
+          success: false,
+          retryable: true,
+          error:
+            "Der KI-Entwurf konnte noch nicht vollständig erstellt werden.",
+        },
+        { status: 503 },
+      );
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         {

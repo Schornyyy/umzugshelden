@@ -111,6 +111,21 @@ export default function BlogGenerationReview({
           <p className='mt-2 text-sm text-slate-600'>
             {proposal.cityName} · {proposal.keyword}
           </p>
+          {typeof proposal.qualityScore === "number" && (
+            <p className='mt-2 text-sm font-medium text-slate-700'>
+              SEO-Qualitätsprüfung: {proposal.qualityScore}/100
+              {proposal.qualitySummary
+                ? ` · ${proposal.qualitySummary}`
+                : ""}
+            </p>
+          )}
+          {proposal.generationWarnings?.map((warning) => (
+            <p
+              key={warning}
+              className='mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800'>
+              {warning}
+            </p>
+          ))}
         </div>
         {proposal.status === "pending" && (
           <div className='flex gap-2'>

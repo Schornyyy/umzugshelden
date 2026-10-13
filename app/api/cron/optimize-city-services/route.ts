@@ -14,9 +14,10 @@ import {
 import { slugify } from "@/utils/slugify";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const MONTH_IN_MS = 30 * 24 * 60 * 60 * 1_000;
+const ANALYSIS_RETRY_DELAY_MS = 4 * 60 * 1_000;
 const STATE_COLLECTION = "cityServiceOptimizationStates";
 
 type InternalApiResult = {
@@ -102,7 +103,15 @@ async function optimizeSingleCityService(
   request: Request,
   ownerId: string,
   source: "manual" | "cron",
+  requestedPageKey?: string,
 ) {
+  let failureContext:
+    | {
+        reference: FirebaseFirestore.DocumentReference;
+        retryCount: number;
+        pageKey: string;
+      }
+    | undefined;
   try {
     const database = getAdminDatabase();
     const [templateSnapshot, pageSnapshot, stateSnapshot] = await Promise.all([
@@ -149,23 +158,31 @@ async function optimizeSingleCityService(
           const state = states.get(id);
           return {
             id,
+            pageKey: `${citySlug}/${serviceKey}`,
             cityName,
             citySlug,
             serviceKey,
             state,
             lastGeneratedAt: asTimestamp(state?.lastGeneratedAt),
+            nextAnalysisRetryAt: asTimestamp(state?.nextAnalysisRetryAt),
           };
         });
       })
       .filter(
         (candidate) =>
+          (!requestedPageKey || candidate.pageKey === requestedPageKey) &&
           !candidate.state?.pendingProposalId &&
           !candidate.state?.suspendedForTopFive &&
+          (source === "manual" && candidate.pageKey === requestedPageKey
+            ? true
+            : candidate.nextAnalysisRetryAt <= now) &&
           (!candidate.lastGeneratedAt ||
             now - candidate.lastGeneratedAt >= MONTH_IN_MS),
       )
       .sort(
         (left, right) =>
+          asTimestamp(right.state?.manualPriorityAt) -
+            asTimestamp(left.state?.manualPriorityAt) ||
           Number(Boolean(right.state?.pendingAnalysisId)) -
             Number(Boolean(left.state?.pendingAnalysisId)) ||
           left.lastGeneratedAt - right.lastGeneratedAt,
@@ -178,6 +195,17 @@ async function optimizeSingleCityService(
           "Keine Service-Seite ist fällig. Top-5-Seiten und offene Freigaben bleiben pausiert.",
       });
     }
+    const stateReference = database
+      .collection(STATE_COLLECTION)
+      .doc(candidate.id);
+    failureContext = {
+      reference: stateReference,
+      retryCount:
+        typeof candidate.state?.failureRetryCount === "number"
+          ? candidate.state.failureRetryCount
+          : 0,
+      pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
+    };
 
     const template =
       templates.get(candidate.serviceKey) ??
@@ -197,9 +225,6 @@ async function optimizeSingleCityService(
         : request.headers.get("authorization") || "";
     const keyword =
       `${template.primaryKeyword} ${candidate.cityName}`.trim();
-    const stateReference = database
-      .collection(STATE_COLLECTION)
-      .doc(candidate.id);
     const pendingAnalysisId =
       typeof candidate.state?.pendingAnalysisId === "string"
         ? candidate.state.pendingAnalysisId
@@ -248,6 +273,7 @@ async function optimizeSingleCityService(
               serviceKey: candidate.serviceKey,
               analysisRetryCount: retryCount,
               lastAnalysisRetryAt: Date.now(),
+              nextAnalysisRetryAt: Date.now() + ANALYSIS_RETRY_DELAY_MS,
               updatedAt: Date.now(),
             },
             { merge: true },
@@ -258,8 +284,6 @@ async function optimizeSingleCityService(
             stage: "analysis-retry",
             retryCount,
             pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
-            message:
-              "Die KI-Auswertung wurde zeitlich verschoben und beim nächsten Cron-Lauf automatisch erneut versucht.",
           });
         }
         throw new Error(analysisResult.errorMessage);
@@ -286,8 +310,12 @@ async function optimizeSingleCityService(
             targetRank,
             suspendedForTopFive: true,
             pendingAnalysisId: null,
+            manualPriorityAt: null,
+            nextAnalysisRetryAt: null,
             lastCheckedAt: now,
             updatedAt: now,
+            failureRetryCount: 0,
+            lastError: null,
           },
           { merge: true },
         );
@@ -306,9 +334,12 @@ async function optimizeSingleCityService(
           serviceKey: candidate.serviceKey,
           pendingAnalysisId: analysisId,
           analysisRetryCount: 0,
+          nextAnalysisRetryAt: null,
           targetRank: targetRank ?? null,
           lastCheckedAt: now,
           updatedAt: now,
+          failureRetryCount: 0,
+          lastError: null,
         },
         { merge: true },
       );
@@ -352,12 +383,61 @@ async function optimizeSingleCityService(
       "Der automatische Verbesserungsvorschlag",
     );
     if (generationResult.errorMessage) {
+      if (
+        generationResponse.status === 503 &&
+        generationResult.data.retryable === true
+      ) {
+        const retryCount =
+          typeof candidate.state?.generationRetryCount === "number"
+            ? candidate.state.generationRetryCount + 1
+            : 1;
+        await stateReference.set(
+          {
+            generationRetryCount: retryCount,
+            lastGenerationRetryAt: Date.now(),
+            nextAnalysisRetryAt: Date.now() + ANALYSIS_RETRY_DELAY_MS,
+            updatedAt: Date.now(),
+          },
+          { merge: true },
+        );
+        return NextResponse.json({
+          success: true,
+          pending: true,
+          stage: "generation-retry",
+          retryCount,
+          pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
+        });
+      }
       throw new Error(generationResult.errorMessage);
     }
     const generationData = generationResult.data;
+    if (generationData.pending === true) {
+      return NextResponse.json({
+        success: true,
+        pending: true,
+        stage:
+          typeof generationData.stage === "string"
+            ? generationData.stage
+            : "generation",
+        pageKey: `${candidate.citySlug}/${candidate.serviceKey}`,
+        sectionOrder: generationData.sectionOrder,
+        completedSections: generationData.completedSections,
+        totalSections: generationData.totalSections,
+        qualityScore: generationData.qualityScore,
+        message:
+          "Die persistente SEO-Pipeline wurde gespeichert und wird im nächsten Schritt fortgesetzt.",
+      });
+    }
+    const generationWarning =
+      typeof generationData.warning === "string"
+        ? generationData.warning
+        : undefined;
     await stateReference.set(
       {
         pendingAnalysisId: null,
+        generationRetryCount: 0,
+        manualPriorityAt: null,
+        nextAnalysisRetryAt: null,
         lastCheckedAt: now,
         updatedAt: now,
       },
@@ -376,10 +456,38 @@ async function optimizeSingleCityService(
           : undefined,
       targetRank,
       message:
+        generationWarning ??
         "Ein neuer Vorschlag wurde gespeichert und wartet auf Freigabe.",
     });
   } catch (error) {
     console.error("Monthly city service optimization failed", error);
+    if (failureContext) {
+      const retryCount = failureContext.retryCount + 1;
+      const retryDelay = Math.min(
+        24 * 60 * 60 * 1_000,
+        5 * 60 * 1_000 * 2 ** Math.min(retryCount - 1, 8),
+      );
+      const errorMessage =
+        error instanceof Error ? error.message : "Unbekannter Cron-Fehler";
+      await failureContext.reference.set(
+        {
+          failureRetryCount: retryCount,
+          lastError: errorMessage.slice(0, 1_000),
+          lastFailureAt: Date.now(),
+          nextAnalysisRetryAt: Date.now() + retryDelay,
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
+      return NextResponse.json({
+        success: true,
+        pending: true,
+        stage: "error-retry",
+        retryCount,
+        pageKey: failureContext.pageKey,
+        retryAt: new Date(Date.now() + retryDelay).toISOString(),
+      });
+    }
     return NextResponse.json(
       {
         success: false,
@@ -407,9 +515,16 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
     ownerId?: unknown;
+    count?: unknown;
+    mode?: unknown;
+    pageKey?: unknown;
   } | null;
   const ownerId =
     typeof body?.ownerId === "string" ? body.ownerId.trim() : "";
+  const count =
+    typeof body?.count === "number" && Number.isInteger(body.count)
+      ? Math.min(50, Math.max(1, body.count))
+      : 1;
   if (!ownerId) {
     return NextResponse.json(
       { success: false, error: "Owner-ID fehlt" },
@@ -422,5 +537,89 @@ export async function POST(request: Request) {
       { status: 401 },
     );
   }
-  return optimizeSingleCityService(request, ownerId, "manual");
+  if (body?.mode === "run-now") {
+    const requestedPageKey =
+      typeof body.pageKey === "string" ? body.pageKey.trim() : undefined;
+    return optimizeSingleCityService(
+      request,
+      ownerId,
+      "manual",
+      requestedPageKey,
+    );
+  }
+  const database = getAdminDatabase();
+  const stateSnapshot = await database
+    .collection(STATE_COLLECTION)
+    .where("ownerId", "==", ownerId)
+    .get();
+  const states = new Map(
+    stateSnapshot.docs.map((document) => [document.id, document.data()]),
+  );
+  const now = Date.now();
+  const candidates = rawCities
+    .flatMap((cityName) => {
+      const citySlug = slugify(cityName);
+      return CITY_SERVICE_KEYS.map((serviceKey) => {
+        const id = stateId(ownerId, citySlug, serviceKey);
+        const state = states.get(id);
+        return {
+          id,
+          citySlug,
+          serviceKey,
+          state,
+          lastGeneratedAt: asTimestamp(state?.lastGeneratedAt),
+        };
+      });
+    })
+    .filter(
+      (candidate) =>
+        !candidate.state?.pendingProposalId &&
+        !candidate.state?.suspendedForTopFive &&
+        !candidate.state?.manualPriorityAt &&
+        (!candidate.lastGeneratedAt ||
+          now - candidate.lastGeneratedAt >= MONTH_IN_MS),
+    )
+    .sort(
+      (left, right) =>
+        Number(Boolean(right.state?.pendingAnalysisId)) -
+          Number(Boolean(left.state?.pendingAnalysisId)) ||
+        left.lastGeneratedAt - right.lastGeneratedAt,
+    )
+    .slice(0, count);
+
+  if (!candidates.length) {
+    return NextResponse.json({
+      success: true,
+      queued: 0,
+      message:
+        "Keine weitere Service-Seite ist fällig. Offene Freigaben und Top-5-Seiten bleiben pausiert.",
+    });
+  }
+
+  const batch = database.batch();
+  candidates.forEach((candidate) => {
+    batch.set(
+      database.collection(STATE_COLLECTION).doc(candidate.id),
+      {
+        ownerId,
+        citySlug: candidate.citySlug,
+        serviceKey: candidate.serviceKey,
+        manualPriorityAt: now,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  });
+  await batch.commit();
+
+  return NextResponse.json({
+    success: true,
+    queued: candidates.length,
+    pageKeys: candidates.map(
+      (candidate) => `${candidate.citySlug}/${candidate.serviceKey}`,
+    ),
+    message: `${candidates.length} ${
+      candidates.length === 1 ? "Seite wurde" : "Seiten wurden"
+    } dauerhaft zur Optimierung eingeplant.`,
+  });
 }

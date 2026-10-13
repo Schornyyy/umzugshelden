@@ -206,10 +206,5 @@ export async function discoverSeoSearchResults(
     if (urls.length === limit && targetRank !== undefined) break;
   }
 
-  if (urls.length === 0) {
-    throw new Error(
-      `Die HTTP-Suche hat für "${keyword}" keine crawlbaren Wettbewerber geliefert`,
-    );
-  }
   return { competitorUrls: urls, targetRank };
 }
