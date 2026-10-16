@@ -13,6 +13,58 @@ Ein hochperformantes Caching-System für Aufträge und Unternehmen mit automatis
 
 ## 📁 Struktur
 
+### Quellen und interne Links der Seitengenerierung
+
+Die Stadt-, Stadt-Dienstleistungs- und Bloggenerierung verwendet einen gemeinsamen
+Katalog aus den öffentlichen Routen und Veröffentlichungsdaten. Zulässig sind nur
+`/stadt/{stadt}`, `/stadt/{stadt}/{dienstleistung}` und veröffentlichte Artikel
+unter `/blog/...` auf `NEXT_PUBLIC_SITE_URL` (Standard:
+`https://www.umzugshelden.io`). Stadtseiten ohne eigenes Datenbankdokument sind
+gemäß öffentlichem Routing und Sitemap über die Standardvorlage erreichbar;
+explizit unveröffentlichte Seiten sind ausgeschlossen.
+
+Externe Wettbewerber und Entsorgungsportale werden nicht mehr als Quellen der
+Generierung abgerufen. Auch Weiterleitungen werden vor dem Abruf gegen den
+Katalog geprüft. Die Google-Suche für die Rangermittlung der SEO-Analyse bleibt
+erhalten, deren externe Treffer werden jedoch nicht als Inhaltsquellen verwendet.
+Gespeicherte Analysen und laufende Blog-Workflows werden beim Fortsetzen erneut
+gefiltert. Generierte Markdown- und HTML-Textlinks werden vor Ausgabe bzw.
+Speicherung geprüft; unzulässige Linkziele werden entfernt, der Linktext bleibt.
+Die Auswahl der zu generierenden Seiten bleibt unverändert.
+
+Tests: `npx tsx --test lib\generationPagePolicy.test.ts`.
+
+### Zentrale Page-builder-Bewertungen
+
+Unter **Page-builder Elemente → Bewertungen** werden Name, Bewertungstext,
+Sterne (1–5) und Reihenfolge der Karten zentral verwaltet. Das Pagebuilder-Element
+`testimonials` verwendet auf allen Seiten und in der Builder-Vorschau dasselbe
+durchlaufende Karussell; frühere lokale Inhalte und Designwerte werden ignoriert,
+bleiben aber in bestehenden Seitendaten erhalten.
+
+Jeder neu generierte Stadt-, Stadt-Dienstleistungs- und Blogentwurf enthält
+automatisch genau ein aktiviertes Bewertungen-Element, unabhängig vom
+KI-Blueprint oder einem Fallback. Fehlt es, wird es vor dem letzten Kontakt-
+oder CTA-Block eingefügt, andernfalls am Seitenende. Bereits vorhandene
+Bewertungsblöcke werden wiederverwendet und aktiviert; Duplikate entfallen.
+Bestehende Seiten werden erst bei einer erneuten Generierung angepasst.
+
+Die Einstellungen liegen im Firestore-Dokument
+`page_builder_elements_umzugshelden/reviews`. Die öffentliche Lese-API
+`GET /api/page-builder/reviews` umgeht den Seiten- und Browsercache (`no-store`).
+Nach dem Speichern erscheinen Änderungen beim nächsten Seitenaufruf, ohne
+einzelne Seiten neu zu speichern. Schreibzugriffe über `PUT` erfordern einen
+Firebase-ID-Token und die vorhandene Admin-Owner-Autorisierung.
+
+Solange das Dokument noch nicht existiert, werden die drei bisherigen
+Bewertungen verwendet. Eine explizit gespeicherte leere Liste blendet das Element
+aus. Eine einzelne Karte bleibt statisch. Mehrere Karten laufen endlos,
+pausieren beim Darüberfahren oder Fokussieren und können per Schaltfläche
+angehalten werden. Bei reduzierter Bewegung bleiben die Karten manuell scrollbar.
+Ladefehler werden mit einer Wiederholungsmöglichkeit angezeigt.
+
+Validierungstests: `npx tsx --test lib\reviewSettings.test.ts`.
+
 ```
 lib/
 ├── cache.ts                 # Core Cache Manager

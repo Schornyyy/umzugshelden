@@ -1,15 +1,12 @@
 "use server"
 
-import { database } from "@/config/firebase"
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { Job } from "@/types/Job";
-import {  and, collection, deleteDoc, doc, getDocs, query, setDoc, updateDoc, where } from "firebase/firestore"
 
 const JOB_COLLECTION = "jobs_umzugshelden"
 
 
 export async function createJob(ownerId: string, titel: string, jobArt: "vollzeit" | "teilzeit" | "aushilfe" | "praktikum" | "ferienjob"): Promise<Job> {
-
-    const colRef = collection(database, JOB_COLLECTION);
 
     const job: Job = {
         id: crypto.randomUUID(),
@@ -19,31 +16,26 @@ export async function createJob(ownerId: string, titel: string, jobArt: "vollzei
         jobArt: jobArt,
     } 
 
-    await setDoc(doc(colRef, job.id), job)
+    await getAdminDatabase().collection(JOB_COLLECTION).doc(job.id).set(job);
 
     return job;
 }
 
 export async function getJobById(jobId: string, ownerId: string): Promise<Job | null> {
 
-    const colRef = collection(database, JOB_COLLECTION);
-    const queryRef = query(colRef, and(where("id", "==", jobId), where("ownerId", "==", ownerId)));
-    const jobsDocsRef = await getDocs(queryRef)
-
-
-    if(jobsDocsRef.docs.length == 0) return null;
-
-    return jobsDocsRef.docs[0].data() as Job
+    const jobDocument = await getAdminDatabase()
+        .collection(JOB_COLLECTION)
+        .doc(jobId)
+        .get();
+    if (!jobDocument.exists) return null;
+    const job = jobDocument.data() as Job;
+    return job.ownerId === ownerId ? job : null;
  }
 
 
 export async function deleteJob(jobId: string): Promise<{id: string}> {
 
-    const colRef = collection(database, JOB_COLLECTION);
-    const docRef = doc(colRef, jobId)
-
-
-    await deleteDoc(docRef);
+    await getAdminDatabase().collection(JOB_COLLECTION).doc(jobId).delete();
 
 
     return {id: jobId};
@@ -51,20 +43,19 @@ export async function deleteJob(jobId: string): Promise<{id: string}> {
 
 export async function updateJob(jobId: string, newJob: Job): Promise<Job | null> {
 
-    const colRef = collection(database, JOB_COLLECTION);
-    const docRef = doc(colRef, newJob.id);
-
-    if(!docRef) return null;
-
-    await updateDoc(docRef, {...newJob})
+    await getAdminDatabase()
+        .collection(JOB_COLLECTION)
+        .doc(newJob.id)
+        .update({ ...newJob });
     return newJob
 }
 
 export async function getAllJobsbyOwnerId(ownerId: string): Promise<Job[]> {
 
-    const colRef = collection(database, JOB_COLLECTION);
-    const queryRef = query(colRef, where("ownerId", "==", ownerId));
-    const jobDocsRef = await getDocs(queryRef);
+    const jobDocsRef = await getAdminDatabase()
+        .collection(JOB_COLLECTION)
+        .where("ownerId", "==", ownerId)
+        .get();
 
     if(jobDocsRef.docs.length == 0) return []
 

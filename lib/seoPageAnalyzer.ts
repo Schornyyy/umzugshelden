@@ -105,13 +105,16 @@ async function validatePublicUrl(rawUrl: string): Promise<URL> {
   return url;
 }
 
-async function fetchHtml(rawUrl: string): Promise<{
+async function fetchHtml(rawUrl: string, isAllowedUrl?: (url: string) => boolean): Promise<{
   html: string;
   finalUrl: string;
   statusCode: number;
 }> {
   let url = await validatePublicUrl(rawUrl);
   for (let redirect = 0; redirect <= MAX_REDIRECTS; redirect += 1) {
+    if (isAllowedUrl && !isAllowedUrl(url.toString())) {
+      throw new Error(`Nicht erlaubte Quellseite oder Weiterleitung: ${url}`);
+    }
     const response = await fetch(url, {
       headers: {
         accept: "text/html,application/xhtml+xml",
@@ -202,9 +205,10 @@ function collectSchemaTypes(html: string): string[] {
 
 export async function analyzeSeoPage(
   rawUrl: string,
-  trackedKeywords: string[]
+  trackedKeywords: string[],
+  isAllowedUrl?: (url: string) => boolean,
 ): Promise<SeoPageMetrics> {
-  const { html, finalUrl, statusCode } = await fetchHtml(rawUrl);
+  const { html, finalUrl, statusCode } = await fetchHtml(rawUrl, isAllowedUrl);
   const title = tagContents(html, "title")[0] ?? "";
   const metaDescription = metaContent(html, "description");
   const canonicalTag = (html.match(/<link\b[^>]*rel\s*=\s*(?:"canonical"|'canonical')[^>]*>/i) ??

@@ -10,7 +10,8 @@ import {
 import { discoverSeoSearchResults } from "@/lib/googleSeoSearch";
 import { authorizeAdminOwnerOrCron } from "@/lib/adminApiAuth";
 import { analyzeSeoPage } from "@/lib/seoPageAnalyzer";
-import { slugify } from "@/utils/slugify";
+import { getGenerationPages, restrictGenerationAnalysis } from "@/lib/generationPages";
+import { allowedGenerationPage, generationSiteUrl } from "@/lib/generationPagePolicy";
 import type {
   SeoAiReport,
   SeoAnalysisRun,
@@ -262,36 +263,6 @@ function createFallbackReport(input: {
   };
 }
 
-async function getPublishedBlogLinks(): Promise<BlogLinkCandidate[]> {
-  const snapshot = await getAdminDatabase()
-    .collection("blogPages_umzugshelden")
-    .get();
-  const links = snapshot.docs.flatMap((document) => {
-    const data = document.data();
-    if (data.visible !== true || typeof data.titel !== "string") return [];
-    const rawPath =
-      typeof data.path === "string" && data.path.trim()
-        ? data.path
-        : [data.mainCategory, data.subcategorySlug, data.slug]
-            .filter((part): part is string => typeof part === "string")
-            .join("/");
-    const path = rawPath
-      .split("/")
-      .map((part) => slugify(part.trim().toLocaleLowerCase("de")))
-      .filter(Boolean)
-      .join("/");
-    if (!path) return [];
-    return [{ title: data.titel.trim(), url: `/blog/${path}` }];
-  });
-
-  return links
-    .filter(
-      (link, index) =>
-        links.findIndex((candidate) => candidate.url === link.url) === index,
-    )
-    .sort((left, right) => left.title.localeCompare(right.title, "de"));
-}
-
 function serializeRun(
   id: string,
   data: FirebaseFirestore.DocumentData
@@ -332,8 +303,9 @@ async function createAiReport(
     thinkingBudget: 0,
     systemInstruction:
       `Du bist ein erfahrener deutscher SEO-, Content- und Conversion-Berater.
-targetUrl bezeichnet die zu optimierende Seite, alle anderen URLs sind Wettbewerber.
-Falls für targetUrl wegen eines Abruffehlers keine Messwerte vorhanden sind, benenne diese Einschränkung und behandle keine Wettbewerberseite als Zielseite.
+targetUrl bezeichnet die zu optimierende Seite. Nutze ausschließlich die gelieferten bestehenden Seiten der eigenen Domain als Quellen und Linkziele.
+Es werden keine externen Wettbewerber als Inhaltsquellen berücksichtigt.
+Falls für targetUrl wegen eines Abruffehlers keine Messwerte vorhanden sind, benenne diese Einschränkung.
 Vergleiche ausschließlich die gelieferten Messwerte und erfinde keine gemessenen Eigenschaften.
 Wenn keine auswertbare Wettbewerberseite vorliegt, ist das ein gültiger Analysefall und kein Fehler:
 - Bewerte die Zielseite eigenständig anhand ihrer Messwerte, Suchintention und Keywords.
@@ -348,7 +320,7 @@ Erstelle zusätzlich zu Analyse und Empfehlungen eine vollständige, direkt umse
 - Nutze genau eine H1 und eine saubere H2-/H3-Hierarchie.
 - Plane je Abschnitt Typ, Zweck, detailliertes Content-Briefing, konkrete Kernpunkte, Zielwortzahl, Keywords und gegebenenfalls CTA.
 - Berücksichtige lokale Relevanz, Leistungen, Prozess, Vorteile, Vertrauen, Social Proof, FAQ und Conversion-Elemente, sofern sie zur Seite passen.
-- Der Prompt enthält den vollständigen Katalog der aktuell veröffentlichten Blogartikel. Wähle daraus nur thematisch passende interne Links aus.
+- Der Prompt enthält den Katalog der veröffentlichten Stadtseiten, Stadt-Dienstleistungsseiten und Blogartikel der eigenen Domain. Wähle daraus nur thematisch passende interne Links aus.
 - Verwende für interne Links ausschließlich unveränderte URLs aus availableBlogLinks. Erfinde keine Linkziele.
 - Ordne jeden Link über sectionOrder genau dem Abschnitt zu, in dem er später natürlich und hilfreich eingebaut werden soll.
 - Plane interne Links nutzerorientiert als Vertiefung konkreter Aussagen und nicht als isolierte Linkliste.
@@ -460,13 +432,18 @@ export async function POST(request: Request) {
     if (!(await authorizeAdminOwnerOrCron(request, input.ownerId))) {
       return NextResponse.json({ success: false, error: "Nicht autorisiert" }, { status: 401 });
     }
-    const targetUrl = new URL(input.targetUrl).toString();
-    const [searchDiscovery, blogLinks] = await Promise.all([
-      discoverSeoSearchResults(input.keyword, targetUrl, 5),
-      getPublishedBlogLinks(),
-    ]);
-    const competitorUrls = searchDiscovery.competitorUrls;
-    const uniqueUrls = [targetUrl, ...competitorUrls];
+    const availablePages = await getGenerationPages();
+    const targetPage = allowedGenerationPage(input.targetUrl, availablePages);
+    if (!targetPage) {
+      return NextResponse.json(
+        { success: false, error: "Als Quelle sind nur veröffentlichte Stadtseiten, Stadt-Dienstleistungsseiten und Blogartikel der eigenen Domain erlaubt." },
+        { status: 400 },
+      );
+    }
+    const targetUrl = new URL(targetPage.url, generationSiteUrl()).toString();
+    const searchDiscovery = await discoverSeoSearchResults(input.keyword, targetUrl, 5);
+    const blogLinks = availablePages.filter((page) => page.url !== targetPage.url);
+    const uniqueUrls = [targetUrl];
     const keywords = [
       ...new Set(
         [input.keyword, ...input.keywords].map((keyword) =>
@@ -475,13 +452,18 @@ export async function POST(request: Request) {
       ),
     ];
     const pageResults = await Promise.allSettled(
-      uniqueUrls.map((url) => analyzeSeoPage(url, keywords)),
+      uniqueUrls.map((url) => analyzeSeoPage(url, keywords, (candidate) => Boolean(allowedGenerationPage(candidate, availablePages)))),
     );
     const pages: SeoPageMetrics[] = [];
     const failures: Array<{ url: string; error: string }> = [];
     pageResults.forEach((result, index) => {
       if (result.status === "fulfilled") {
-        pages.push(result.value);
+        if (allowedGenerationPage(result.value.finalUrl, availablePages)) {
+          pages.push(result.value);
+        } else {
+          failures.push({ url: uniqueUrls[index], error: "Das Weiterleitungsziel ist keine erlaubte veröffentlichte Seite." });
+          console.warn("SEO source redirect rejected", result.value.finalUrl);
+        }
         return;
       }
       const reason =
@@ -530,6 +512,7 @@ export async function POST(request: Request) {
         blogLinks,
       });
     }
+    report = restrictGenerationAnalysis({ pages, report }, blogLinks).report;
     const document = await getAdminDatabase().collection("seoAnalyses").add({
       ownerId: input.ownerId,
       citySlug: input.citySlug,

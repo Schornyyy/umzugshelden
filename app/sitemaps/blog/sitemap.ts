@@ -1,6 +1,8 @@
 
-import { listBlogSubcategories } from "@/actions/blogSubcategoryActions";
-import { listBlogPagesBySubcategory } from "@/actions/blogPageActions";
+import {
+  listPublicBlogPages,
+  listPublicBlogSubcategories,
+} from "@/lib/blogPublicData";
 import type { MetadataRoute } from "next";
 
 // If domain changes, adjust here or move to config
@@ -30,7 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // Subcategories
-  const allSubcategories = await listBlogSubcategories();
+  const allSubcategories = await listPublicBlogSubcategories();
   for (const sub of allSubcategories) {
     entries.push({
       url: `${BASE_URL}/blog/${sub.mainCategory}/${sub.slug}`,
@@ -41,18 +43,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }
 
   // Blog pages (filter only visible)
-  for (const sub of allSubcategories) {
-    const pages = await listBlogPagesBySubcategory(sub.slug);
-    pages
-      .filter((p) => p.visible)
-      .forEach((p) => {
-        entries.push({
-          url: `${BASE_URL}/blog/${p.path || `${p.mainCategory}/${p.subcategorySlug}/${p.slug}`}`,
-          lastModified: new Date(p.updatedAt || p.createdAt),
-          priority: 0.8,
-          changeFrequency: "weekly",
-        });
-      });
+  const pages = await listPublicBlogPages();
+  for (const page of pages) {
+    entries.push({
+      url: `${BASE_URL}/blog/${page.path || `${page.mainCategory}/${page.subcategorySlug}/${page.slug}`}`,
+      lastModified: new Date(page.updatedAt || page.createdAt),
+      priority: 0.8,
+      changeFrequency: "weekly",
+    });
   }
 
   return entries;

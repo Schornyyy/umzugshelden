@@ -1,4 +1,4 @@
-import { getResolvedCityServicePage } from "@/actions/cityServicePageActions";
+import { getPublicResolvedCityServicePage } from "@/lib/cityPublicData";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import ServiceSchema from "@/components/ServiceSchema";
 import {
@@ -79,7 +79,7 @@ async function loadPageData(cityParam: string, serviceParam: string) {
   if (!isAllowedCity(cityName) || !isServiceKey(serviceKey)) return null;
 
   const citySlug = slugify(cityName);
-  const resolved = await getResolvedCityServicePage({
+  const resolved = await getPublicResolvedCityServicePage({
     cityName,
     citySlug,
     serviceKey,

@@ -4,6 +4,8 @@ import CityServiceLivePreview, {
   type BuilderViewport,
 } from "@/components/admin/city/CityServiceLivePreview";
 import MediathekDialog from "@/components/utils/MediathekDialog";
+import { useCompanyData } from "@/provider/CompanyDataProvider";
+import Link from "next/link";
 import { createCityServiceBlock } from "@/lib/cityServiceBlockFactory";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
 import {
@@ -761,6 +763,25 @@ function BlockInspector({
   const [activeTab, setActiveTab] = useState<"content" | "style" | "advanced">(
     "content",
   );
+  const { companyData } = useCompanyData();
+  if (block.type === "testimonials") {
+    return (
+      <div className='space-y-4'>
+        <h3 className='font-semibold text-slate-900'>Bewertungen</h3>
+        <CheckboxField label='Block anzeigen' checked={block.enabled} disabled={readOnly} onChange={(enabled) => onChange({ ...block, enabled })} />
+        <p className='text-sm leading-6 text-slate-600'>
+          Dieses Element verwendet überall dieselben zentral gepflegten
+          Bewertungskarten und dasselbe durchlaufende Karussell. Frühere lokale
+          Inhalte und Design-Einstellungen werden nicht mehr verwendet.
+        </p>
+        {companyData?.id && (
+          <Link href={`/admin/${companyData.id}/page-builder/bewertungen`} target='_blank' rel='noopener noreferrer' className='inline-block text-sm font-semibold text-blue-700 underline'>
+            Bewertungen zentral bearbeiten
+          </Link>
+        )}
+      </div>
+    );
+  }
   const patch = (values: Record<string, unknown>) =>
     onChange({ ...block, ...values } as CityServiceBlock);
 
@@ -886,41 +907,6 @@ function BlockInspector({
               <>
                 <Field label={`Wert ${index + 1}`} value={item.value} disabled={readOnly} onChange={(value) => update({ value })} />
                 <Field label='Bezeichnung' value={item.label} disabled={readOnly} onChange={(label) => update({ label })} />
-              </>
-            )}
-          />
-        </div>
-      )}
-
-      {block.type === "testimonials" && (
-        <div className='space-y-4'>
-          <Field label='Überschrift' value={block.heading} disabled={readOnly} onChange={(heading) => patch({ heading })} />
-          <label className='block'>
-            <span className={LABEL_CLASS}>Spalten</span>
-            <select className={INPUT_CLASS} value={block.columns} disabled={readOnly} onChange={(event) => patch({ columns: Number(event.target.value) as 1 | 2 | 3 })}>
-              <option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
-            </select>
-          </label>
-          <CollectionEditor
-            label='Kundenstimmen'
-            itemName='Bewertung'
-            values={block.items}
-            createValue={() => ({ quote: "Neue Kundenstimme", name: "Kundenname", role: "", rating: 5 as const })}
-            disabled={readOnly}
-            onChange={(items) => patch({ items })}
-            renderItem={(item, index, update) => (
-              <>
-                <TextareaField label={`Zitat ${index + 1}`} value={item.quote} disabled={readOnly} onChange={(quote) => update({ quote })} />
-                <Field label='Name' value={item.name} disabled={readOnly} onChange={(name) => update({ name })} />
-                <Field label='Zusatz' value={item.role || ""} disabled={readOnly} onChange={(role) => update({ role: role || undefined })} />
-                <MediaField label='Avatar' value={item.avatar} disabled={readOnly} optional onChange={(avatar) => update({ avatar })} />
-                <Field label='Quelle' value={item.source || ""} disabled={readOnly} placeholder='z. B. Google' onChange={(source) => update({ source: source || undefined })} />
-                <label className='block'>
-                  <span className={LABEL_CLASS}>Bewertung</span>
-                  <select className={INPUT_CLASS} value={item.rating} disabled={readOnly} onChange={(event) => update({ rating: Number(event.target.value) as 1 | 2 | 3 | 4 | 5 })}>
-                    {[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating} Sterne</option>)}
-                  </select>
-                </label>
               </>
             )}
           />

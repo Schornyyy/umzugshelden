@@ -1,16 +1,6 @@
 "use server";
 
-import { database } from "@/config/firebase";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  addDoc,
-  deleteDoc,
-  doc,
-  getDoc,
-} from "firebase/firestore";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { z } from "zod";
 import { cacheManager } from "@/lib/cache";
 import type { BlogSubcategory, AdminBlogMainCategory } from "@/types/blog/BlogSubcategory";
@@ -55,14 +45,16 @@ function revalidateBlogRoutes(slug?: string) {
 export async function createBlogSubcategory(input: CreateBlogSubcategoryInput): Promise<string> {
   const parsed = createSchema.parse(input);
   const slug = buildSlug(parsed.name);
-  const col = collection(database, COLLECTION);
+  const col = getAdminDatabase().collection(COLLECTION);
   // Uniqueness per mainCategory
-  const qDup = query(col, where("mainCategory", "==", parsed.mainCategory), where("slug", "==", slug));
-  const dupSnap = await getDocs(qDup);
+  const dupSnap = await col
+    .where("mainCategory", "==", parsed.mainCategory)
+    .where("slug", "==", slug)
+    .get();
   if (!dupSnap.empty) throw new Error("Unterkategorie existiert bereits");
 
   const now = Date.now();
-  const docRef = await addDoc(col, {
+  const docRef = await col.add({
     name: parsed.name,
     slug,
     mainCategory: parsed.mainCategory,
@@ -86,9 +78,8 @@ export async function listBlogSubcategories(main?: AdminBlogMainCategory): Promi
     }));
   }
 
-  const col = collection(database, COLLECTION);
-  const qRef = main ? query(col, where("mainCategory", "==", main)) : col;
-  const snap = await getDocs(qRef);
+  const col = getAdminDatabase().collection(COLLECTION);
+  const snap = await (main ? col.where("mainCategory", "==", main) : col).get();
   const items: BlogSubcategory[] = snap.docs.map((d) => {
     const data = d.data() as Omit<BlogSubcategory, 'id'> & { slug: string; name: string } & Partial<BlogSubcategory>;
     return {
@@ -107,22 +98,31 @@ export async function listBlogSubcategories(main?: AdminBlogMainCategory): Promi
 }
 
 export async function deleteBlogSubcategory(id: string): Promise<boolean> {
-  const ref = doc(database, COLLECTION, id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return false;
+  const ref = getAdminDatabase().collection(COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
   const data = snap.data() as { mainCategory?: AdminBlogMainCategory; slug?: string };
-  await deleteDoc(ref);
+  await ref.delete();
   invalidateCaches(data.mainCategory);
   revalidateBlogRoutes(data.slug);
   return true;
 }
 
-export async function getBlogSubcategoryBySlug(slug: string): Promise<BlogSubcategory | null> {
-  const col = collection(database, COLLECTION);
-  const qRef = query(col, where("slug", "==", slug));
-  const snap = await getDocs(qRef);
+export async function getBlogSubcategoryBySlug(
+  slug: string,
+  mainCategory?: AdminBlogMainCategory,
+): Promise<BlogSubcategory | null> {
+  const snap = await getAdminDatabase()
+    .collection(COLLECTION)
+    .where("slug", "==", slug)
+    .get();
   if (snap.empty) return null;
-  const d = snap.docs[0];
+  const d = mainCategory
+    ? snap.docs.find(
+        (document) => document.get("mainCategory") === mainCategory,
+      )
+    : snap.docs[0];
+  if (!d) return null;
   const data = d.data() as {
     name: string;
     slug: string;
@@ -149,9 +149,9 @@ const updateSchema = z.object({
 
 export async function updateBlogSubcategory(id: string, patch: z.infer<typeof updateSchema>): Promise<boolean> {
   const parsed = updateSchema.parse(patch);
-  const ref = doc(database, COLLECTION, id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return false;
+  const ref = getAdminDatabase().collection(COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
   const current = snap.data() as { mainCategory: AdminBlogMainCategory; slug: string };
   // Build a typed, Firestore-friendly update object
   const update: {
@@ -163,9 +163,7 @@ export async function updateBlogSubcategory(id: string, patch: z.infer<typeof up
   if (parsed.thumbnailUrl !== undefined) {
     update.thumbnailUrl = parsed.thumbnailUrl ? parsed.thumbnailUrl : null;
   }
-  const { updateDoc } = await import("firebase/firestore");
-  // Firestore accepts partial doc data; our object matches stored fields.
-  await updateDoc(ref, update);
+  await ref.update(update);
   invalidateCaches(current.mainCategory);
   revalidateBlogRoutes(current.slug);
   return true;

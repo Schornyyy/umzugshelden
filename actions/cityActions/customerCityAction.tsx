@@ -1,19 +1,6 @@
 "use server";
 
-import { database } from "@/config/firebase";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  setDoc,
-  and,
-} from "firebase/firestore";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { revalidatePath } from "next/cache";
 import { cacheManager, CACHE_KEYS, CACHE_OPTIONS } from "@/lib/cache";
 import { CityPage } from "@/types/city/CityPage";
@@ -103,25 +90,22 @@ export async function createCityPage(
     title: input.title,
     description: input.description,
   });
-  const colRef = collection(database, CITY_PAGES_COLLECTION);
+  const colRef = getAdminDatabase().collection(CITY_PAGES_COLLECTION);
   if (input.id) {
-    const ref = doc(database, CITY_PAGES_COLLECTION, input.id);
-    const existing = await getDoc(ref);
-    if (existing.exists()) {
+    const ref = colRef.doc(input.id);
+    const existing = await ref.get();
+    if (existing.exists) {
       // Remove undefined fields before updating
-      await updateDoc(ref, sanitize({ ...parsed, ownerId: ownerId }));
+      await ref.update(sanitize({ ...parsed, ownerId: ownerId }));
     } else {
       // Ensure no undefined values are sent on initial creation
-      await setDoc(ref, sanitize({ ...parsed, ownerId: ownerId }));
+      await ref.set(sanitize({ ...parsed, ownerId: ownerId }));
     }
     invalidateCityCaches(input.id, parsed.city);
     revalidateCityRoutes(parsed.city);
     return input.id;
   } else {
-    const docRef = await addDoc(
-      colRef,
-      sanitize({ ...parsed, ownerId: ownerId })
-    );
+    const docRef = await colRef.add(sanitize({ ...parsed, ownerId: ownerId }));
     invalidateCityCaches(docRef.id, parsed.city);
     revalidateCityRoutes(parsed.city);
     return docRef.id;
@@ -135,11 +119,11 @@ export async function getCityPage(
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGE_BY_ID(id),
     async () => {
-      const querySearch = query(
-        collection(database, CITY_PAGES_COLLECTION),
-        and(where("id", "==", id), where("ownerId", "==", ownerid))
-      );
-      const snap = await getDocs(querySearch);
+      const snap = await getAdminDatabase()
+        .collection(CITY_PAGES_COLLECTION)
+        .where("id", "==", id)
+        .where("ownerId", "==", ownerid)
+        .get();
 
       if (snap.docs.length == 0) return null;
 
@@ -158,12 +142,11 @@ export async function getCityPageByCity(
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGE_BY_CITY(city),
     async () => {
-      const colRef = collection(database, CITY_PAGES_COLLECTION);
-      const qCity = query(
-        colRef,
-        and(where("city", "==", city), where("ownerId", "==", ownerid))
-      );
-      const snap = await getDocs(qCity);
+      const snap = await getAdminDatabase()
+        .collection(CITY_PAGES_COLLECTION)
+        .where("city", "==", city)
+        .where("ownerId", "==", ownerid)
+        .get();
       if (snap.empty) return null;
       const d = snap.docs[0];
       return { id: d.id, ...(d.data() as Omit<CityPage, "id">) } as CityPage;
@@ -176,9 +159,10 @@ export async function listCityPages(ownerid: string): Promise<CityPage[]> {
   return cacheManager.getOrFetch(
     CACHE_KEYS.CITY_PAGES_LIST,
     async () => {
-      const colRef = collection(database, CITY_PAGES_COLLECTION);
-      const qOwner = query(colRef, where("ownerid", "==", ownerid));
-      const snap = await getDocs(qOwner);
+      const snap = await getAdminDatabase()
+        .collection(CITY_PAGES_COLLECTION)
+        .where("ownerid", "==", ownerid)
+        .get();
       return snap.docs.map((d) => ({
         id: d.id,
         ...(d.data() as Omit<CityPage, "id">),
@@ -206,17 +190,16 @@ export async function updateCityPage(
     title: patch.title ?? existing.title,
     description: patch.description ?? existing.description,
   };
-  const ref = doc(database, CITY_PAGES_COLLECTION, id);
-  await updateDoc(
-    ref,
-    sanitize({
+  await getAdminDatabase()
+    .collection(CITY_PAGES_COLLECTION)
+    .doc(id)
+    .update(sanitize({
       city: merged.city,
       faq: merged.faq as CityFAQ[],
       sections: merged.sections as CityPageSection[] | undefined,
       title: merged.title,
       description: merged.description,
-    })
-  );
+    }));
   invalidateCityCaches(id, merged.city);
   revalidateCityRoutes(merged.city);
   return true;
@@ -228,8 +211,7 @@ export async function deleteCityPage(
 ): Promise<boolean> {
   const existing = await getCityPage(id, ownerid);
   if (!existing) return false;
-  const ref = doc(database, CITY_PAGES_COLLECTION, id);
-  await deleteDoc(ref);
+  await getAdminDatabase().collection(CITY_PAGES_COLLECTION).doc(id).delete();
   invalidateCityCaches(id, existing.city);
   revalidateCityRoutes(existing.city);
   return true;

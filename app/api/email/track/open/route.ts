@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { database } from '@/config/firebase';
-import { collection, addDoc, serverTimestamp, doc, setDoc, getDoc, updateDoc, increment } from 'firebase/firestore';
+import { getAdminDatabase } from '@/lib/firebaseAdmin';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Returns a 1x1 transparent gif
 const GIF_BUFFER = Buffer.from(
@@ -15,22 +15,22 @@ export async function GET(req: NextRequest) {
     const companyEmail = searchParams.get('companyEmail');
 
     if (contractId) {
-      const eventsCol = collection(database, 'contracts', contractId, 'events');
-      await addDoc(eventsCol, {
+      const database = getAdminDatabase();
+      const contract = database.collection('contracts').doc(contractId);
+      await contract.collection('events').add({
         type: 'email_open',
         companyEmail: companyEmail || null,
         companyId: null,
         meta: null,
-        createdAt: serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
 
-      const statsRef = doc(database, 'contracts', contractId, 'metrics', 'stats');
-      const statsSnap = await getDoc(statsRef);
-      if (!statsSnap.exists()) {
-        await setDoc(statsRef, { views: 0, purchaseAttempts: 0, emailClicks: 0, emailOpens: 0, notifiedCount: 0 }, { merge: true });
+      const statsRef = contract.collection('metrics').doc('stats');
+      const statsSnap = await statsRef.get();
+      if (!statsSnap.exists) {
+        await statsRef.set({ views: 0, purchaseAttempts: 0, emailClicks: 0, emailOpens: 0, notifiedCount: 0 }, { merge: true });
       }
-      // Increment dedicated opens counter
-      await updateDoc(statsRef, { emailOpens: increment(1) });
+      await statsRef.update({ emailOpens: FieldValue.increment(1) });
     }
 
     return new NextResponse(GIF_BUFFER, {

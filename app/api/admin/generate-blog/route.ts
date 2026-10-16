@@ -5,8 +5,21 @@ import { remainingApiTime } from "@/lib/apiDeadline";
 import { authorizeAdminOwnerOrCron } from "@/lib/adminApiAuth";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { generateGeminiJson } from "@/lib/gemini";
-import { discoverSeoSearchResults } from "@/lib/googleSeoSearch";
 import { analyzeSeoPage } from "@/lib/seoPageAnalyzer";
+import { ensureGeneratedPageReviews } from "@/lib/cityServiceContentPolicy";
+import { getGenerationPages } from "@/lib/generationPages";
+import {
+  allowedGenerationPage,
+  filterGenerationContent,
+  generationSiteUrl,
+  type GenerationPage,
+} from "@/lib/generationPagePolicy";
+import {
+  blogKeywordRegistryId,
+  mergeBlogKeywords,
+  normalizeBlogKeyword,
+  type BlogKeywordType,
+} from "@/lib/blogKeywords";
 import { rawCities } from "@/statics/Lists";
 import {
   CITY_SERVICE_KEYS,
@@ -23,10 +36,14 @@ const BLOG_GENERATION_WORK_BUDGET_MS = 55_000;
 const WORKFLOW_COLLECTION = "blogGenerationWorkflows";
 const PROPOSAL_COLLECTION = "blogGenerationProposals";
 const ROTATION_COLLECTION = "blogGenerationRotation";
+const KEYWORD_REGISTRY_COLLECTION = "blogKeywordRegistry";
 const BLOG_COLLECTION = "blogPages_umzugshelden";
 const SUBCATEGORY_COLLECTION = "blogSubcategories_umzugshelden";
 const IMAGE_PLACEHOLDER = "/images/image.png";
 const BLOG_OPTIMIZATION_INTERVAL_MS = 30 * 24 * 60 * 60 * 1_000;
+const KEYWORD_RESERVATION_MS = 24 * 60 * 60 * 1_000;
+
+type InternalLinkCandidate = GenerationPage;
 
 const requestSchema = z.object({
   ownerId: z.string().trim().min(1).max(200),
@@ -205,6 +222,37 @@ function applyAuditedLinks(
   return { ...content, sections };
 }
 
+function ensureInternalLinks(
+  content: GeneratedContent,
+  candidates: InternalLinkCandidate[],
+  minimumLinks = 3,
+): GeneratedContent {
+  const sections = content.sections.map((section) => ({ ...section }));
+  const serialized = JSON.stringify(sections);
+  const missing = candidates
+    .filter((candidate) => !serialized.includes(`](${candidate.url})`));
+  const existingCount = countInternalLinks(content, candidates);
+
+  missing.slice(0, Math.max(0, minimumLinks - existingCount)).forEach((link, index) => {
+    const sectionIndex = Math.min(index, Math.max(0, sections.length - 1));
+    const section = sections[sectionIndex];
+    if (!section) return;
+    section.body = `${section.body}\n\nPassende Informationen finden Sie auf unserer Seite **[${link.title}](${link.url})**.`;
+  });
+
+  return { ...content, sections };
+}
+
+function countInternalLinks(
+  content: GeneratedContent,
+  candidates: InternalLinkCandidate[],
+): number {
+  const serialized = JSON.stringify(content.sections);
+  return candidates.filter((candidate) =>
+    serialized.includes(`](${candidate.url})`),
+  ).length;
+}
+
 function createBlocks(content: GeneratedContent): CityServiceBlock[] {
   const blocks = content.sections
     .filter((section) => section.type !== "cta")
@@ -361,8 +409,15 @@ async function loadBlogCatalog() {
           : "umzugsservice";
     return {
       id: document.id,
+      visible: data.visible === true,
       title: String(data.titel || ""),
       keywords: Array.isArray(data.keywords) ? data.keywords : [],
+      primaryKeyword:
+        typeof data.primaryKeyword === "string"
+          ? data.primaryKeyword
+          : Array.isArray(data.keywords)
+            ? String(data.keywords[0] || "")
+            : "",
       cityName: typeof data.cityName === "string" ? data.cityName : undefined,
       serviceKey:
         typeof data.serviceKey === "string"
@@ -384,6 +439,26 @@ async function loadBlogCatalog() {
   });
 }
 
+function createInternalLinkCatalog(
+  catalog: Awaited<ReturnType<typeof loadBlogCatalog>>,
+  serviceKey: CityServiceKey,
+  cityName: string,
+  availablePages: GenerationPage[],
+): InternalLinkCandidate[] {
+  const citySlug = slugify(cityName);
+  return [...availablePages].sort((left, right) => {
+    const score = (page: InternalLinkCandidate) => {
+      if (page.url === `/stadt/${citySlug}/${serviceKey}`) return 100;
+      if (page.url === `/stadt/${citySlug}`) return 90;
+      const article = catalog.find((entry) => entry.visible && entry.url === page.url);
+      return article
+        ? 20 + Number(article.serviceKey === serviceKey) * 30 + Number(article.cityName === cityName) * 20
+        : Number(page.url.endsWith(`/${serviceKey}`)) * 10;
+    };
+    return score(right) - score(left);
+  });
+}
+
 async function chooseSubcategory(mainCategory: AdminBlogMainCategory) {
   const snapshot = await getAdminDatabase()
     .collection(SUBCATEGORY_COLLECTION)
@@ -397,10 +472,6 @@ async function chooseSubcategory(mainCategory: AdminBlogMainCategory) {
     );
   }
   return String(document.get("slug"));
-}
-
-function normalizeKeyword(value: string) {
-  return value.trim().toLocaleLowerCase("de").replace(/\s+/gu, " ");
 }
 
 function zodCorrection(error: z.ZodError) {
@@ -671,6 +742,15 @@ export async function POST(request: Request) {
     }
 
     const workflow = workflowDocument.data()!;
+    const availablePages = await getGenerationPages();
+    const sourcePages = Array.isArray(workflow.competitorPages)
+      ? workflow.competitorPages.filter((page: { url?: string; finalUrl?: string }) =>
+          typeof page.url === "string" &&
+          allowedGenerationPage(page.url, availablePages) &&
+          typeof page.finalUrl === "string" &&
+          allowedGenerationPage(page.finalUrl, availablePages),
+        )
+      : [];
     const stage = String(workflow.stage);
     const serviceKey = workflow.serviceKey as CityServiceKey;
     const cityName = String(workflow.cityName);
@@ -679,6 +759,10 @@ export async function POST(request: Request) {
       const rejectedKeywords = Array.isArray(workflow.rejectedKeywords)
         ? workflow.rejectedKeywords
         : [];
+      const duplicateKeywordAttempts = Number(
+        workflow.duplicateKeywordAttempts || 0,
+      );
+      const longTailMode = duplicateKeywordAttempts >= 3;
       const keywordResponse = await generateGeminiJson({
           temperature: 0.45,
           timeoutMs: remainingApiTime(deadlineAt),
@@ -689,6 +773,9 @@ Finde genau ein informationsorientiertes Blog-Keyword mit möglichst hoher reale
 Das Thema muss ausschließlich zur angegebenen serviceKey gehören. Wähle niemals ein Thema einer anderen Dienstleistung.
 Bei serviceKey "umzugsservice" sind Entrümpelung, Wertstoffhöfe und Entsorgung ausdrücklich ausgeschlossen.
 Vermeide alle vorhandenen Blogthemen und rejectedKeywords. Das Keyword muss einen klaren, eigenständigen Suchintent besitzen.
+${longTailMode
+  ? "Die naheliegenden Hauptkeywords sind bereits belegt. Generiere deshalb zwingend ein spezifisches Long-Tail-Keyword mit klarer Frage, Zielgruppe, Situation oder lokalem Bedarf."
+  : "Bevorzuge zunächst ein relevantes, prägnantes Hauptkeyword. Wenn dieses belegt ist, wird automatisch auf Long-Tail-Keywords umgestellt."}
 Für Entrümpelung sind lokale Entsorgung, Wertstoffhöfe, Sperrmüll und kommunale Anlaufstellen besonders relevant.
 Erfinde keine konkrete Suchvolumen-Zahl.
 Antworte ausschließlich als JSON:
@@ -701,6 +788,7 @@ Antworte ausschließlich als JSON:
               keywords: page.keywords,
             })),
             rejectedKeywords,
+            keywordStrategy: longTailMode ? "long-tail" : "primary",
             correction: workflow.validationFeedback,
           }),
         });
@@ -710,10 +798,13 @@ Antworte ausschließlich als JSON:
         const correction = zodCorrection(keywordResult.error);
         const retryCount = Number(workflow.retryCount || 0) + 1;
         if (retryCount >= 3) {
+          const fallbackKeyword = longTailMode
+            ? `${serviceKey.replaceAll("-", " ")} ${cityName} Planung Checkliste`
+            : `${serviceKey.replaceAll("-", " ")} ${cityName} Ratgeber`;
           generated = keywordSchema.parse({
             serviceKey,
-            keyword: `${serviceKey.replaceAll("-", " ")} ${cityName} Ratgeber`,
-            titleIdea: `${serviceKey.replaceAll("-", " ")} in ${cityName}: der praktische Ratgeber`,
+            keyword: fallbackKeyword,
+            titleIdea: `${serviceKey.replaceAll("-", " ")} in ${cityName}: der praktische Planungsratgeber`,
             searchIntent:
               "Nutzer suchen praktische Informationen, Vorbereitungsschritte und Entscheidungshilfen zur lokalen Dienstleistung.",
             supportingKeywords: [
@@ -759,17 +850,57 @@ Antworte ausschließlich als JSON:
             "Das Thema gehörte zur falschen Dienstleistung und wird neu gewählt.",
         });
       }
-      const normalized = normalizeKeyword(generated.keyword);
-      const duplicate = catalog.some(
+      const normalized = normalizeBlogKeyword(generated.keyword);
+      let duplicate = catalog.some(
         (page) =>
-          normalizeKeyword(page.title) === normalized ||
+          normalizeBlogKeyword(page.primaryKeyword) === normalized ||
+          normalizeBlogKeyword(page.title) === normalized ||
           page.keywords.some(
-            (keyword: string) => normalizeKeyword(keyword) === normalized,
+            (keyword: string) =>
+              normalizeBlogKeyword(keyword) === normalized,
           ),
       );
+      const keywordType: BlogKeywordType = longTailMode
+        ? "long-tail"
+        : "primary";
+      if (!duplicate) {
+        const registryReference = database
+          .collection(KEYWORD_REGISTRY_COLLECTION)
+          .doc(blogKeywordRegistryId(generated.keyword));
+        duplicate = !(await database.runTransaction(async (transaction) => {
+          const registryDocument = await transaction.get(registryReference);
+          const registry = registryDocument.data();
+          const belongsToWorkflow =
+            registry?.workflowId === workflowReference.id;
+          const expiredReservation =
+            registry?.status === "reserved" &&
+            Number(registry.expiresAt || 0) < Date.now();
+          if (
+            registryDocument.exists &&
+            !belongsToWorkflow &&
+            !expiredReservation
+          ) {
+            return false;
+          }
+          transaction.set(registryReference, {
+            keyword: generated.keyword,
+            normalizedKeyword: normalized,
+            keywordType,
+            status: "reserved",
+            workflowId: workflowReference.id,
+            ownerId: input.ownerId,
+            expiresAt: Date.now() + KEYWORD_RESERVATION_MS,
+            updatedAt: Date.now(),
+          });
+          return true;
+        }));
+      }
       if (duplicate) {
         await workflowReference.update({
           rejectedKeywords: [...rejectedKeywords, generated.keyword],
+          duplicateKeywordAttempts: duplicateKeywordAttempts + 1,
+          keywordStrategy:
+            duplicateKeywordAttempts + 1 >= 3 ? "long-tail" : "primary",
           updatedAt: Date.now(),
         });
         return NextResponse.json({
@@ -777,11 +908,16 @@ Antworte ausschließlich als JSON:
           pending: true,
           workflowId: workflowReference.id,
           stage: "keyword",
-          message: "Das Thema existiert bereits; ein neuer Versuch ist nötig.",
+          message:
+            duplicateKeywordAttempts + 1 >= 3
+              ? "Die Hauptkeywords sind belegt; es wird jetzt ein Long-Tail-Keyword erzeugt."
+              : "Das Keyword existiert bereits; ein neuer Versuch ist nötig.",
         });
       }
       await workflowReference.update({
         keyword: generated.keyword,
+        primaryKeywordNormalized: normalized,
+        keywordType,
         titleIdea: generated.titleIdea,
         searchIntent: generated.searchIntent,
         supportingKeywords: generated.supportingKeywords,
@@ -801,29 +937,22 @@ Antworte ausschließlich als JSON:
 
     if (stage === "research") {
       const keyword = String(workflow.keyword);
-      const targetUrl = `${
-        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/u, "") ||
-        "https://www.umzugshelden.io"
-      }/blog`;
-      const [search, disposalSearch] = await Promise.all([
-        discoverSeoSearchResults(keyword, targetUrl, 5),
-        serviceKey === "entruempelung"
-          ? discoverSeoSearchResults(
-              `Wertstoffhof Entsorgung ${cityName}`,
-              targetUrl,
-              5,
-            ).catch(() => ({ competitorUrls: [] }))
-          : Promise.resolve({ competitorUrls: [] }),
-      ]);
+      const sources = createInternalLinkCatalog(catalog, serviceKey, cityName, availablePages).slice(0, 5);
       const results = await Promise.allSettled(
-        search.competitorUrls.map((url) => analyzeSeoPage(url, [keyword])),
+        sources.map((page) => analyzeSeoPage(
+          new URL(page.url, generationSiteUrl()).toString(),
+          [keyword],
+          (candidate) => Boolean(allowedGenerationPage(candidate, availablePages)),
+        )),
       );
-      const pages = results.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : [],
-      );
+      const pages = results.flatMap((result, index) => {
+        if (result.status === "fulfilled" && allowedGenerationPage(result.value.finalUrl, availablePages)) return [result.value];
+        console.warn("Blog source skipped", sources[index].url, result.status === "rejected" ? result.reason : "Unerlaubtes Weiterleitungsziel");
+        return [];
+      });
       await workflowReference.update({
         competitorPages: pages,
-        regionalResourceCandidates: disposalSearch.competitorUrls,
+        regionalResourceCandidates: [],
         stage: "blueprint",
         updatedAt: Date.now(),
       });
@@ -833,14 +962,14 @@ Antworte ausschließlich als JSON:
         workflowId: workflowReference.id,
         stage: "blueprint",
         message: pages.length
-          ? "Google-Wettbewerber wurden analysiert."
-          : "Es waren keine lesbaren Wettbewerber verfügbar; der eigene SEO-Plan wird erstellt.",
+          ? "Veröffentlichte Seiten der eigenen Domain wurden analysiert."
+          : "Keine eigenen Quellseiten waren lesbar; der SEO-Plan wird ohne externe Quellen erstellt.",
       });
     }
 
     if (stage === "blueprint") {
-      const competitorSummary = Array.isArray(workflow.competitorPages)
-        ? workflow.competitorPages.map(
+      const competitorSummary = sourcePages.length
+        ? sourcePages.map(
             (page: {
               url?: string;
               title?: string;
@@ -868,7 +997,7 @@ Antworte ausschließlich als JSON:
 Erstelle einen vollständigen Artikel-Blueprint, der den angegebenen Suchintent bestmöglich erfüllt.
 Lege Titel, Meta-Daten, Haupt- und Nebenkeywords sowie 8 bis 14 logisch aufeinander aufbauende Sektionen fest.
 Jede Sektion benötigt einen klaren Zweck, ein detailliertes Content-Briefing, konkrete Kernpunkte, Zielwortzahl und eigene Keywords.
-Nutze Wettbewerber nur als messbare Orientierung und kopiere keine Inhalte. Wenn keine Wettbewerber vorliegen, plane eigenständig anhand von Keyword und Suchintent.
+Nutze ausschließlich die gelieferten veröffentlichten Seiten der eigenen Domain als Quellen. Kopiere keine Inhalte. Wenn keine eigenen Quellseiten vorliegen, plane eigenständig anhand von Keyword und Suchintent.
 Der Artikel muss ausschließlich zur angegebenen serviceKey gehören und natürlich zur passenden Dienstleistung führen.
 Erfinde keine Preise, Garantien, Bewertungen, Suchvolumen oder Unternehmensfakten.
 Plane mindestens einen imageText-Abschnitt, einen praktischen Prozess oder eine Checkliste, FAQ und einen abschließenden CTA.
@@ -882,8 +1011,10 @@ Antworte ausschließlich als JSON:
           titleIdea: workflow.titleIdea,
           searchIntent: workflow.searchIntent,
           supportingKeywords: workflow.supportingKeywords,
-          competitorPages: competitorSummary,
-          currentArticle: workflow.previousBlog || null,
+          sourcePages: competitorSummary,
+          currentArticle: catalog.some((page) =>
+            page.id === workflow.targetBlogId && page.visible && allowedGenerationPage(page.url, availablePages),
+          ) ? filterGenerationContent(workflow.previousBlog || null, availablePages) : null,
           correction: workflow.validationFeedback,
         }),
       });
@@ -1053,17 +1184,14 @@ Antworte ausschließlich als JSON:
     }
 
     if (stage === "content" || stage === "expand") {
-      const relevantInternalLinks = catalog
-        .filter((page) => page.url !== "/blog/")
-        .sort(
-          (left, right) =>
-            Number(right.serviceKey === serviceKey) -
-            Number(left.serviceKey === serviceKey),
-        )
-        .slice(0, 20)
-        .map((page) => ({ title: page.title, url: page.url }));
-      const competitorSummary = Array.isArray(workflow.competitorPages)
-        ? workflow.competitorPages.map(
+      const relevantInternalLinks = createInternalLinkCatalog(
+        catalog,
+        serviceKey,
+        cityName,
+        availablePages,
+      ).slice(0, 20);
+      const competitorSummary = sourcePages.length
+        ? sourcePages.map(
             (page: {
               url?: string;
               title?: string;
@@ -1096,7 +1224,7 @@ Erstelle in diesem Paket den ersten zusammenhängenden Seitenteil mit 500 bis 70
 Die metaDescription muss zwingend 120 bis 155 Zeichen lang sein.
 Nutze mindestens einen imageText-Abschnitt; Bilder werden später als Platzhalter eingesetzt.
 Verwende interne Links ausschließlich aus internalLinks und formatiere sie als [Anchor](URL).
-Für Entrümpelung: Verlinke passende regionale Entsorgungsstellen nur, wenn eine plausible offizielle oder kommunale URL in regionalResourceCandidates vorhanden ist. Erfinde keine Anlaufstellen oder URLs.
+Verwende ausschließlich veröffentlichte Stadtseiten, Stadt-Dienstleistungsseiten und Blogartikel der eigenen Domain als Quellen und Linkziele. Keine externen Quellen oder URLs.
 Kopiere keine Formulierungen der Wettbewerber. Erfinde keine Preise, Garantien, Bewertungen oder Unternehmensfakten.
 Verwende keine Markdown-Überschriften in Textfeldern und keine unvollständigen Links.
 Antworte ausschließlich als JSON:
@@ -1108,10 +1236,9 @@ Antworte ausschließlich als JSON:
             titleIdea: workflow.titleIdea,
             searchIntent: workflow.searchIntent,
             supportingKeywords: workflow.supportingKeywords,
-            competitorPages: competitorSummary,
+            sourcePages: competitorSummary,
             internalLinks: relevantInternalLinks,
-            regionalResourceCandidates:
-              workflow.regionalResourceCandidates || [],
+            regionalResourceCandidates: [],
             correction: workflow.validationFeedback,
           }),
           });
@@ -1154,8 +1281,7 @@ Antworte ausschließlich als JSON:
               searchIntent: workflow.searchIntent,
               existingSections: firstPart.sections,
               internalLinks: relevantInternalLinks.slice(0, 10),
-              regionalResourceCandidates:
-                workflow.regionalResourceCandidates || [],
+              regionalResourceCandidates: [],
               correction: workflow.validationFeedback,
             }),
           });
@@ -1214,15 +1340,12 @@ Antworte ausschließlich als JSON:
 
     if (stage === "links") {
       const generated = contentSchema.parse(workflow.generatedContent);
-      const internalLinks = catalog
-        .filter((page) => page.url !== "/blog/")
-        .sort(
-          (left, right) =>
-            Number(right.serviceKey === serviceKey) -
-            Number(left.serviceKey === serviceKey),
-        )
-        .slice(0, 30)
-        .map((page) => ({ title: page.title, url: page.url }));
+      const internalLinks = createInternalLinkCatalog(
+        catalog,
+        serviceKey,
+        cityName,
+        availablePages,
+      ).slice(0, 30);
       const allowedUrls = new Set(internalLinks.map((link) => link.url));
       let linkedContent = generated;
       if (internalLinks.length) {
@@ -1236,6 +1359,7 @@ Prüfe den fertigen Blogartikel und wähle 3 bis 8 wirklich hilfreiche interne L
 Jeder anchorText muss exakt und unverändert als zusammenhängender Text in body des angegebenen sectionIndex vorkommen.
 Verwende jede Ziel-URL höchstens einmal. Nutze ausschließlich URLs aus allowedInternalLinks und keine externen URLs.
 Bevorzuge thematisch passende Artikel und natürliche Ankertexte; vermeide generische Wörter wie "hier" oder "mehr".
+Berücksichtige neben passenden Blogartikeln und Ratgebern auch die Stadtseite und die passende Stadt-Dienstleistungsseite.
 Antworte ausschließlich als JSON:
 {"links":[{"sectionIndex":number,"anchorText":string,"targetUrl":string}]}`,
             prompt: JSON.stringify({
@@ -1259,18 +1383,6 @@ Antworte ausschließlich als JSON:
               "Die interne Link-KI lieferte kein gültiges Format; geprüfte Links wurden regelbasiert ergänzt.",
             ),
           });
-          linkedContent = {
-            ...generated,
-            sections: generated.sections.map((section, index) => {
-              const link = internalLinks[index];
-              return link
-                ? {
-                    ...section,
-                    body: `${section.body}\n\nWeitere Informationen bietet unser Beitrag **[${link.title}](${link.url})**.`,
-                  }
-                : section;
-            }),
-          };
         } else {
           const audit = auditResult.data;
           linkedContent = applyAuditedLinks(
@@ -1280,6 +1392,7 @@ Antworte ausschließlich als JSON:
           );
         }
       }
+      linkedContent = filterGenerationContent(ensureInternalLinks(linkedContent, internalLinks), availablePages);
       await workflowReference.update({
         linkedContent,
         validationFeedback: null,
@@ -1296,7 +1409,7 @@ Antworte ausschließlich als JSON:
     }
 
     if (stage === "quality") {
-      const linkedContent = contentSchema.parse(workflow.linkedContent);
+      const linkedContent = filterGenerationContent(contentSchema.parse(workflow.linkedContent), availablePages);
       let quality: z.infer<typeof qualitySchema>;
       try {
         const qualityResponse = await generateGeminiJson({
@@ -1324,7 +1437,7 @@ Antworte ausschließlich als JSON:
       } catch (error) {
         console.warn("Blog quality AI failed; using structural score", error);
         const words = countWords(linkedContent.sections);
-        const hasLinks = JSON.stringify(linkedContent).includes("](/blog/");
+        const hasLinks = JSON.stringify(linkedContent).includes("](/");
         quality = {
           score: words >= 900 && hasLinks ? 85 : 75,
           summary:
@@ -1409,17 +1522,27 @@ Antworte ausschließlich als JSON:
         .collection(PROPOSAL_COLLECTION)
         .doc();
       const mainCategory = workflow.mainCategory as AdminBlogMainCategory;
+      const primaryKeyword = String(workflow.keyword);
+      const primaryKeywordNormalized =
+        typeof workflow.primaryKeywordNormalized === "string"
+          ? workflow.primaryKeywordNormalized
+          : normalizeBlogKeyword(primaryKeyword);
+      const keywordType: BlogKeywordType =
+        workflow.keywordType === "long-tail" ? "long-tail" : "primary";
       const draft = {
         title: linkedContent.title,
         slug: slugify(linkedContent.title),
         description: linkedContent.description,
         metaDescription: linkedContent.metaDescription,
-        keywords: linkedContent.keywords,
+        keywords: mergeBlogKeywords(primaryKeyword, linkedContent.keywords),
+        primaryKeyword,
+        primaryKeywordNormalized,
+        keywordType,
         cityName,
         serviceKey,
         mainCategory,
         subcategorySlug: String(workflow.subcategorySlug),
-        blocks: createBlocks(linkedContent),
+        blocks: ensureGeneratedPageReviews(createBlocks(linkedContent)),
       };
       const now = Date.now();
       await database.runTransaction(async (transaction) => {
@@ -1444,6 +1567,25 @@ Antworte ausschließlich als JSON:
             : [],
           createdAt: now,
         });
+        if (workflow.operation !== "optimize") {
+          transaction.set(
+            database
+              .collection(KEYWORD_REGISTRY_COLLECTION)
+              .doc(blogKeywordRegistryId(primaryKeyword)),
+            {
+              keyword: primaryKeyword,
+              normalizedKeyword: primaryKeywordNormalized,
+              keywordType,
+              status: "pending",
+              workflowId: workflowReference.id,
+              proposalId: proposalReference.id,
+              ownerId: input.ownerId,
+              expiresAt: null,
+              updatedAt: now,
+            },
+            { merge: true },
+          );
+        }
         transaction.update(workflowReference, {
           stage: "completed",
           proposalId: proposalReference.id,

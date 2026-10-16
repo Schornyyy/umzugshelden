@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getGenerationPages, restrictGenerationAnalysis } from "@/lib/generationPages";
+import { filterGenerationContent } from "@/lib/generationPagePolicy";
 import { FieldValue } from "firebase-admin/firestore";
 import { z } from "zod";
 import { remainingApiTime } from "@/lib/apiDeadline";
@@ -567,11 +569,13 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
-    const analysis = await getAnalysis(
+    const storedAnalysis = await getAnalysis(
       input.ownerId,
       `${input.citySlug}/${input.serviceKey}`,
       input.analysisId,
     );
+    const availablePages = await getGenerationPages();
+    const analysis = storedAnalysis ? restrictGenerationAnalysis(storedAnalysis, availablePages) : null;
     if (analysis?.targetRank && analysis.targetRank <= 5) {
       return NextResponse.json(
         {
@@ -824,6 +828,7 @@ export async function POST(request: Request) {
         job.linkedSections,
       );
 
+      draft = filterGenerationContent(draft, availablePages);
       const proposalId = await saveProposal({
         request: input,
         draft,
@@ -874,6 +879,7 @@ export async function POST(request: Request) {
         strategy: copy.strategy,
       });
     }
+    draft = filterGenerationContent(draft, availablePages);
     const proposalId = await saveProposal({
       request: input,
       draft,

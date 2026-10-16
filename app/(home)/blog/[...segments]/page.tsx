@@ -1,12 +1,10 @@
 import {
-  getBlogPageByPath,
-  listAllBlogPages,
-  listBlogPagesBySubcategory,
-} from "@/actions/blogPageActions";
-import {
-  getBlogSubcategoryBySlug,
-  listBlogSubcategories,
-} from "@/actions/blogSubcategoryActions";
+  getPublicBlogPageByPath,
+  getPublicBlogSubcategory,
+  listPublicBlogPages,
+  listPublicBlogPagesBySubcategory,
+  listPublicBlogSubcategories,
+} from "@/lib/blogPublicData";
 import { BlogBlocksRenderer } from "@/components/blog/BlogBlockRenderer";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import ContactForm from "@/components/ContactForm";
@@ -54,8 +52,8 @@ type Props = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { segments } = await params;
-  const page = await getBlogPageByPath(segments.join("/"));
-  if (page?.visible) {
+  const page = await getPublicBlogPageByPath(segments.join("/"));
+  if (page) {
     const description = page.meta_description || page.description.slice(0, 155);
     return {
       title: page.titel,
@@ -84,7 +82,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 
   if (segments.length === 2) {
-    const subcategory = await getBlogSubcategoryBySlug(segments[1]);
+    const subcategory = await getPublicBlogSubcategory(
+      segments[1],
+      segments[0] as AdminBlogMainCategory,
+    );
     if (subcategory?.mainCategory === segments[0]) {
       return {
         title: `${subcategory.name} | Blog`,
@@ -120,7 +121,7 @@ async function LegacyOverview({ segments }: { segments: string[] }) {
     const category = segments[0] as AdminBlogMainCategory;
     const info = MAIN_CATEGORY_INFO[category];
     if (!info) notFound();
-    const subcategories = (await listBlogSubcategories()).filter(
+    const subcategories = (await listPublicBlogSubcategories()).filter(
       (subcategory) => subcategory.mainCategory === category,
     );
     return (
@@ -144,11 +145,17 @@ async function LegacyOverview({ segments }: { segments: string[] }) {
   }
 
   if (segments.length === 2) {
-    const subcategory = await getBlogSubcategoryBySlug(segments[1]);
-    if (!subcategory || subcategory.mainCategory !== segments[0]) notFound();
-    const pages = (await listBlogPagesBySubcategory(subcategory.slug)).filter(
-      (page) => page.visible,
+    const subcategory = await getPublicBlogSubcategory(
+      segments[1],
+      segments[0] as AdminBlogMainCategory,
     );
+    if (!subcategory || subcategory.mainCategory !== segments[0]) notFound();
+    const pages = (
+      await listPublicBlogPagesBySubcategory(
+        subcategory.slug,
+        subcategory.mainCategory,
+      )
+    ).filter((page) => page.visible);
     return (
       <main className='mx-auto max-w-5xl space-y-8 px-4 py-10'>
         <nav className='text-xs text-slate-500'>
@@ -171,7 +178,7 @@ async function BlogPageView({ page }: { page: BlogPage }) {
   const settings = normalizeBlogPageSettings(page.settings);
   const path = page.path || `${page.mainCategory}/${page.subcategorySlug}/${page.slug}`;
   const segments = path.split("/");
-  const allPages = await listAllBlogPages();
+  const allPages = await listPublicBlogPages();
   const labels = new Map(allPages.map((item) => [item.path, item.titel]));
   const contentWidthClass = {
     narrow: "max-w-4xl",
@@ -330,9 +337,8 @@ async function BlogPageView({ page }: { page: BlogPage }) {
 
 export default async function DynamicBlogPage({ params }: Props) {
   const { segments } = await params;
-  const page = await getBlogPageByPath(segments.join("/"));
+  const page = await getPublicBlogPageByPath(segments.join("/"));
   if (page) {
-    if (!page.visible) notFound();
     return <BlogPageView page={page} />;
   }
   return <LegacyOverview segments={segments} />;

@@ -1,5 +1,6 @@
 import type { AdminBlogMainCategory } from "@/types/blog/AdminBlogCategory";
 import type { CityServiceBlock, CityServiceKey } from "@/types/city/CityServicePage";
+import type { BlogKeywordType } from "@/lib/blogKeywords";
 
 export type BlogGenerationStage =
   | "keyword"
@@ -19,6 +20,9 @@ export interface GeneratedBlogDraft {
   description: string;
   metaDescription: string;
   keywords: string[];
+  primaryKeyword: string;
+  primaryKeywordNormalized: string;
+  keywordType: BlogKeywordType;
   cityName: string;
   serviceKey: CityServiceKey;
   mainCategory: AdminBlogMainCategory;

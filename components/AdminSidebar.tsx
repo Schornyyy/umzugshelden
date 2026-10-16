@@ -27,6 +27,7 @@ import {
   Inbox,
   ListChecks,
   MapPinned,
+  MessageSquareQuote,
   PackageCheck,
   UsersRound,
 } from "lucide-react";
@@ -91,6 +92,17 @@ const data = {
           title: "Material-Preisliste",
           url: "/material-preisliste",
           icon: PackageCheck,
+        },
+      ],
+    },
+    {
+      title: "Page-builder Elemente",
+      url: "/page-builder",
+      items: [
+        {
+          title: "Bewertungen",
+          url: "/page-builder/bewertungen",
+          icon: MessageSquareQuote,
         },
       ],
     },

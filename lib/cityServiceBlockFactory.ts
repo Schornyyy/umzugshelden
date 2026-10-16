@@ -180,15 +180,7 @@ export function createCityServiceBlock(
         type,
         heading: "Das sagen unsere Kunden",
         columns: 3,
-        items: [
-          {
-            quote: "Von der Planung bis zum letzten Karton lief alles zuverlässig und freundlich.",
-            name: "Max Mustermann",
-            role: "Privatumzug in {city}",
-            source: "Google",
-            rating: 5,
-          },
-        ],
+        items: [],
       };
     case "gallery":
       return {

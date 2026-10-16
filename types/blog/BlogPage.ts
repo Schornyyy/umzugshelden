@@ -3,6 +3,7 @@ import type {
   CityServiceBlock,
   CityServiceKey,
 } from "@/types/city/CityServicePage";
+import type { BlogKeywordType } from "@/lib/blogKeywords";
 
 export interface BlogPageSection {
   titel: string;            // section heading
@@ -125,6 +126,9 @@ export interface BlogPage {
   mainCategory: AdminBlogMainCategory; // denormalized for querying
   thumbnailUrl?: string;    // preview image
   keywords?: string[];      // SEO keywords
+  primaryKeyword?: string;  // unique primary SEO keyword
+  primaryKeywordNormalized?: string;
+  keywordType?: BlogKeywordType;
   meta_description?: string;// SEO meta description
   sections: BlogPageSection[]; // ordered sections
   faq: BlogPageFAQEntry[];  // FAQ entries

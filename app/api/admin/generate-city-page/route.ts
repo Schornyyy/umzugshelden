@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { getGenerationPages, restrictGenerationAnalysis } from "@/lib/generationPages";
+import { filterGenerationContent } from "@/lib/generationPagePolicy";
 import { z } from "zod";
 import { API_WORK_BUDGET_MS, remainingApiTime } from "@/lib/apiDeadline";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { generateGeminiJson } from "@/lib/gemini";
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
 import { generatePageFromSeoBlueprint } from "@/lib/seoBlueprintPageGenerator";
+import { ensureGeneratedPageReviews } from "@/lib/cityServiceContentPolicy";
 import type { GeneratedCityPageDraft } from "@/types/city/CityPageGeneration";
 import {
   CITY_SERVICE_KEYS,
@@ -336,11 +339,13 @@ export async function POST(request: Request) {
         { status: 401 },
       );
     }
-    const analysis = await getAnalysis(
+    const storedAnalysis = await getAnalysis(
       input.ownerId,
       input.citySlug,
       input.analysisId,
     );
+    const availablePages = await getGenerationPages();
+    const analysis = storedAnalysis ? restrictGenerationAnalysis(storedAnalysis, availablePages) : null;
     if (input.analysisId && !analysis?.report.pageBlueprint) {
       throw new Error(
         "Diese ältere Analyse enthält noch keinen vollständigen KI-Blueprint. Bitte eine neue SEO-Analyse starten.",
@@ -363,7 +368,7 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({
         success: true,
-        draft,
+        draft: filterGenerationContent(draft, availablePages),
         usedAnalysis: true,
         promptCount: Math.max(
           1,
@@ -384,16 +389,16 @@ export async function POST(request: Request) {
       imageAlt: input.currentImageAlt,
     };
     const draft: GeneratedCityPageDraft = {
-      blocks: createBlocks(
+      blocks: ensureGeneratedPageReviews(createBlocks(
         input.cityName,
         input.currentImage,
         input.currentImageAlt,
         copy,
-      ),
+      )),
       seo,
       strategy: copy.strategy,
     };
-    return NextResponse.json({ success: true, draft, usedAnalysis: Boolean(analysis) });
+    return NextResponse.json({ success: true, draft: filterGenerationContent(draft, availablePages), usedAnalysis: Boolean(analysis) });
   } catch (error) {
     console.error("City page generation error", error);
     if (error instanceof z.ZodError) {

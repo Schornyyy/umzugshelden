@@ -1,4 +1,4 @@
-import { getResolvedCityLandingPage } from "@/actions/cityServicePageActions";
+import { getPublicResolvedCityLandingPage } from "@/lib/cityPublicData";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import ServiceSchema from "@/components/ServiceSchema";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
@@ -49,7 +49,10 @@ async function loadCityLandingData(cityParam: string) {
   }
 
   const citySlug = slugify(cityName);
-  const resolved = await getResolvedCityLandingPage({ cityName, citySlug });
+  const resolved = await getPublicResolvedCityLandingPage({
+    cityName,
+    citySlug,
+  });
   const nearbyCities = getNearbyCities(cityName);
   const localAreaBlock = resolved.blocks.find(
     (block) => block.type === "localArea" && block.enabled,

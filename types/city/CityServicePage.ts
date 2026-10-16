@@ -174,6 +174,7 @@ export type CityServiceStatsBlock = CityServiceBlockBase & {
 
 export type CityServiceTestimonialsBlock = CityServiceBlockBase & {
   type: "testimonials";
+  // Legacy page data remains readable; content and design now come from the global reviews element.
   heading: string;
   items: {
     quote: string;

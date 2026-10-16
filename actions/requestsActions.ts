@@ -1,21 +1,9 @@
 "use server";
 
-import { database } from "@/config/firebase";
 import { createCustomerNumber } from "@/lib/crmIdentifiers";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import type { CrmCustomer } from "@/types/Crm";
 import { Request, RequestNotice } from "@/types/Request";
-import {
-	and,
-	collection,
-	deleteDoc,
-	doc,
-	getDocs,
-	query,
-	setDoc,
-	updateDoc,
-	where,
-	writeBatch,
-} from "firebase/firestore";
 
 const REQUEST_COLLECTION = "requests_umzugshelden";
 const CRM_COLLECTION = "crm_customers_umzugshelden";
@@ -31,7 +19,6 @@ export async function createRequest(
 		imageUrls?: string[];
 	}
 ): Promise<Request> {
-	const colRef = collection(database, REQUEST_COLLECTION);
 	const createdAt = Date.now();
 	const requestId = crypto.randomUUID();
 
@@ -76,9 +63,10 @@ export async function createRequest(
 		updatedAt: createdAt,
 	};
 
-	const batch = writeBatch(database);
-	batch.set(doc(colRef, request.id), request);
-	batch.set(doc(database, CRM_COLLECTION, customer.id), customer);
+	const database = getAdminDatabase();
+	const batch = database.batch();
+	batch.set(database.collection(REQUEST_COLLECTION).doc(request.id), request);
+	batch.set(database.collection(CRM_COLLECTION).doc(customer.id), customer);
 	await batch.commit();
 	return request;
 }
@@ -88,21 +76,21 @@ export async function getRequestById(
 	requestId: string,
 	ownerId: string
 ): Promise<Request | null> {
-	const colRef = collection(database, REQUEST_COLLECTION);
-	const qRef = query(
-		colRef,
-		and(where("id", "==", requestId), where("ownerId", "==", ownerId))
-	);
-	const docsRef = await getDocs(qRef);
-	if (docsRef.docs.length === 0) return null;
-	return docsRef.docs[0].data() as Request;
+	const document = await getAdminDatabase()
+		.collection(REQUEST_COLLECTION)
+		.doc(requestId)
+		.get();
+	if (!document.exists) return null;
+	const request = document.data() as Request;
+	return request.ownerId === ownerId ? request : null;
 }
 
 // List all requests for an owner
 export async function listRequestsByOwner(ownerId: string): Promise<Request[]> {
-	const colRef = collection(database, REQUEST_COLLECTION);
-	const qRef = query(colRef, where("ownerId", "==", ownerId));
-	const docsRef = await getDocs(qRef);
+	const docsRef = await getAdminDatabase()
+		.collection(REQUEST_COLLECTION)
+		.where("ownerId", "==", ownerId)
+		.get();
 	if (docsRef.empty) return [];
 	return docsRef.docs.map((d) => d.data() as Request);
 }
@@ -126,9 +114,10 @@ export async function updateRequest(
 		notices: patch.notices ?? existing.notices,
 	};
 
-	const colRef = collection(database, REQUEST_COLLECTION);
-	const docRef = doc(colRef, requestId);
-	await updateDoc(docRef, { ...updated });
+	await getAdminDatabase()
+		.collection(REQUEST_COLLECTION)
+		.doc(requestId)
+		.update({ ...updated });
 	return updated;
 }
 
@@ -139,9 +128,7 @@ export async function deleteRequest(
 ): Promise<{ id: string } | null> {
 	const existing = await getRequestById(requestId, ownerId);
 	if (!existing) return null;
-	const colRef = collection(database, REQUEST_COLLECTION);
-	const docRef = doc(colRef, requestId);
-	await deleteDoc(docRef);
+	await getAdminDatabase().collection(REQUEST_COLLECTION).doc(requestId).delete();
 	return { id: requestId };
 }
 
@@ -165,8 +152,9 @@ export async function addRequestNotice(
 		notices: [...existing.notices, newNotice],
 	};
 
-	const colRef = collection(database, REQUEST_COLLECTION);
-	const docRef = doc(colRef, requestId);
-	await updateDoc(docRef, { notices: updated.notices });
+	await getAdminDatabase()
+		.collection(REQUEST_COLLECTION)
+		.doc(requestId)
+		.update({ notices: updated.notices });
 	return updated;
 }

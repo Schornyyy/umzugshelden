@@ -1,6 +1,7 @@
 import ContactForm from "@/components/ContactForm";
 import CityServiceBeforeAfter from "@/components/city/CityServiceBeforeAfter";
 import CityServiceCarousel from "@/components/city/CityServiceCarousel";
+import ReviewCarousel from "@/components/reviews/ReviewCarousel";
 import SemanticHeading from "@/components/SemanticHeading";
 import { Button } from "@/components/ui/button";
 import FAQBlock from "@/components/utils/FAQBlock";
@@ -28,8 +29,6 @@ import {
   MailIcon,
   MapPinIcon,
   PhoneIcon,
-  QuoteIcon,
-  StarIcon,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -60,12 +59,6 @@ const cardColumns = {
 } as const;
 
 const checkColumns = {
-  1: "grid-cols-1",
-  2: "md:grid-cols-2",
-  3: "md:grid-cols-3",
-} as const;
-
-const singleToTripleColumns = {
   1: "grid-cols-1",
   2: "md:grid-cols-2",
   3: "md:grid-cols-3",
@@ -116,7 +109,7 @@ function BlockStyleBoundary({
   editorMode: boolean;
   selected: boolean;
 }) {
-  const style = block.style;
+  const style = block.type === "testimonials" ? undefined : block.style;
   const variables = {
     ...(style?.backgroundColor
       ? { "--builder-background-color": style.backgroundColor }
@@ -871,40 +864,7 @@ export default function CityServiceBlocksRenderer({
           }
 
           if (block.type === "testimonials") {
-            const isNavy = block.tone === "navy";
-            return (
-              <section key={block.id} className={`${sectionTone[block.tone]} py-20`}>
-                <div className='container mx-auto max-w-6xl px-4'>
-                  <SemanticHeading
-                    level={block.headingLevel}
-                    className={`text-center font-sans text-3xl font-bold md:text-4xl ${isNavy ? "text-white" : "text-navy"}`}>
-                    {richText(block.heading)}
-                  </SemanticHeading>
-                  <div className={`mt-10 grid gap-6 ${singleToTripleColumns[block.columns]}`}>
-                    {block.items.map((item, index) => (
-                      <figure key={`${block.id}-testimonial-${index}`} className={isNavy ? "border border-white/10 bg-white/5 p-6" : "border border-gray-100 bg-white p-6 shadow-sm"}>
-                        <QuoteIcon className='h-8 w-8 text-primary' aria-hidden='true' />
-                        <div className='mt-4 flex gap-1' aria-label={`${item.rating} von 5 Sternen`}>
-                          {Array.from({ length: 5 }, (_, starIndex) => (
-                            <StarIcon key={starIndex} className={`h-4 w-4 ${starIndex < item.rating ? "fill-primary text-primary" : "text-gray-300"}`} />
-                          ))}
-                        </div>
-                        <blockquote className={`mt-4 font-body leading-relaxed ${isNavy ? "text-gray-200" : "text-gray-700"}`}>„{richText(item.quote)}“</blockquote>
-                        <figcaption className='mt-5 flex items-center gap-3'>
-                          {item.avatar && (
-                            <Image src={item.avatar} alt={text(item.name)} width={48} height={48} className='h-12 w-12 rounded-full object-cover' />
-                          )}
-                          <span>
-                            <strong className={`block font-sans text-sm ${isNavy ? "text-white" : "text-navy"}`}>{richText(item.name)}</strong>
-                            {(item.role || item.source) && <span className={`mt-1 block text-xs ${isNavy ? "text-gray-400" : "text-gray-500"}`}>{[item.role, item.source].filter(Boolean).map((value) => text(value!)).join(" · ")}</span>}
-                          </span>
-                        </figcaption>
-                      </figure>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            );
+            return <ReviewCarousel key={block.id} />;
           }
 
           if (block.type === "gallery") {

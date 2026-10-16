@@ -1,0 +1,55 @@
+.viewport {
+  overflow: hidden;
+  margin-inline: auto;
+}
+
+.track {
+  display: flex;
+  width: max-content;
+}
+
+.moving {
+  animation: reviews-scroll linear infinite;
+}
+
+.group {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.card {
+  width: min(24rem, 85vw);
+  overflow-wrap: anywhere;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: white;
+  padding: 1.5rem;
+}
+
+.viewport:hover .track,
+.viewport:focus-within .track,
+.track[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+@keyframes reviews-scroll {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewport {
+    overflow-x: auto;
+  }
+
+  .moving {
+    animation: none;
+  }
+
+  .group[aria-hidden="true"] {
+    display: none;
+  }
+}

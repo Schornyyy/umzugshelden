@@ -1,19 +1,7 @@
 "use server";
 
-import { database } from "@/config/firebase";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import type { Reference } from "@/types/ReferencType";
-import {
-	collection,
-	addDoc,
-	doc,
-	getDoc,
-	getDocs,
-	query,
-	where,
-	updateDoc,
-	deleteDoc,
-	type UpdateData,
-} from "firebase/firestore";
 
 const REFERENCES_COLLECTION = "references_umzugshelden";
 
@@ -42,8 +30,7 @@ export async function clearAllReferenceCaches() {
 
 export async function createReference(ref: Omit<Reference, 'id'>): Promise<string> {
 	if (!ref?.comanyName) throw new Error("Reference must have a company name");
-	const col = collection(database, REFERENCES_COLLECTION);
-	const res = await addDoc(col, ref as Record<string, unknown>);
+	const res = await getAdminDatabase().collection(REFERENCES_COLLECTION).add(ref);
 	// new document created -> invalidate published list cache
 	clearPublishedReferencesCache();
 	return res.id;
@@ -55,17 +42,15 @@ export async function getReferenceById(id: string): Promise<(Reference & { id: s
 	const cached = refByIdCache.get(id);
 	if (cached && cached.expires > Date.now()) return cached.value;
 
-	const refDoc = doc(database, REFERENCES_COLLECTION, id);
-	const snap = await getDoc(refDoc);
-	if (!snap.exists()) return null;
+	const snap = await getAdminDatabase().collection(REFERENCES_COLLECTION).doc(id).get();
+	if (!snap.exists) return null;
 	const val = { ...(snap.data() as Reference), id: snap.id };
 	refByIdCache.set(id, { value: val, expires: Date.now() + CACHE_TTL_MS });
 	return val;
 }
 
 export async function listReferences(): Promise<Array<Reference & { id: string }>> {
-	const col = collection(database, REFERENCES_COLLECTION);
-	const snaps = await getDocs(col);
+	const snaps = await getAdminDatabase().collection(REFERENCES_COLLECTION).get();
 	return snaps.docs.map((d) => ({ ...(d.data() as Reference), id: d.id }));
 }
 
@@ -74,9 +59,10 @@ export async function listPublishedReferences(max?: number): Promise<Array<Refer
 	const cached = publishedListCache.get(key);
 	if (cached && cached.expires > Date.now()) return cached.value;
 
-	const col = collection(database, REFERENCES_COLLECTION);
-	const q = query(col, where("public", "==", true));
-	const snaps = await getDocs(q);
+	const snaps = await getAdminDatabase()
+		.collection(REFERENCES_COLLECTION)
+		.where("public", "==", true)
+		.get();
 	const list = snaps.docs.map((d) => ({ ...(d.data() as Reference), id: d.id })).slice(0, max ? max : 1000);
 	publishedListCache.set(key, { value: list, expires: Date.now() + CACHE_TTL_MS });
 	return list;
@@ -84,15 +70,15 @@ export async function listPublishedReferences(max?: number): Promise<Array<Refer
 
 export async function getReferencesByBranch(branch: string): Promise<Array<Reference & { id: string }>> {
 	if (!branch) return [];
-	const col = collection(database, REFERENCES_COLLECTION);
-	const q = query(col, where("companyBranch", "==", branch));
-	const snaps = await getDocs(q);
+	const snaps = await getAdminDatabase()
+		.collection(REFERENCES_COLLECTION)
+		.where("companyBranch", "==", branch)
+		.get();
 	return snaps.docs.map((d) => ({ ...(d.data() as Reference), id: d.id }));
 }
 export async function updateReference(id: string, updates: Partial<Reference>): Promise<void> {
  if (!id) throw new Error("Missing reference id");
- const refDoc = doc(database, REFERENCES_COLLECTION, id);
- await updateDoc(refDoc, updates as UpdateData<Reference>);
+ await getAdminDatabase().collection(REFERENCES_COLLECTION).doc(id).set(updates, { merge: true });
  // invalidate caches
  clearReferenceCache(id);
  clearPublishedReferencesCache();
@@ -101,8 +87,7 @@ export async function updateReference(id: string, updates: Partial<Reference>): 
 
 export async function deleteReference(id: string): Promise<void> {
  if (!id) throw new Error("Missing reference id");
- const refDoc = doc(database, REFERENCES_COLLECTION, id);
- await deleteDoc(refDoc);
+ await getAdminDatabase().collection(REFERENCES_COLLECTION).doc(id).delete();
  // invalidate caches
  clearReferenceCache(id);
  clearPublishedReferencesCache();
@@ -114,20 +99,18 @@ export async function deleteReference(id: string): Promise<void> {
  */
 export async function upsertReferenceByCompany(ref: Omit<Reference, 'id'>): Promise<string> {
 	if (!ref?.comanyName) throw new Error("Reference must have a company name");
-	const col = collection(database, REFERENCES_COLLECTION);
-	const q = query(col, where("comanyName", "==", ref.comanyName));
-	const snaps = await getDocs(q);
+	const collection = getAdminDatabase().collection(REFERENCES_COLLECTION);
+	const snaps = await collection.where("comanyName", "==", ref.comanyName).get();
 	if (snaps.docs.length > 0) {
-	 await updateDoc(doc(database, REFERENCES_COLLECTION, snaps.docs[0].id), ref as UpdateData<Reference>);
+	 await snaps.docs[0].ref.set(ref, { merge: true });
 	 // invalidate
 	 clearReferenceCache(snaps.docs[0].id);
 	 clearPublishedReferencesCache();
 	 return snaps.docs[0].id;
 	}
 	
- 	const created = await addDoc(col, ref as Record<string, unknown>);
+	const created = await collection.add(ref);
  	// invalidate published list cache
  	clearPublishedReferencesCache();
  	return created.id;
 }
-

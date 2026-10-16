@@ -1,20 +1,7 @@
 "use server";
 
-import { database } from "@/config/firebase";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import type { User } from "@/types/UserType";
-import {
-	collection,
-	addDoc,
-	doc,
-  
-	getDoc,
-	getDocs,
-	query,
-	where,
-	updateDoc,
-	deleteDoc,
-} from "firebase/firestore";
-import type { UpdateData, DocumentData } from "firebase/firestore";
 import { redirect } from "next/navigation";
 
 const USERS_COLLECTION = "users_umzugshelden";
@@ -25,8 +12,7 @@ const USERS_COLLECTION = "users_umzugshelden";
  */
 export async function createUser(user: User): Promise<string> {
 	if (!user?.email) throw new Error("User must have an email");
-	const col = collection(database, USERS_COLLECTION);
-	const ref = await addDoc(col, user);
+	const ref = await getAdminDatabase().collection(USERS_COLLECTION).add(user);
 	return ref.id;
 }
 
@@ -35,9 +21,8 @@ export async function createUser(user: User): Promise<string> {
  */
 export async function getUserById(id: string): Promise<(User & { id: string }) | null> {
 	if (!id) return null;
-	const ref = doc(database, USERS_COLLECTION, id);
-	const snap = await getDoc(ref);
-	if (!snap.exists()) return null;
+	const snap = await getAdminDatabase().collection(USERS_COLLECTION).doc(id).get();
+	if (!snap.exists) return null;
 	return { ...(snap.data() as User), id: snap.id };
 }
 
@@ -46,9 +31,11 @@ export async function getUserById(id: string): Promise<(User & { id: string }) |
  */
 export async function getUserByEmail(email: string): Promise<(User & { id: string }) | null> {
 	if (!email) return null;
-	const col = collection(database, USERS_COLLECTION);
-	const q = query(col, where("email", "==", email));
-	const snaps = await getDocs(q);
+	const snaps = await getAdminDatabase()
+		.collection(USERS_COLLECTION)
+		.where("email", "==", email)
+		.limit(1)
+		.get();
 	const first = snaps.docs[0];
 	if (!first) return null;
 	return { ...(first.data() as User), id: first.id };
@@ -59,8 +46,10 @@ export async function getUserByEmail(email: string): Promise<(User & { id: strin
  */
 export async function updateUser(id: string, updates: Partial<User>): Promise<void> {
 	if (!id) throw new Error("Missing user id");
-	const ref = doc(database, USERS_COLLECTION, id);
-		await updateDoc(ref, updates as UpdateData<DocumentData>);
+	await getAdminDatabase()
+		.collection(USERS_COLLECTION)
+		.doc(id)
+		.set(updates, { merge: true });
 }
 
 /**
@@ -68,16 +57,14 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<vo
  */
 export async function deleteUser(id: string): Promise<void> {
 	if (!id) throw new Error("Missing user id");
-	const ref = doc(database, USERS_COLLECTION, id);
-	await deleteDoc(ref);
+	await getAdminDatabase().collection(USERS_COLLECTION).doc(id).delete();
 }
 
 /**
  * List all users (simple helper).
  */
 export async function listUsers(): Promise<Array<User & { id: string }>> {
-	const col = collection(database, USERS_COLLECTION);
-	const snaps = await getDocs(col);
+	const snaps = await getAdminDatabase().collection(USERS_COLLECTION).get();
 	return snaps.docs.map((d) => ({ ...(d.data() as User), id: d.id }));
 }
 

@@ -4,6 +4,7 @@ import type {
   CityServiceSeoSettings,
 } from "@/types/city/CityServicePage";
 import type { GeneratedCityPageDraft } from "@/types/city/CityPageGeneration";
+import { createCityServiceBlock } from "@/lib/cityServiceBlockFactory";
 
 export const CITY_SERVICE_IMAGE_PLACEHOLDER =
   "/images/Umzugsunternhemen_olpe.png";
@@ -60,7 +61,32 @@ export function mergePreservedBuilderBlocks(
   const preserved = previousBlocks.filter(
     (block) => !generatedTypes.has(block.type),
   );
-  return [...generatedBlocks, ...structuredClone(preserved)];
+  return ensureGeneratedPageReviews([
+    ...generatedBlocks,
+    ...structuredClone(preserved),
+  ]);
+}
+
+export function ensureGeneratedPageReviews(
+  blocks: CityServiceBlock[],
+): CityServiceBlock[] {
+  const existing = blocks.find((block) => block.type === "testimonials");
+  if (existing) {
+    return blocks.flatMap<CityServiceBlock>((block) =>
+      block.type !== "testimonials"
+        ? [block]
+        : block === existing
+          ? [{ ...block, enabled: true }]
+          : [],
+    );
+  }
+
+  const reviews = createCityServiceBlock("testimonials");
+  const closingIndex = blocks.findLastIndex(
+    (block) => block.type === "contact" || block.type === "cta",
+  );
+  const index = closingIndex < 0 ? blocks.length : closingIndex;
+  return [...blocks.slice(0, index), reviews, ...blocks.slice(index)];
 }
 
 export function ensureSeoImagePlaceholders(

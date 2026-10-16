@@ -38,6 +38,9 @@ const Footer = () => {
             <Link href='/agb' className='hover:text-primary transition-colors'>
               AGB
             </Link>
+            <Link href='/blog' className='hover:text-primary transition-colors'>
+              Blog
+            </Link>
           </nav>
         </div>
 

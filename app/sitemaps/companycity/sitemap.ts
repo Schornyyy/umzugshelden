@@ -3,9 +3,9 @@ import { cities, getServices } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 import { CITY_SERVICE_CONTENT_LAST_MODIFIED } from "@/lib/cityServiceSeo";
 import {
-  getCityLandingSitemapRecords,
-  getCityServiceSitemapRecords,
-} from "@/actions/cityServicePageActions";
+  getPublicCityLandingSitemapRecords,
+  getPublicCityServiceSitemapRecords,
+} from "@/lib/cityPublicData";
 import type { MetadataRoute } from "next";
 
 const BASE_URL = "https://www.umzugshelden.io";
@@ -26,8 +26,8 @@ function createEntry(
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const services = getServices();
   const [storedPages, storedLandingPages] = await Promise.all([
-    getCityServiceSitemapRecords(),
-    getCityLandingSitemapRecords(),
+    getPublicCityServiceSitemapRecords(),
+    getPublicCityLandingSitemapRecords(),
   ]);
   const storedPageByKey = new Map(
     storedPages.map((page) => [

@@ -1,8 +1,8 @@
 "use server";
 
-import { database } from "@/config/firebase";
 import { createDefaultCityLandingTemplate } from "@/lib/cityLandingDefaults";
 import { createDefaultCityServiceTemplate } from "@/lib/cityServiceDefaults";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { cities } from "@/statics/Lists";
 import {
   CITY_SERVICE_KEYS,
@@ -19,16 +19,6 @@ import {
 import type { CityFAQ } from "@/types/city/CityFAQType";
 import type { CityPageSection } from "@/types/city/CityPageSection";
 import { slugify } from "@/utils/slugify";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  setDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -227,7 +217,7 @@ const testimonialsBlockSchema = baseBlockSchema.extend({
         ]),
       }),
     )
-    .min(1)
+    .min(0)
     .max(9),
   columns: z.union([z.literal(1), z.literal(2), z.literal(3)]),
 });
@@ -525,8 +515,8 @@ function fallbackPage(
 
 async function readTemplate(ownerId: string, serviceKey: CityServiceKey) {
   const id = templateId(ownerId, serviceKey);
-  const snapshot = await getDoc(doc(database, TEMPLATE_COLLECTION, id));
-  if (!snapshot.exists()) return fallbackTemplate(ownerId, serviceKey);
+  const snapshot = await getAdminDatabase().collection(TEMPLATE_COLLECTION).doc(id).get();
+  if (!snapshot.exists) return fallbackTemplate(ownerId, serviceKey);
   return { id: snapshot.id, ...snapshot.data() } as CityServiceTemplate;
 }
 
@@ -537,8 +527,8 @@ async function readPage(
   serviceKey: CityServiceKey,
 ) {
   const id = pageId(ownerId, citySlug, serviceKey);
-  const snapshot = await getDoc(doc(database, PAGE_COLLECTION, id));
-  if (!snapshot.exists()) {
+  const snapshot = await getAdminDatabase().collection(PAGE_COLLECTION).doc(id).get();
+  if (!snapshot.exists) {
     return fallbackPage(ownerId, cityName, citySlug, serviceKey);
   }
   return { id: snapshot.id, ...snapshot.data() } as CityServicePage;
@@ -586,8 +576,11 @@ function fallbackLandingPage(
 
 async function readLandingTemplate(ownerId: string) {
   const id = landingTemplateId(ownerId);
-  const snapshot = await getDoc(doc(database, LANDING_TEMPLATE_COLLECTION, id));
-  if (!snapshot.exists()) return fallbackLandingTemplate(ownerId);
+  const snapshot = await getAdminDatabase()
+    .collection(LANDING_TEMPLATE_COLLECTION)
+    .doc(id)
+    .get();
+  if (!snapshot.exists) return fallbackLandingTemplate(ownerId);
   return { id: snapshot.id, ...snapshot.data() } as CityLandingTemplate;
 }
 
@@ -597,8 +590,11 @@ async function readLandingPage(
   citySlug: string,
 ) {
   const id = landingPageId(ownerId, citySlug);
-  const snapshot = await getDoc(doc(database, LANDING_PAGE_COLLECTION, id));
-  if (!snapshot.exists()) {
+  const snapshot = await getAdminDatabase()
+    .collection(LANDING_PAGE_COLLECTION)
+    .doc(id)
+    .get();
+  if (!snapshot.exists) {
     return fallbackLandingPage(ownerId, cityName, citySlug);
   }
   return { id: snapshot.id, ...snapshot.data() } as CityLandingPage;
@@ -696,12 +692,10 @@ export async function getCityLandingTemplateEditorData(ownerId: string) {
 
 export async function getCityLandingSitemapRecords(ownerId?: string) {
   const resolvedOwnerId = configuredOwnerId(ownerId);
-  const snapshot = await getDocs(
-    query(
-      collection(database, LANDING_PAGE_COLLECTION),
-      where("ownerId", "==", resolvedOwnerId),
-    ),
-  );
+  const snapshot = await getAdminDatabase()
+    .collection(LANDING_PAGE_COLLECTION)
+    .where("ownerId", "==", resolvedOwnerId)
+    .get();
   return snapshot.docs.map((pageSnapshot) => {
     const page = pageSnapshot.data() as CityLandingPage;
     return {
@@ -714,12 +708,10 @@ export async function getCityLandingSitemapRecords(ownerId?: string) {
 
 export async function getCityServiceSitemapRecords(ownerId?: string) {
   const resolvedOwnerId = configuredOwnerId(ownerId);
-  const snapshot = await getDocs(
-    query(
-      collection(database, PAGE_COLLECTION),
-      where("ownerId", "==", resolvedOwnerId),
-    ),
-  );
+  const snapshot = await getAdminDatabase()
+    .collection(PAGE_COLLECTION)
+    .where("ownerId", "==", resolvedOwnerId)
+    .get();
   return snapshot.docs.map((pageSnapshot) => {
     const page = pageSnapshot.data() as CityServicePage;
     return {
@@ -775,10 +767,10 @@ export async function saveCityServiceTemplate(
     updatedAt: now,
     version: (current.version || 0) + 1,
   };
-  await setDoc(
-    doc(database, TEMPLATE_COLLECTION, next.id),
-    stripUndefinedDeep(next),
-  );
+  await getAdminDatabase()
+    .collection(TEMPLATE_COLLECTION)
+    .doc(next.id)
+    .set(stripUndefinedDeep(next));
   revalidateAllCityServicePages();
   return next;
 }
@@ -811,10 +803,10 @@ export async function saveCityServicePage(
     createdAt: current.createdAt || now,
     updatedAt: now,
   };
-  await setDoc(
-    doc(database, PAGE_COLLECTION, next.id),
-    stripUndefinedDeep(next),
-  );
+  await getAdminDatabase()
+    .collection(PAGE_COLLECTION)
+    .doc(next.id)
+    .set(stripUndefinedDeep(next));
   revalidateCityServicePage(citySlug, serviceKey);
   return next;
 }
@@ -837,10 +829,10 @@ export async function saveCityLandingTemplate(
     updatedAt: now,
     version: (current.version || 0) + 1,
   };
-  await setDoc(
-    doc(database, LANDING_TEMPLATE_COLLECTION, next.id),
-    stripUndefinedDeep(next),
-  );
+  await getAdminDatabase()
+    .collection(LANDING_TEMPLATE_COLLECTION)
+    .doc(next.id)
+    .set(stripUndefinedDeep(next));
   revalidateAllCityServicePages();
   return next;
 }
@@ -871,10 +863,10 @@ export async function saveCityLandingPage(
     createdAt: current.createdAt || now,
     updatedAt: now,
   };
-  await setDoc(
-    doc(database, LANDING_PAGE_COLLECTION, next.id),
-    stripUndefinedDeep(next),
-  );
+  await getAdminDatabase()
+    .collection(LANDING_PAGE_COLLECTION)
+    .doc(next.id)
+    .set(stripUndefinedDeep(next));
   revalidateCityLandingPage(citySlug);
   return next;
 }
@@ -957,6 +949,7 @@ function applyLegacyCityPage(
 
 export async function migrateCityServicePages(ownerId: string) {
   assertOwner(ownerId);
+  const database = getAdminDatabase();
   const [
     templateSnapshot,
     pageSnapshot,
@@ -964,31 +957,17 @@ export async function migrateCityServicePages(ownerId: string) {
     landingPageSnapshot,
     legacyCityPageSnapshot,
   ] = await Promise.all([
-    getDocs(
-      query(
-        collection(database, TEMPLATE_COLLECTION),
-        where("ownerId", "==", ownerId),
-      ),
-    ),
-    getDocs(
-      query(
-        collection(database, PAGE_COLLECTION),
-        where("ownerId", "==", ownerId),
-      ),
-    ),
-    getDocs(
-      query(
-        collection(database, LANDING_TEMPLATE_COLLECTION),
-        where("ownerId", "==", ownerId),
-      ),
-    ),
-    getDocs(
-      query(
-        collection(database, LANDING_PAGE_COLLECTION),
-        where("ownerId", "==", ownerId),
-      ),
-    ),
-    getDocs(collection(database, LEGACY_CITY_PAGE_COLLECTION)),
+    database.collection(TEMPLATE_COLLECTION).where("ownerId", "==", ownerId).get(),
+    database.collection(PAGE_COLLECTION).where("ownerId", "==", ownerId).get(),
+    database
+      .collection(LANDING_TEMPLATE_COLLECTION)
+      .where("ownerId", "==", ownerId)
+      .get(),
+    database
+      .collection(LANDING_PAGE_COLLECTION)
+      .where("ownerId", "==", ownerId)
+      .get(),
+    database.collection(LEGACY_CITY_PAGE_COLLECTION).get(),
   ]);
   const existingTemplates = new Set(
     templateSnapshot.docs.map((snapshot) => snapshot.id),
@@ -1008,7 +987,7 @@ export async function migrateCityServicePages(ownerId: string) {
     legacyPageBySlug.set(citySlug, data);
   }
   const now = Date.now();
-  const batch = writeBatch(database);
+  const batch = database.batch();
   let templatesCreated = 0;
   let pagesCreated = 0;
   let landingTemplatesCreated = 0;
@@ -1022,7 +1001,7 @@ export async function migrateCityServicePages(ownerId: string) {
         id,
       };
       batch.set(
-        doc(database, TEMPLATE_COLLECTION, id),
+        database.collection(TEMPLATE_COLLECTION).doc(id),
         stripUndefinedDeep(template),
       );
       templatesCreated++;
@@ -1036,7 +1015,9 @@ export async function migrateCityServicePages(ownerId: string) {
   };
   if (!existingLandingTemplates.has(cityTemplateDocumentId)) {
     batch.set(
-      doc(database, LANDING_TEMPLATE_COLLECTION, cityTemplateDocumentId),
+      database
+        .collection(LANDING_TEMPLATE_COLLECTION)
+        .doc(cityTemplateDocumentId),
       stripUndefinedDeep(cityTemplate),
     );
     landingTemplatesCreated++;
@@ -1059,7 +1040,7 @@ export async function migrateCityServicePages(ownerId: string) {
         migratedAt: now,
       };
       batch.set(
-        doc(database, LANDING_PAGE_COLLECTION, cityDocumentId),
+        database.collection(LANDING_PAGE_COLLECTION).doc(cityDocumentId),
         stripUndefinedDeep(landingPage),
       );
       landingPagesCreated++;
@@ -1074,7 +1055,7 @@ export async function migrateCityServicePages(ownerId: string) {
         updatedAt: now,
         migratedAt: now,
       };
-      batch.set(doc(database, PAGE_COLLECTION, id), page);
+      batch.set(database.collection(PAGE_COLLECTION).doc(id), page);
       pagesCreated++;
     }
   }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { globalAgent } from "node:https";
 import {
   applicationDefault,
   cert,
@@ -8,7 +9,14 @@ import {
   type App,
 } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import {
+  initializeFirestore,
+  type Firestore,
+} from "firebase-admin/firestore";
+
+let adminDatabase: Firestore | undefined;
+
+globalAgent.options.family = 4;
 
 function getAdminApp(): App {
   const existingApp = getApps()[0];
@@ -52,5 +60,8 @@ export function getAdminAuth() {
 }
 
 export function getAdminDatabase() {
-  return getFirestore(getAdminApp());
+  adminDatabase ??= initializeFirestore(getAdminApp(), {
+    preferRest: true,
+  });
+  return adminDatabase;
 }

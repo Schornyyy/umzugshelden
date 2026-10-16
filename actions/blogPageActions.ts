@@ -1,21 +1,6 @@
 "use server";
 
-import { database } from "@/config/firebase";
-import {
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  getDocs,
-  query,
-  where,
-  updateDoc,
-  deleteDoc,
-  setDoc,
-  writeBatch,
-  orderBy,
-  limit,
-} from "firebase/firestore";
+import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { cacheManager } from "@/lib/cache";
@@ -32,12 +17,17 @@ import {
   type CityServiceBlock,
 } from "@/types/city/CityServicePage";
 import { slugify } from "@/utils/slugify";
+import { normalizeBlogKeyword } from "@/lib/blogKeywords";
 
 const COLLECTION = "blogPages_umzugshelden";
 
 // cache key helpers (local, to avoid editing central enum for now)
 const cacheKeyBySlug = (subcategorySlug: string, slug: string) => `BLOG_PAGE_${subcategorySlug}_${slug}`;
-const cacheKeyListBySub = (subcategorySlug: string) => `BLOG_PAGES_LIST_${subcategorySlug}`;
+const cacheKeyListBySub = (
+  subcategorySlug: string,
+  mainCategory?: AdminBlogMainCategory,
+) =>
+  `BLOG_PAGES_LIST_${mainCategory || "all"}_${subcategorySlug}`;
 const cacheKeyByPath = (path: string) => `BLOG_PAGE_PATH_${path}`;
 
 // Zod schemas
@@ -186,10 +176,17 @@ export type UpdateBlogPageInput = Partial<
 
 type FirestoreBlogPagePatch = Omit<
   Partial<BlogPage>,
-  "thumbnailUrl" | "meta_description"
+  | "thumbnailUrl"
+  | "meta_description"
+  | "primaryKeyword"
+  | "primaryKeywordNormalized"
+  | "keywordType"
 > & {
   thumbnailUrl?: string | null;
   meta_description?: string | null;
+  primaryKeyword?: string | null;
+  primaryKeywordNormalized?: string | null;
+  keywordType?: "primary" | "long-tail" | null;
 };
 
 function buildSlug(titel: string) {
@@ -206,8 +203,28 @@ function getStoredPath(page: Partial<BlogPage>) {
 }
 
 async function getAllBlogPagesRaw() {
-  const snap = await getDocs(collection(database, COLLECTION));
+  const snap = await getAdminDatabase().collection(COLLECTION).get();
   return snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<BlogPage, "id">) }));
+}
+
+function assertUniquePrimaryKeyword(
+  primaryKeyword: string | undefined,
+  pages: BlogPage[],
+  currentId?: string,
+) {
+  if (!primaryKeyword) return;
+  const normalized = normalizeBlogKeyword(primaryKeyword);
+  const duplicate = pages.find((page) => {
+    if (page.id === currentId) return false;
+    const existingPrimary =
+      page.primaryKeyword || page.keywords?.[0] || page.titel;
+    return normalizeBlogKeyword(existingPrimary) === normalized;
+  });
+  if (duplicate) {
+    throw new Error(
+      `Das Hauptkeyword "${primaryKeyword}" ist bereits dem Blog "${duplicate.titel}" zugeordnet`,
+    );
+  }
 }
 
 async function resolvePagePath(
@@ -256,6 +273,10 @@ function removeUndefinedDeep<T>(value: T): T {
 function invalidateCaches(subcategorySlug: string, slug?: string, path?: string) {
   try {
     cacheManager.delete(cacheKeyListBySub(subcategorySlug));
+    cacheManager.delete(cacheKeyListBySub(subcategorySlug, "umzug"));
+    cacheManager.delete(cacheKeyListBySub(subcategorySlug, "streicharbeit"));
+    cacheManager.delete(cacheKeyListBySub(subcategorySlug, "ratgeber"));
+    cacheManager.delete(cacheKeyListBySub(subcategorySlug, "entrümpelung"));
     if (slug) cacheManager.delete(cacheKeyBySlug(subcategorySlug, slug));
     if (path) cacheManager.delete(cacheKeyByPath(path));
   } catch {}
@@ -291,22 +312,30 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
 
   const slug = normalizePath(input.slug || buildSlug(parsed.titel));
   if (slug.includes("/")) throw new Error("Der Slug darf nur aus einem URL-Segment bestehen");
-  const { path } = await resolvePagePath(slug, input.parentId, input.id);
-  const colRef = collection(database, COLLECTION);
+  const { path, pages } = await resolvePagePath(slug, input.parentId, input.id);
+  const primaryKeyword = parsed.keywords?.[0];
+  assertUniquePrimaryKeyword(primaryKeyword, pages, input.id);
+  const primaryKeywordNormalized = primaryKeyword
+    ? normalizeBlogKeyword(primaryKeyword)
+    : undefined;
+  const colRef = getAdminDatabase().collection(COLLECTION);
   const now = Date.now();
 
   if (input.id) {
-    const ref = doc(database, COLLECTION, input.id);
-    const existing = await getDoc(ref);
-    if (existing.exists()) {
+    const ref = colRef.doc(input.id);
+    const existing = await ref.get();
+    if (existing.exists) {
       // do not allow slug change if doc exists already (slug stable from initial title)
-      await updateDoc(ref, removeUndefinedDeep({
+      await ref.update(removeUndefinedDeep({
         titel: parsed.titel,
         description: parsed.description,
         subcategorySlug: parsed.subcategorySlug,
         mainCategory: parsed.mainCategory,
         thumbnailUrl: parsed.thumbnailUrl || null,
         keywords: parsed.keywords || [],
+        primaryKeyword,
+        primaryKeywordNormalized,
+        keywordType: primaryKeyword ? "primary" : undefined,
         meta_description: parsed.meta_description || null,
         sections: parsed.sections as BlogPageSection[],
         faq: parsed.faq as BlogPageFAQEntry[],
@@ -326,7 +355,7 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
       revalidateBlogRoutes(parsed.subcategorySlug, existingData.slug);
       return ref.id;
     } else {
-      await setDoc(ref, removeUndefinedDeep({
+      await ref.set(removeUndefinedDeep({
         slug,
         path,
         parentId: input.parentId || null,
@@ -336,6 +365,9 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
         mainCategory: parsed.mainCategory,
         thumbnailUrl: parsed.thumbnailUrl || null,
         keywords: parsed.keywords || [],
+        primaryKeyword,
+        primaryKeywordNormalized,
+        keywordType: primaryKeyword ? "primary" : undefined,
         meta_description: parsed.meta_description || null,
         sections: parsed.sections as BlogPageSection[],
         faq: parsed.faq as BlogPageFAQEntry[],
@@ -353,7 +385,7 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
       return ref.id;
     }
   } else {
-    const docRef = await addDoc(colRef, removeUndefinedDeep({
+    const docRef = await colRef.add(removeUndefinedDeep({
       slug,
       path,
       parentId: input.parentId || null,
@@ -363,6 +395,9 @@ export async function createBlogPage(input: CreateBlogPageInput): Promise<string
       mainCategory: parsed.mainCategory,
       thumbnailUrl: parsed.thumbnailUrl || null,
       keywords: parsed.keywords || [],
+      primaryKeyword,
+      primaryKeywordNormalized,
+      keywordType: primaryKeyword ? "primary" : undefined,
       meta_description: parsed.meta_description || null,
       sections: parsed.sections as BlogPageSection[],
       faq: parsed.faq as BlogPageFAQEntry[],
@@ -386,9 +421,11 @@ export async function getBlogPageBySlug(subcategorySlug: string, slug: string): 
   const cached = cacheManager.get<BlogPage>(cacheKey);
   if (cached) return cached;
 
-  const colRef = collection(database, COLLECTION);
-  const qRef = query(colRef, where("subcategorySlug", "==", subcategorySlug), where("slug", "==", slug));
-  const snap = await getDocs(qRef);
+  const snap = await getAdminDatabase()
+    .collection(COLLECTION)
+    .where("subcategorySlug", "==", subcategorySlug)
+    .where("slug", "==", slug)
+    .get();
   if (snap.empty) return null;
   const d = snap.docs[0];
   type Raw = Omit<BlogPage, "id"> & { sections?: BlogPageSection[]; faq?: BlogPageFAQEntry[] };
@@ -404,6 +441,9 @@ export async function getBlogPageBySlug(subcategorySlug: string, slug: string): 
     mainCategory: data.mainCategory,
     thumbnailUrl: data.thumbnailUrl || undefined,
     keywords: data.keywords || [],
+    primaryKeyword: data.primaryKeyword,
+    primaryKeywordNormalized: data.primaryKeywordNormalized,
+    keywordType: data.keywordType,
     meta_description: data.meta_description || undefined,
     sections: (data.sections || []) as BlogPageSection[],
     faq: (data.faq || []) as BlogPageFAQEntry[],
@@ -439,13 +479,19 @@ export async function listAllBlogPages(): Promise<BlogPage[]> {
     .sort((a, b) => getStoredPath(a).localeCompare(getStoredPath(b), "de"));
 }
 
-export async function listBlogPagesBySubcategory(subcategorySlug: string): Promise<BlogPage[]> {
-  const key = cacheKeyListBySub(subcategorySlug);
+export async function listBlogPagesBySubcategory(
+  subcategorySlug: string,
+  mainCategory?: AdminBlogMainCategory,
+): Promise<BlogPage[]> {
+  const key = cacheKeyListBySub(subcategorySlug, mainCategory);
   const cached = cacheManager.get<BlogPage[]>(key);
   if (cached) return cached;
-  const colRef = collection(database, COLLECTION);
-  const qRef = query(colRef, where("subcategorySlug", "==", subcategorySlug), orderBy("createdAt", "desc"), limit(200));
-  const snap = await getDocs(qRef);
+  const snap = await getAdminDatabase()
+    .collection(COLLECTION)
+    .where("subcategorySlug", "==", subcategorySlug)
+    .orderBy("createdAt", "desc")
+    .limit(200)
+    .get();
   type Raw = Omit<BlogPage, "id"> & { sections?: BlogPageSection[]; faq?: BlogPageFAQEntry[] };
   const pages: BlogPage[] = snap.docs.map((d) => {
     const data = d.data() as Raw;
@@ -460,6 +506,9 @@ export async function listBlogPagesBySubcategory(subcategorySlug: string): Promi
       mainCategory: data.mainCategory,
       thumbnailUrl: data.thumbnailUrl || undefined,
       keywords: data.keywords || [],
+      primaryKeyword: data.primaryKeyword,
+      primaryKeywordNormalized: data.primaryKeywordNormalized,
+      keywordType: data.keywordType,
       meta_description: data.meta_description || undefined,
       sections: data.sections || [],
       faq: data.faq || [],
@@ -472,7 +521,7 @@ export async function listBlogPagesBySubcategory(subcategorySlug: string): Promi
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
     };
-  });
+  }).filter((page) => !mainCategory || page.mainCategory === mainCategory);
   cacheManager.set(key, pages, { ttl: 5 * 60 * 1000 });
   return pages;
 }
@@ -489,9 +538,9 @@ export async function listBlogPagesBySubcategoryPaginated(subcategorySlug: strin
 }
 
 export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Promise<boolean> {
-  const ref = doc(database, COLLECTION, id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return false;
+  const ref = getAdminDatabase().collection(COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
   const existing = snap.data() as {
     slug: string;
     subcategorySlug: string;
@@ -527,10 +576,11 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
           throw new Error(`Die Unterseiten-URL /blog/${descendantPath} ist bereits vergeben`);
         }
       }
-      const batch = writeBatch(database);
+      const database = getAdminDatabase();
+      const batch = database.batch();
       descendants.forEach((page) => {
         const descendantPath = `${nextPath}${getStoredPath(page).slice(currentPath.length)}`;
-        batch.update(doc(database, COLLECTION, page.id), {
+        batch.update(database.collection(COLLECTION).doc(page.id), {
           path: descendantPath,
           updatedAt: Date.now(),
         });
@@ -542,6 +592,21 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
   if (patch.description !== undefined) parsedPatch.description = patch.description;
   if (patch.thumbnailUrl !== undefined) parsedPatch.thumbnailUrl = patch.thumbnailUrl || null;
   if (patch.keywords !== undefined) parsedPatch.keywords = patch.keywords || [];
+  if (patch.keywords !== undefined) {
+    const primaryKeyword = patch.keywords?.[0];
+    const pages = await getAllBlogPagesRaw();
+    assertUniquePrimaryKeyword(primaryKeyword, pages, id);
+    parsedPatch.primaryKeyword = primaryKeyword || null;
+    parsedPatch.primaryKeywordNormalized = primaryKeyword
+      ? normalizeBlogKeyword(primaryKeyword)
+      : null;
+    parsedPatch.keywordType = primaryKeyword
+      ? existing.primaryKeywordNormalized ===
+          normalizeBlogKeyword(primaryKeyword)
+        ? existing.keywordType || "primary"
+        : "primary"
+      : null;
+  }
   if (patch.meta_description !== undefined) parsedPatch.meta_description = patch.meta_description || null;
   if (patch.sections !== undefined) {
     parsedPatch.sections = patch.sections.map((s) => sectionSchema.parse(s)) as BlogPageSection[];
@@ -569,22 +634,22 @@ export async function updateBlogPage(id: string, patch: UpdateBlogPageInput): Pr
   if (patch.visible !== undefined) parsedPatch.visible = patch.visible;
   parsedPatch.updatedAt = Date.now();
 
-  await updateDoc(ref, removeUndefinedDeep(parsedPatch));
+  await ref.update(removeUndefinedDeep(parsedPatch));
   invalidateCaches(existing.subcategorySlug, currentSlug, currentPath);
   revalidateBlogRoutes(existing.subcategorySlug, currentSlug);
   return true;
 }
 
 export async function deleteBlogPage(id: string): Promise<boolean> {
-  const ref = doc(database, COLLECTION, id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return false;
+  const ref = getAdminDatabase().collection(COLLECTION).doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) return false;
   const data = snap.data() as BlogPage;
   const pages = await getAllBlogPagesRaw();
   if (pages.some((page) => page.parentId === id)) {
     throw new Error("Diese Seite besitzt Unterseiten. Bitte verschiebe oder lösche diese zuerst.");
   }
-  await deleteDoc(ref);
+  await ref.delete();
   invalidateCaches(data.subcategorySlug, data.slug, getStoredPath(data));
   revalidateBlogRoutes(data.subcategorySlug, data.slug);
   return true;

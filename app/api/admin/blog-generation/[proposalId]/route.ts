@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
+import {
+  blogKeywordRegistryId,
+  normalizeBlogKeyword,
+} from "@/lib/blogKeywords";
 import type { BlogGenerationProposal } from "@/types/blog/BlogGeneration";
 
 export const runtime = "nodejs";
@@ -10,6 +14,7 @@ export const maxDuration = 30;
 
 const PROPOSAL_COLLECTION = "blogGenerationProposals";
 const BLOG_COLLECTION = "blogPages_umzugshelden";
+const KEYWORD_REGISTRY_COLLECTION = "blogKeywordRegistry";
 
 const decisionSchema = z.object({
   ownerId: z.string().trim().min(1).max(200),
@@ -89,13 +94,55 @@ export async function PUT(
         throw new Error("Über diesen Blogvorschlag wurde bereits entschieden.");
       }
       const proposal = document.data()!;
+      const draft = proposal.draft;
+      const primaryKeyword = String(
+        draft.primaryKeyword || proposal.keyword || draft.keywords?.[0] || "",
+      );
+      const primaryKeywordNormalized =
+        draft.primaryKeywordNormalized ||
+        normalizeBlogKeyword(primaryKeyword);
+      if (!primaryKeywordNormalized) {
+        throw new Error("Der Blogvorschlag enthält kein gültiges Hauptkeyword.");
+      }
+      const keywordReference = database
+        .collection(KEYWORD_REGISTRY_COLLECTION)
+        .doc(blogKeywordRegistryId(primaryKeyword));
+      const keywordDocument = await transaction.get(keywordReference);
+      const keywordRegistry = keywordDocument.data();
       if (input.action === "accept") {
-        const draft = proposal.draft;
         const now = Date.now();
         const targetBlogId =
           typeof proposal.targetBlogId === "string"
             ? proposal.targetBlogId
             : undefined;
+        const duplicateKeywordBlogs = await transaction.get(
+          database
+            .collection(BLOG_COLLECTION)
+            .where(
+              "primaryKeywordNormalized",
+              "==",
+              primaryKeywordNormalized,
+            ),
+        );
+        if (
+          duplicateKeywordBlogs.docs.some(
+            (blogDocument) => blogDocument.id !== targetBlogId,
+          )
+        ) {
+          throw new Error(
+            `Das Hauptkeyword "${primaryKeyword}" ist bereits einem anderen Blog zugeordnet.`,
+          );
+        }
+        if (
+          keywordDocument.exists &&
+          keywordRegistry?.proposalId !== proposalId &&
+          keywordRegistry?.blogId !== targetBlogId
+        ) {
+          throw new Error(
+            `Das Hauptkeyword "${primaryKeyword}" ist bereits einem anderen Blog zugeordnet.`,
+          );
+        }
+        let publishedBlogId: string;
         if (targetBlogId) {
           const pageReference = database
             .collection(BLOG_COLLECTION)
@@ -113,6 +160,7 @@ export async function PUT(
               "Der Blogartikel wurde nach Erstellung des Vorschlags geändert.",
             );
           }
+          publishedBlogId = pageReference.id;
           publishedPath = String(current.path || "");
           transaction.set(
             pageReference,
@@ -120,6 +168,9 @@ export async function PUT(
               titel: draft.title,
               description: draft.description,
               keywords: draft.keywords,
+              primaryKeyword,
+              primaryKeywordNormalized,
+              keywordType: draft.keywordType || "primary",
               meta_description: draft.metaDescription,
               serviceBlocks: draft.blocks,
               serviceKey: draft.serviceKey,
@@ -131,15 +182,17 @@ export async function PUT(
           );
         } else {
           publishedPath = `${draft.mainCategory}/${draft.subcategorySlug}/${draft.slug}`;
-          const duplicate = await database
-            .collection(BLOG_COLLECTION)
-            .where("path", "==", publishedPath)
-            .limit(1)
-            .get();
+          const duplicate = await transaction.get(
+            database
+              .collection(BLOG_COLLECTION)
+              .where("path", "==", publishedPath)
+              .limit(1),
+          );
           if (!duplicate.empty) {
             throw new Error("Unter dieser Blog-URL existiert bereits ein Beitrag.");
           }
           const pageReference = database.collection(BLOG_COLLECTION).doc();
+          publishedBlogId = pageReference.id;
           transaction.create(pageReference, {
             titel: draft.title,
             slug: draft.slug,
@@ -150,6 +203,9 @@ export async function PUT(
             mainCategory: draft.mainCategory,
             thumbnailUrl: null,
             keywords: draft.keywords,
+            primaryKeyword,
+            primaryKeywordNormalized,
+            keywordType: draft.keywordType || "primary",
             meta_description: draft.metaDescription,
             sections: [],
             faq: [],
@@ -162,6 +218,19 @@ export async function PUT(
             updatedAt: now,
           });
         }
+        transaction.set(keywordReference, {
+          keyword: primaryKeyword,
+          normalizedKeyword: primaryKeywordNormalized,
+          keywordType: draft.keywordType || "primary",
+          status: "published",
+          proposalId,
+          blogId: publishedBlogId,
+          ownerId: input.ownerId,
+          expiresAt: null,
+          updatedAt: now,
+        });
+      } else if (keywordRegistry?.proposalId === proposalId) {
+        transaction.delete(keywordReference);
       }
       transaction.update(proposalReference, {
         status: input.action === "accept" ? "accepted" : "rejected",
