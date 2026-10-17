@@ -22,6 +22,7 @@ import {
   type CityServiceKey,
 } from "@/types/city/CityServicePage";
 import type { FAQType } from "@/types/utils/FAQType";
+import type { Review } from "@/lib/reviewSettings";
 import { slugify } from "@/utils/slugify";
 import {
   CheckIcon,
@@ -43,6 +44,8 @@ type Props = {
   localSeo: CityServiceSeoContent;
   editorMode?: boolean;
   selectedBlockId?: string | null;
+  reviews?: Review[];
+  renderFaqSchema?: boolean;
 };
 
 const sectionTone = {
@@ -233,6 +236,8 @@ export default function CityServiceBlocksRenderer({
   localSeo,
   editorMode = false,
   selectedBlockId,
+  reviews,
+  renderFaqSchema = true,
 }: Props) {
   const text = (value: string) => resolveCityServiceText(value, context);
   const richText = (value: string) => renderInlineMarkdown(text(value));
@@ -651,6 +656,7 @@ export default function CityServiceBlocksRenderer({
                 faqs={faqs as FAQType[]}
                 title={text(block.heading)}
                 headingLevel={block.headingLevel}
+                renderSchema={renderFaqSchema}
               />
             );
           }
@@ -864,7 +870,9 @@ export default function CityServiceBlocksRenderer({
           }
 
           if (block.type === "testimonials") {
-            return <ReviewCarousel key={block.id} />;
+            return (
+              <ReviewCarousel key={block.id} initialReviews={reviews} />
+            );
           }
 
           if (block.type === "gallery") {

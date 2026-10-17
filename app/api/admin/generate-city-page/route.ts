@@ -7,7 +7,7 @@ import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { generateGeminiJson } from "@/lib/gemini";
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
 import { generatePageFromSeoBlueprint } from "@/lib/seoBlueprintPageGenerator";
-import { ensureGeneratedPageReviews } from "@/lib/cityServiceContentPolicy";
+import { ensureGeneratedPageReviewsAfterHero } from "@/lib/cityServiceContentPolicy";
 import type { GeneratedCityPageDraft } from "@/types/city/CityPageGeneration";
 import {
   CITY_SERVICE_KEYS,
@@ -389,7 +389,7 @@ export async function POST(request: Request) {
       imageAlt: input.currentImageAlt,
     };
     const draft: GeneratedCityPageDraft = {
-      blocks: ensureGeneratedPageReviews(createBlocks(
+      blocks: ensureGeneratedPageReviewsAfterHero(createBlocks(
         input.cityName,
         input.currentImage,
         input.currentImageAlt,

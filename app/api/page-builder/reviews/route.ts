@@ -1,7 +1,9 @@
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
-import { defaultReviewSettings, reviewSettingsSchema } from "@/lib/reviewSettings";
+import { reviewSettingsSchema } from "@/lib/reviewSettings";
+import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -17,10 +19,7 @@ function settingsDocument() {
 
 export async function GET() {
   try {
-    const snapshot = await settingsDocument().get();
-    const settings = snapshot.exists
-      ? reviewSettingsSchema.parse(snapshot.data())
-      : defaultReviewSettings;
+    const settings = await getPublicReviewSettings();
     return NextResponse.json(settings, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Bewertungen konnten nicht geladen werden:", error);
@@ -40,6 +39,7 @@ export async function PUT(request: Request) {
     }
     const settings = reviewSettingsSchema.parse(parsed.data);
     await settingsDocument().set(settings);
+    revalidatePath("/stadt", "layout");
     return NextResponse.json(settings);
   } catch (error) {
     console.error("Bewertungen konnten nicht gespeichert werden:", error);

@@ -13,10 +13,12 @@ const FAQBlock = ({
   faqs,
   title,
   headingLevel = 3,
+  renderSchema = true,
 }: {
   faqs: FAQType[];
   title: string;
   headingLevel?: 2 | 3 | 4;
+  renderSchema?: boolean;
 }) => {
   // Generate JSON-LD FAQ schema from the provided faqs
   const faqSchema = {
@@ -34,10 +36,14 @@ const FAQBlock = ({
   return (
     <div className='mx-auto my-36 w-full max-w-7xl rounded-md bg-white p-6 shadow-md'>
       {/* Structured data for FAQ - JSON-LD */}
-      <script
-        type='application/ld+json'
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
-      />
+      {renderSchema && (
+        <script
+          type='application/ld+json'
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(faqSchema).replaceAll("<", "\\u003c"),
+          }}
+        />
+      )}
       <SemanticHeading
         level={headingLevel}
         className='font-sans text-md font-medium md:text-2xl'>

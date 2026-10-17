@@ -57,12 +57,23 @@ export function ReviewCarouselContent({ reviews }: { reviews: Review[] }) {
   );
 }
 
-export default function ReviewCarousel() {
-  const [reviews, setReviews] = useState<Review[] | null>(null);
+export default function ReviewCarousel({
+  initialReviews,
+}: {
+  initialReviews?: Review[];
+}) {
+  const [reviews, setReviews] = useState<Review[] | null>(
+    initialReviews ?? null,
+  );
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    if (initialReviews !== undefined) {
+      setReviews(initialReviews);
+      return;
+    }
+
     const controller = new AbortController();
     async function load() {
       setError(false);
@@ -79,7 +90,7 @@ export default function ReviewCarousel() {
     }
     void load();
     return () => controller.abort();
-  }, [attempt]);
+  }, [attempt, initialReviews]);
 
   if (error) {
     return (

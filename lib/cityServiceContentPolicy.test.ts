@@ -3,6 +3,7 @@ import test from "node:test";
 import { createCityServiceBlock } from "./cityServiceBlockFactory";
 import {
   ensureGeneratedPageReviews,
+  ensureGeneratedPageReviewsAfterHero,
   mergePreservedBuilderBlocks,
 } from "./cityServiceContentPolicy";
 
@@ -48,14 +49,49 @@ test("existing reviews retain position and ID, are enabled and are not duplicate
   assert.deepEqual(ensureGeneratedPageReviews(result), result);
 });
 
-test("blueprint and fallback block merging always includes reviews and preserves unrelated blocks", () => {
+test("city and service pages place reviews directly after the hero", () => {
+  const hero = createCityServiceBlock("hero");
+  const intro = createCityServiceBlock("intro");
+  const reviews = { ...createCityServiceBlock("testimonials"), enabled: false };
+  const result = ensureGeneratedPageReviewsAfterHero([
+    intro,
+    hero,
+    reviews,
+    createCityServiceBlock("testimonials"),
+  ]);
+  assert.deepEqual(result.map((block) => block.type), [
+    "intro",
+    "hero",
+    "testimonials",
+  ]);
+  assert.equal(result[2].id, reviews.id);
+  assert.equal(result[2].enabled, true);
+  assert.equal(reviews.enabled, false);
+  assert.deepEqual(ensureGeneratedPageReviewsAfterHero(result), result);
+});
+
+test("city and service pages without a hero place reviews first", () => {
+  const intro = createCityServiceBlock("intro");
+  assert.deepEqual(
+    ensureGeneratedPageReviewsAfterHero([intro]).map((block) => block.type),
+    ["testimonials", "intro"],
+  );
+});
+
+test("blueprint and fallback block merging places reviews after the hero and preserves unrelated blocks", () => {
+  const hero = createCityServiceBlock("hero");
   const intro = createCityServiceBlock("intro");
   const gallery = createCityServiceBlock("gallery");
   const reviews = { ...createCityServiceBlock("testimonials"), enabled: false };
-  const result = mergePreservedBuilderBlocks([intro], [gallery, reviews]);
-  assert.deepEqual(result.map((block) => block.type), ["intro", "gallery", "testimonials"]);
-  assert.equal(result[2].enabled, true);
-  assert.equal(result[2].id, reviews.id);
+  const result = mergePreservedBuilderBlocks([hero, intro], [gallery, reviews]);
+  assert.deepEqual(result.map((block) => block.type), [
+    "hero",
+    "testimonials",
+    "intro",
+    "gallery",
+  ]);
+  assert.equal(result[1].enabled, true);
+  assert.equal(result[1].id, reviews.id);
   assert.equal(reviews.enabled, false);
-  assert.equal(mergePreservedBuilderBlocks([intro], []).filter((block) => block.type === "testimonials").length, 1);
+  assert.equal(mergePreservedBuilderBlocks([hero, intro], []).filter((block) => block.type === "testimonials").length, 1);
 });

@@ -61,7 +61,7 @@ export function mergePreservedBuilderBlocks(
   const preserved = previousBlocks.filter(
     (block) => !generatedTypes.has(block.type),
   );
-  return ensureGeneratedPageReviews([
+  return ensureGeneratedPageReviewsAfterHero([
     ...generatedBlocks,
     ...structuredClone(preserved),
   ]);
@@ -87,6 +87,25 @@ export function ensureGeneratedPageReviews(
   );
   const index = closingIndex < 0 ? blocks.length : closingIndex;
   return [...blocks.slice(0, index), reviews, ...blocks.slice(index)];
+}
+
+export function ensureGeneratedPageReviewsAfterHero(
+  blocks: CityServiceBlock[],
+): CityServiceBlock[] {
+  const existing = blocks.find((block) => block.type === "testimonials");
+  const reviews = existing
+    ? { ...existing, enabled: true }
+    : createCityServiceBlock("testimonials");
+  const remainingBlocks = blocks.filter(
+    (block) => block.type !== "testimonials",
+  );
+  const heroIndex = remainingBlocks.findIndex((block) => block.type === "hero");
+  const index = heroIndex < 0 ? 0 : heroIndex + 1;
+  return [
+    ...remainingBlocks.slice(0, index),
+    reviews,
+    ...remainingBlocks.slice(index),
+  ];
 }
 
 export function ensureSeoImagePlaceholders(

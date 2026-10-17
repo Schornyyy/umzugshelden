@@ -1,4 +1,6 @@
 import { cities, cityCoordinates } from "@/statics/Lists";
+import type { Review } from "@/lib/reviewSettings";
+import type { FAQType } from "@/types/utils/FAQType";
 
 type SchemaBreadcrumb = {
   name: string;
@@ -19,6 +21,8 @@ type ServiceSchemaProps = {
   offers?: readonly string[];
   breadcrumbs?: readonly SchemaBreadcrumb[];
   dateModified?: string;
+  faqs?: readonly FAQType[];
+  reviews?: readonly Review[];
 };
 
 const SITE_URL = "https://www.umzugshelden.io";
@@ -81,6 +85,8 @@ export function buildServiceSchema({
   offers,
   breadcrumbs,
   dateModified,
+  faqs,
+  reviews,
 }: ServiceSchemaProps) {
   const url = absoluteUrl(path);
   const webpageId = `${url}#webpage`;
@@ -88,6 +94,7 @@ export function buildServiceSchema({
   const imageId = `${url}#primaryimage`;
   const offerCatalogId = `${url}#offer-catalog`;
   const breadcrumbId = `${url}#breadcrumb`;
+  const faqId = `${url}#faq`;
   const imageUrl = image ? absoluteUrl(image) : undefined;
   const localAreaNames = uniqueText([city, ...(areaServed ?? [])]);
   const effectiveAreaNames = localAreaNames.length ? localAreaNames : cities;
@@ -100,6 +107,24 @@ export function buildServiceSchema({
   ];
   const cleanAlternateNames = uniqueText(alternateNames ?? []);
   const cleanOffers = uniqueText(offers ?? []);
+  const cleanFaqs = (faqs ?? []).filter(
+    (faq) => faq.question.trim() && faq.answer.trim(),
+  );
+  const cleanReviews = reviews ?? [];
+  const aggregateRating = cleanReviews.length
+    ? {
+        "@type": "AggregateRating",
+        ratingValue: Number(
+          (
+            cleanReviews.reduce((sum, review) => sum + review.rating, 0) /
+            cleanReviews.length
+          ).toFixed(2),
+        ),
+        reviewCount: cleanReviews.length,
+        bestRating: 5,
+        worstRating: 1,
+      }
+    : undefined;
   const openingHours = [
     {
       "@type": "OpeningHoursSpecification",
@@ -177,6 +202,14 @@ export function buildServiceSchema({
       openingHoursSpecification: openingHours,
       currenciesAccepted: "EUR",
       knowsLanguage: ["de"],
+      ...(aggregateRating ? { aggregateRating } : {}),
+      ...(cleanReviews.length
+        ? {
+            review: cleanReviews.map((review) => ({
+              "@id": `${url}#review-${encodeURIComponent(review.id)}`,
+            })),
+          }
+        : {}),
     },
     {
       "@type": "Service",
@@ -255,6 +288,42 @@ export function buildServiceSchema({
           },
         ]
       : []),
+    ...(cleanFaqs.length
+      ? [
+          {
+            "@type": "FAQPage",
+            "@id": faqId,
+            url,
+            inLanguage: "de-DE",
+            isPartOf: { "@id": webpageId },
+            mainEntity: cleanFaqs.map((faq, index) => ({
+              "@type": "Question",
+              "@id": `${url}#faq-question-${index + 1}`,
+              name: faq.question,
+              acceptedAnswer: {
+                "@type": "Answer",
+                text: faq.answer,
+              },
+            })),
+          },
+        ]
+      : []),
+    ...cleanReviews.map((review) => ({
+      "@type": "Review",
+      "@id": `${url}#review-${encodeURIComponent(review.id)}`,
+      itemReviewed: { "@id": BUSINESS_ID },
+      author: {
+        "@type": "Person",
+        name: review.name,
+      },
+      reviewBody: review.review,
+      reviewRating: {
+        "@type": "Rating",
+        ratingValue: review.rating,
+        bestRating: 5,
+        worstRating: 1,
+      },
+    })),
   ];
 
   return {

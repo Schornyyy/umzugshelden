@@ -1,4 +1,6 @@
 import { getPublicResolvedCityLandingPage } from "@/lib/cityPublicData";
+import { getResolvedCityServiceFaqs } from "@/lib/cityServiceStructuredData";
+import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import ServiceSchema from "@/components/ServiceSchema";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
@@ -49,10 +51,13 @@ async function loadCityLandingData(cityParam: string) {
   }
 
   const citySlug = slugify(cityName);
-  const resolved = await getPublicResolvedCityLandingPage({
-    cityName,
-    citySlug,
-  });
+  const [resolved, reviewSettings] = await Promise.all([
+    getPublicResolvedCityLandingPage({
+      cityName,
+      citySlug,
+    }),
+    getPublicReviewSettings(),
+  ]);
   const nearbyCities = getNearbyCities(cityName);
   const localAreaBlock = resolved.blocks.find(
     (block) => block.type === "localArea" && block.enabled,
@@ -86,6 +91,7 @@ async function loadCityLandingData(cityParam: string) {
     localSeo,
     context,
     nearbyCityNames,
+    reviews: reviewSettings.reviews,
   };
 }
 
@@ -102,6 +108,11 @@ export default async function CityLandingPageData({
   if (!data || !data.resolved.page.published) redirect("/stadt");
 
   const path = `/stadt/${encodeURIComponent(data.citySlug)}`;
+  const faqs = getResolvedCityServiceFaqs(
+    data.resolved.blocks,
+    data.context,
+    data.localSeo,
+  );
   return (
     <>
       <ServiceSchema
@@ -130,6 +141,8 @@ export default async function CityLandingPageData({
           { name: data.cityName, path },
         ]}
         dateModified={CITY_SERVICE_CONTENT_LAST_MODIFIED}
+        faqs={faqs}
+        reviews={data.reviews}
       />
       <CityServiceBlocksRenderer
         blocks={data.resolved.blocks}
@@ -137,6 +150,8 @@ export default async function CityLandingPageData({
         citySlug={data.citySlug}
         context={data.context}
         localSeo={data.localSeo}
+        reviews={data.reviews}
+        renderFaqSchema={false}
       />
     </>
   );

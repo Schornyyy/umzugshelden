@@ -19,6 +19,7 @@ import {
   mergePreservedBuilderBlocks,
   serviceGenerationRules,
 } from "@/lib/cityServiceContentPolicy";
+export { createFallbackSeoSection } from "@/lib/seoBlueprintSectionFallback";
 
 const generatedSectionSchema = z.object({
   order: z.number().int().positive(),
@@ -533,40 +534,6 @@ export async function generateSeoBlueprintSection(input: {
     internalLinks: [],
   });
   return sections[0];
-}
-
-export function createFallbackSeoSection(
-  section: SeoPageBlueprintSection,
-): GeneratedSeoSection {
-  const body = [
-    section.contentBrief,
-    ...section.keyPoints,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  return {
-    order: section.order,
-    blockType:
-      section.sectionType === "hero"
-        ? "hero"
-        : section.sectionType === "faq"
-          ? "faq"
-          : section.sectionType === "contact"
-            ? "contact"
-            : "text",
-    heading: section.heading,
-    body,
-    items: [],
-    steps: [],
-    faqItems: [],
-    cta: section.cta
-      ? {
-          title: section.heading,
-          text: section.cta,
-          label: section.cta,
-        }
-      : undefined,
-  };
 }
 
 export function buildPageFromSeoSections(

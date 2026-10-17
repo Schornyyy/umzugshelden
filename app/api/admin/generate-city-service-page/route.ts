@@ -669,7 +669,7 @@ export async function POST(request: Request) {
           console.warn(
             "SEO section generation incomplete; using section fallback",
             nextSection.order,
-            error,
+            error instanceof Error ? error.message : String(error),
           );
           generatedSection = createFallbackSeoSection(nextSection);
           sectionWarning = `Sektion ${nextSection.order} wurde aus dem geprüften SEO-Briefing aufgebaut, weil die KI-Textantwort unvollständig war.`;

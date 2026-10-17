@@ -1,4 +1,6 @@
 import { getPublicResolvedCityServicePage } from "@/lib/cityPublicData";
+import { getResolvedCityServiceFaqs } from "@/lib/cityServiceStructuredData";
+import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import ServiceSchema from "@/components/ServiceSchema";
 import {
@@ -79,11 +81,14 @@ async function loadPageData(cityParam: string, serviceParam: string) {
   if (!isAllowedCity(cityName) || !isServiceKey(serviceKey)) return null;
 
   const citySlug = slugify(cityName);
-  const resolved = await getPublicResolvedCityServicePage({
-    cityName,
-    citySlug,
-    serviceKey,
-  });
+  const [resolved, reviewSettings] = await Promise.all([
+    getPublicResolvedCityServicePage({
+      cityName,
+      citySlug,
+      serviceKey,
+    }),
+    getPublicReviewSettings(),
+  ]);
   const nearbyCities = getNearbyCities(cityName);
   const localAreaBlock = resolved.blocks.find(
     (block) => block.type === "localArea" && block.enabled,
@@ -117,6 +122,7 @@ async function loadPageData(cityParam: string, serviceParam: string) {
     localSeo,
     context,
     nearbyCityNames,
+    reviews: reviewSettings.reviews,
   };
 }
 
@@ -144,6 +150,11 @@ export default async function CityServicePageData({
   const path = `/stadt/${encodeURIComponent(data.citySlug)}/${data.serviceKey}`;
   const featureBlock = data.resolved.blocks.find(
     (block) => block.id === "features" && block.type === "checkList",
+  );
+  const faqs = getResolvedCityServiceFaqs(
+    data.resolved.blocks,
+    data.context,
+    data.localSeo,
   );
 
   return (
@@ -187,6 +198,8 @@ export default async function CityServicePageData({
           },
         ]}
         dateModified={CITY_SERVICE_CONTENT_LAST_MODIFIED}
+        faqs={faqs}
+        reviews={data.reviews}
       />
       <CityServiceBlocksRenderer
         blocks={data.resolved.blocks}
@@ -195,6 +208,8 @@ export default async function CityServicePageData({
         serviceKey={data.serviceKey}
         context={data.context}
         localSeo={data.localSeo}
+        reviews={data.reviews}
+        renderFaqSchema={false}
       />
     </>
   );
