@@ -15,6 +15,56 @@ type PushNotificationSetupProps = {
   ownerId: string;
 };
 
+function waitForActiveServiceWorker(
+  registration: ServiceWorkerRegistration,
+  timeoutMs = 15_000,
+) {
+  if (registration.active?.state === "activated") {
+    return Promise.resolve(registration);
+  }
+
+  const pendingWorker = registration.installing ?? registration.waiting;
+  if (!pendingWorker) {
+    return Promise.reject(
+      new Error("Der Benachrichtigungsdienst konnte nicht gestartet werden."),
+    );
+  }
+  const worker: ServiceWorker = pendingWorker;
+
+  return new Promise<ServiceWorkerRegistration>((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      worker.removeEventListener("statechange", handleStateChange);
+      reject(
+        new Error(
+          "Der Benachrichtigungsdienst wurde nicht rechtzeitig aktiviert. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
+        ),
+      );
+    }, timeoutMs);
+
+    function finish() {
+      window.clearTimeout(timeout);
+      worker.removeEventListener("statechange", handleStateChange);
+    }
+
+    function handleStateChange() {
+      if (worker.state === "activated") {
+        finish();
+        resolve(registration);
+      } else if (worker.state === "redundant") {
+        finish();
+        reject(
+          new Error(
+            "Der Benachrichtigungsdienst konnte nicht installiert werden.",
+          ),
+        );
+      }
+    }
+
+    worker.addEventListener("statechange", handleStateChange);
+    handleStateChange();
+  });
+}
+
 export default function PushNotificationSetup({
   ownerId,
 }: PushNotificationSetupProps) {
@@ -22,15 +72,6 @@ export default function PushNotificationSetup({
     "idle" | "loading" | "enabled" | "unsupported" | "error"
   >("idle");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted"
-    ) {
-      setStatus("enabled");
-    }
-  }, []);
 
   useEffect(() => {
     if (status !== "enabled") return;
@@ -75,9 +116,18 @@ export default function PushNotificationSetup({
         throw new Error("Benachrichtigungen wurden nicht freigegeben.");
       }
 
-      const registration = await navigator.serviceWorker.register(
+      const pendingRegistration = await navigator.serviceWorker.register(
         "/firebase-messaging-sw.js",
+        { scope: "/" },
       );
+      await pendingRegistration.update();
+      const registration =
+        await waitForActiveServiceWorker(pendingRegistration);
+      if (!registration.active) {
+        throw new Error(
+          "Der Benachrichtigungsdienst ist noch nicht aktiv. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
+        );
+      }
       const token = await getToken(getMessaging(), {
         vapidKey,
         serviceWorkerRegistration: registration,

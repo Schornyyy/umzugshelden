@@ -9,8 +9,8 @@ export async function authorizeAdminOwner(
   ownerId: string,
 ): Promise<boolean> {
   const configuredOwnerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
-  if (!ownerId || (configuredOwnerId && ownerId !== configuredOwnerId)) {
-    console.warn("Admin API authorization failed: owner mismatch");
+  if (!ownerId) {
+    console.warn("Admin API authorization failed: owner missing");
     return false;
   }
 
@@ -35,16 +35,26 @@ export async function authorizeAdminOwner(
   const accountQuery = await database
     .collection(USER_COLLECTION)
     .where("email", "==", tokenEmail)
-    .limit(1)
     .get();
-  const account = accountQuery.docs[0];
-  if (account) {
+  if (!accountQuery.empty) {
+    const authorizedAccount = accountQuery.docs.find((account) => {
+      const isAdmin =
+        String(account.get("role") ?? "").toLocaleLowerCase("de-DE") ===
+        "admin";
+      const canAccessOwner =
+        ownerId === account.id ||
+        Boolean(configuredOwnerId && ownerId === configuredOwnerId);
+      return isAdmin && canAccessOwner;
+    });
+    if (authorizedAccount) return true;
+
+    const account = accountQuery.docs[0];
     const isAdmin = String(account.get("role") ?? "").toLocaleLowerCase("de-DE") === "admin";
-    const canAccessOwner = configuredOwnerId
-      ? ownerId === configuredOwnerId
-      : ownerId === account.id;
-    if (isAdmin && canAccessOwner) return true;
-    console.warn("Admin API authorization failed: insufficient account access");
+    console.warn(
+      isAdmin
+        ? "Admin API authorization failed: owner mismatch"
+        : "Admin API authorization failed: insufficient account access",
+    );
     return false;
   }
 

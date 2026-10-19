@@ -14,93 +14,97 @@ export async function GET(request: Request) {
   if (!authorizeCronRequest(request)) {
     return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
   }
-  const ownerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
-  if (!ownerId) {
-    return NextResponse.json(
-      { error: "NEXT_PUBLIC_OWNERID fehlt." },
-      { status: 500 },
-    );
+  const database = getAdminDatabase();
+  const subscriptionSnapshot = await database
+    .collection(SUBSCRIPTION_COLLECTION)
+    .get();
+  if (subscriptionSnapshot.empty) {
+    return NextResponse.json({ success: true, sent: 0, reason: "no-subscriptions" });
   }
 
-  const database = getAdminDatabase();
-  const [customerSnapshot, subscriptionSnapshot] = await Promise.all([
-    database.collection(CUSTOMER_COLLECTION).where("ownerId", "==", ownerId).get(),
-    database
-      .collection(SUBSCRIPTION_COLLECTION)
-      .where("ownerId", "==", ownerId)
-      .get(),
-  ]);
-  const tokens = subscriptionSnapshot.docs
-    .map((document) => String(document.get("token") ?? "").trim())
-    .filter(Boolean);
-  if (tokens.length === 0) {
-    return NextResponse.json({ success: true, sent: 0, reason: "no-subscriptions" });
+  const subscriptionsByOwner = new Map<
+    string,
+    Array<{ token: string; reference: FirebaseFirestore.DocumentReference }>
+  >();
+  for (const document of subscriptionSnapshot.docs) {
+    const ownerId = String(document.get("ownerId") ?? "").trim();
+    const token = String(document.get("token") ?? "").trim();
+    if (!ownerId || !token) continue;
+    const subscriptions = subscriptionsByOwner.get(ownerId) ?? [];
+    subscriptions.push({ token, reference: document.ref });
+    subscriptionsByOwner.set(ownerId, subscriptions);
   }
 
   const now = Date.now();
   let sent = 0;
-  for (const customerDocument of customerSnapshot.docs) {
-    const customer = customerDocument.data() as CrmCustomer;
-    const dueAppointments = (customer.appointments ?? []).filter((appointment) => {
-      const startAt = new Date(appointment.startAt).getTime();
-      const reminderAt = startAt - TEN_MINUTES;
-      return (
-        appointment.type === "visit" &&
-        !appointment.completed &&
-        !appointment.reminderSentAt &&
-        Number.isFinite(startAt) &&
-        reminderAt <= now &&
-        startAt > now
-      );
-    });
-    if (dueAppointments.length === 0) continue;
-
-    const sentAppointmentIds = new Set<string>();
-    for (const appointment of dueAppointments) {
-      const link = `/admin/${ownerId}/crm/customers/${customerDocument.id}/appointments/${appointment.id}`;
-      const response = await getAdminMessaging().sendEachForMulticast({
-        tokens,
-        data: {
-          title: "Besichtigungstermin starten",
-          body: `${appointment.title} bei ${customer.name} beginnt in 10 Minuten.`,
-          link,
-        },
-        webpush: {
-          headers: { Urgency: "high" },
-          fcmOptions: { link },
-        },
+  for (const [ownerId, subscriptions] of subscriptionsByOwner) {
+    const tokens = subscriptions.map((subscription) => subscription.token);
+    const customerSnapshot = await database
+      .collection(CUSTOMER_COLLECTION)
+      .where("ownerId", "==", ownerId)
+      .get();
+    for (const customerDocument of customerSnapshot.docs) {
+      const customer = customerDocument.data() as CrmCustomer;
+      const dueAppointments = (customer.appointments ?? []).filter((appointment) => {
+        const startAt = new Date(appointment.startAt).getTime();
+        const reminderAt = startAt - TEN_MINUTES;
+        return (
+          appointment.type === "visit" &&
+          !appointment.completed &&
+          !appointment.reminderSentAt &&
+          Number.isFinite(startAt) &&
+          reminderAt <= now &&
+          startAt > now
+        );
       });
-      if (response.successCount > 0) {
-        sentAppointmentIds.add(appointment.id);
-        sent += response.successCount;
-      }
+      if (dueAppointments.length === 0) continue;
 
-      const invalidTokens = response.responses.flatMap((result, index) => {
-        const code = result.error?.code;
-        return code === "messaging/registration-token-not-registered" ||
-          code === "messaging/invalid-registration-token"
-          ? [tokens[index]]
-          : [];
-      });
-      if (invalidTokens.length > 0) {
-        const batch = database.batch();
-        for (const subscription of subscriptionSnapshot.docs) {
-          if (invalidTokens.includes(String(subscription.get("token") ?? ""))) {
-            batch.delete(subscription.ref);
-          }
+      const sentAppointmentIds = new Set<string>();
+      for (const appointment of dueAppointments) {
+        const link = `/admin/${ownerId}/crm/customers/${customerDocument.id}/appointments/${appointment.id}`;
+        const response = await getAdminMessaging().sendEachForMulticast({
+          tokens,
+          data: {
+            title: "Besichtigungstermin starten",
+            body: `${appointment.title} bei ${customer.name} beginnt in 10 Minuten.`,
+            link,
+          },
+          webpush: {
+            headers: { Urgency: "high" },
+            fcmOptions: { link },
+          },
+        });
+        if (response.successCount > 0) {
+          sentAppointmentIds.add(appointment.id);
+          sent += response.successCount;
         }
-        await batch.commit();
-      }
-    }
 
-    if (sentAppointmentIds.size > 0) {
-      const appointments = (customer.appointments ?? []).map(
-        (appointment): CrmAppointment =>
-          sentAppointmentIds.has(appointment.id)
-            ? { ...appointment, reminderSentAt: now }
-            : appointment,
-      );
-      await customerDocument.ref.update({ appointments, updatedAt: now });
+        const invalidTokenIndexes = response.responses.flatMap((result, index) => {
+          const code = result.error?.code;
+          return code === "messaging/registration-token-not-registered" ||
+            code === "messaging/invalid-registration-token"
+            ? [index]
+            : [];
+        });
+        if (invalidTokenIndexes.length > 0) {
+          const batch = database.batch();
+          for (const index of invalidTokenIndexes) {
+            const subscription = subscriptions[index];
+            if (subscription) batch.delete(subscription.reference);
+          }
+          await batch.commit();
+        }
+      }
+
+      if (sentAppointmentIds.size > 0) {
+        const appointments = (customer.appointments ?? []).map(
+          (appointment): CrmAppointment =>
+            sentAppointmentIds.has(appointment.id)
+              ? { ...appointment, reminderSentAt: now }
+              : appointment,
+        );
+        await customerDocument.ref.update({ appointments, updatedAt: now });
+      }
     }
   }
 
