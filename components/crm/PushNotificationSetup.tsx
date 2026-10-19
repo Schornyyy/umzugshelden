@@ -12,11 +12,11 @@ import { Bell, BellRing, LoaderCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type PushNotificationSetupProps = {
-  ownerId: string;
+  ownerIds: string[];
 };
 
-const notificationStorageKey = (ownerId: string) =>
-  `crm-push-notifications:${ownerId}`;
+const notificationStorageKey = (ownerIds: string[]) =>
+  `crm-push-notifications:${[...ownerIds].sort().join(":")}`;
 
 function waitForActiveServiceWorker(
   registration: ServiceWorkerRegistration,
@@ -68,7 +68,7 @@ function waitForActiveServiceWorker(
   });
 }
 
-async function registerPushDevice(ownerId: string, sendTest: boolean) {
+async function registerPushDevice(ownerIds: string[], sendTest: boolean) {
   if (!(await isSupported()) || !("serviceWorker" in navigator)) {
     throw new Error("Push wird von diesem Browser nicht unterstützt.");
   }
@@ -107,27 +107,35 @@ async function registerPushDevice(ownerId: string, sendTest: boolean) {
   await auth.authStateReady();
   const idToken = await auth.currentUser?.getIdToken(true);
   if (!idToken) throw new Error("Die Anmeldung ist abgelaufen.");
-  const response = await fetch("/api/crm/push-subscriptions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${idToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ ownerId, token, sendTest }),
-  });
-  const result = (await response.json().catch(() => null)) as {
-    error?: string;
-  } | null;
-  if (!response.ok) {
-    throw new Error(
-      result?.error || "Das Gerät konnte nicht registriert werden.",
-    );
+  for (const [index, ownerId] of ownerIds.entries()) {
+    const response = await fetch("/api/crm/push-subscriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ownerId,
+        token,
+        sendTest: sendTest && index === 0,
+      }),
+    });
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    if (!response.ok) {
+      throw new Error(
+        result?.error || "Das Gerät konnte nicht registriert werden.",
+      );
+    }
   }
 }
 
 export default function PushNotificationSetup({
-  ownerId,
+  ownerIds,
 }: PushNotificationSetupProps) {
+  const uniqueOwnerIds = [...new Set(ownerIds.filter(Boolean))];
+  const storageKey = notificationStorageKey(uniqueOwnerIds);
   const [status, setStatus] = useState<
     "idle" | "loading" | "enabled" | "unsupported" | "error"
   >("idle");
@@ -160,14 +168,14 @@ export default function PushNotificationSetup({
     if (
       typeof Notification === "undefined" ||
       Notification.permission !== "granted" ||
-      localStorage.getItem(notificationStorageKey(ownerId)) !== "enabled"
+      localStorage.getItem(storageKey) !== "enabled"
     ) {
       return;
     }
 
     let active = true;
     setStatus("loading");
-    void registerPushDevice(ownerId, false)
+    void registerPushDevice(uniqueOwnerIds, false)
       .then(() => {
         if (active) setStatus("enabled");
       })
@@ -176,7 +184,7 @@ export default function PushNotificationSetup({
           "Push-Benachrichtigungen konnten nicht wiederhergestellt werden.",
           caughtError,
         );
-        localStorage.removeItem(notificationStorageKey(ownerId));
+        localStorage.removeItem(storageKey);
         if (!active) return;
         setError(
           caughtError instanceof Error
@@ -188,14 +196,14 @@ export default function PushNotificationSetup({
     return () => {
       active = false;
     };
-  }, [ownerId]);
+  }, [storageKey]);
 
   async function enableNotifications() {
     setStatus("loading");
     setError("");
     try {
-      await registerPushDevice(ownerId, true);
-      localStorage.setItem(notificationStorageKey(ownerId), "enabled");
+      await registerPushDevice(uniqueOwnerIds, true);
+      localStorage.setItem(storageKey, "enabled");
       setStatus("enabled");
     } catch (caughtError) {
       console.error("Push-Benachrichtigungen konnten nicht aktiviert werden.", caughtError);

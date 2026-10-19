@@ -95,7 +95,11 @@ export default function AppointmentSession({
         );
         if (!snapshot.exists()) throw new Error("Kundenakte nicht gefunden.");
         const storedCustomer = snapshot.data() as CrmCustomer;
-        if (storedCustomer.ownerId !== ownerId) {
+        const configuredOwnerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
+        if (
+          storedCustomer.ownerId !== ownerId &&
+          storedCustomer.ownerId !== configuredOwnerId
+        ) {
           throw new Error("Du hast keinen Zugriff auf diesen Termin.");
         }
         const storedAppointment = storedCustomer.appointments?.find(

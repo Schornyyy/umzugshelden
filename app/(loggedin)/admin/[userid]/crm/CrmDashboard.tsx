@@ -51,6 +51,7 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   Archive,
   ArrowLeft,
+  BellRing,
   BriefcaseBusiness,
   CalendarDays,
   CalendarPlus,
@@ -274,6 +275,11 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   );
   const [appointmentError, setAppointmentError] = useState("");
   const [isSavingAppointment, setIsSavingAppointment] = useState(false);
+  const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
+  const [appointmentFeedback, setAppointmentFeedback] = useState<{
+    type: "sent" | "error";
+    message: string;
+  } | null>(null);
   const [selectedOfferForEmail, setSelectedOfferForEmail] =
     useState<SavedOfferSummary | null>(null);
   const [offerEmailForm, setOfferEmailForm] =
@@ -318,13 +324,26 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
         let loadedCustomers: CrmCustomer[] = [];
         try {
-          const customerSnapshot = await getDocs(
-            query(
-              collection(database, CRM_COLLECTION),
-              where("ownerId", "==", companyId)
+          const ownerIds = [...new Set([companyId, requestsCompanyId])];
+          const customerSnapshots = await Promise.all(
+            ownerIds.map((ownerId) =>
+              getDocs(
+                query(
+                  collection(database, CRM_COLLECTION),
+                  where("ownerId", "==", ownerId)
+                )
+              )
             )
           );
-          loadedCustomers = customerSnapshot.docs.map((customerDoc) => {
+          const customerDocuments = new Map(
+            customerSnapshots
+              .flatMap((snapshot) => snapshot.docs)
+              .map((customerDocument) => [
+                customerDocument.id,
+                customerDocument,
+              ])
+          );
+          loadedCustomers = [...customerDocuments.values()].map((customerDoc) => {
             const storedCustomer = customerDoc.data() as CrmCustomer;
             const id = storedCustomer.id || customerDoc.id;
             return {
@@ -523,6 +542,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
   useEffect(() => {
     setReviewFeedback(null);
+    setAppointmentFeedback(null);
     setActiveCustomerTab("overview");
     setSelectedOrderId(null);
   }, [selectedCustomerId]);
@@ -774,6 +794,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       setAppointmentError("Bitte einen gültigen Zeitraum mit Start und Ende angeben.");
       return;
     }
+
     const appointment: CrmAppointment = {
       id: crypto.randomUUID(),
       title: appointmentForm.title.trim(),
@@ -805,6 +826,52 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       setFeedback("error");
     } finally {
       setIsSavingAppointment(false);
+    }
+  }
+
+  async function sendAppointmentReminder(appointment: CrmAppointment) {
+    if (!draft) return;
+    setSendingReminderId(appointment.id);
+    setAppointmentFeedback(null);
+    try {
+      const idToken = await auth.currentUser?.getIdToken(true);
+      if (!idToken) throw new Error("Die Anmeldung ist abgelaufen.");
+      const response = await fetch("/api/crm/appointment-reminders/send", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ownerId: draft.ownerId,
+          customerId: draft.id,
+          appointmentId: appointment.id,
+        }),
+      });
+      const result = (await response.json().catch(() => null)) as {
+        error?: string;
+        sent?: number;
+      } | null;
+      if (!response.ok) {
+        throw new Error(
+          result?.error || "Die Erinnerung konnte nicht versendet werden.",
+        );
+      }
+      setAppointmentFeedback({
+        type: "sent",
+        message: `Erinnerung an ${result?.sent ?? 1} Gerät(e) gesendet.`,
+      });
+    } catch (error) {
+      console.error("Terminerinnerung konnte nicht versendet werden.", error);
+      setAppointmentFeedback({
+        type: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Erinnerung konnte nicht versendet werden.",
+      });
+    } finally {
+      setSendingReminderId(null);
     }
   }
 
@@ -1236,7 +1303,9 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
             <p className='mt-2 text-sm text-slate-600'>Die nächsten Kundentermine, Aufgaben und Vertriebszahlen auf einen Blick.</p>
           </div>
           <div className='flex flex-wrap items-start justify-end gap-2'>
-            {crmOwnerId && <PushNotificationSetup ownerId={crmOwnerId} />}
+            {crmOwnerId && requestOwnerId && (
+              <PushNotificationSetup ownerIds={[crmOwnerId, requestOwnerId]} />
+            )}
             <Button asChild><Link href={`/admin/${companyData?.id}/crm/customers`}><UsersRound /> Kunden öffnen</Link></Button>
           </div>
         </header>
@@ -1420,7 +1489,8 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
               <div className='space-y-6'>
                 <section>
                   <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><CalendarDays size={17} /> Termine & Aufgaben</h3><Button variant='outline' size='sm' onClick={openAppointmentDialog}><Plus /> Neu</Button></div>
-                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-start ${appointment.completed ? "bg-slate-50" : "bg-white"}`}><div className='flex min-w-0 flex-1 items-start gap-3'><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through opacity-65" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span>{appointment.session?.startedAt && <><span>·</span><span className='font-medium text-emerald-700'>{appointment.session.endedAt ? "Protokoll gespeichert" : "Tracking läuft"}</span></>}</p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div></div><div className='flex shrink-0 justify-end gap-1'>{appointment.type === "visit" && <Button asChild variant={appointment.session?.startedAt ? "outline" : "default"} size='sm'><Link href={`/admin/${companyData?.id}/crm/customers/${draft.id}/appointments/${appointment.id}`}><Play size={15} /> {appointment.session?.startedAt ? "Termin öffnen" : "Besichtigungstermin starten"}</Link></Button>}<Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div></div>)}</div>}
+                  {appointmentFeedback && <p className={`mb-3 rounded-md px-3 py-2 text-sm font-medium ${appointmentFeedback.type === "sent" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{appointmentFeedback.message}</p>}
+                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-start ${appointment.completed ? "bg-slate-50" : "bg-white"}`}><div className='flex min-w-0 flex-1 items-start gap-3'><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through opacity-65" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span>{appointment.session?.startedAt && <><span>·</span><span className='font-medium text-emerald-700'>{appointment.session.endedAt ? "Protokoll gespeichert" : "Tracking läuft"}</span></>}</p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div></div><div className='flex shrink-0 flex-wrap justify-end gap-1'>{appointment.type === "visit" && <><Button variant='outline' size='sm' disabled={sendingReminderId === appointment.id} onClick={() => void sendAppointmentReminder(appointment)}>{sendingReminderId === appointment.id ? <LoaderCircle className='animate-spin' size={15} /> : <BellRing size={15} />} Erinnerung senden</Button><Button asChild variant={appointment.session?.startedAt ? "outline" : "default"} size='sm'><Link href={`/admin/${companyData?.id}/crm/customers/${draft.id}/appointments/${appointment.id}`}><Play size={15} /> {appointment.session?.startedAt ? "Termin öffnen" : "Besichtigungstermin starten"}</Link></Button></>}<Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div></div>)}</div>}
                 </section>
 
                 <section className='border-t border-slate-200 pt-5'>

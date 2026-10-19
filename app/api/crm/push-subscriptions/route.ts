@@ -25,7 +25,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nicht autorisiert." }, { status: 401 });
   }
 
-  const id = createHash("sha256").update(token).digest("hex");
+  const id = createHash("sha256")
+    .update(`${ownerId}:${token}`)
+    .digest("hex");
   if (payload?.sendTest === true) {
     try {
       await getAdminMessaging().send({
@@ -51,17 +53,22 @@ export async function POST(request: Request) {
       );
     }
   }
-  await getAdminDatabase()
-    .collection(SUBSCRIPTION_COLLECTION)
-    .doc(id)
-    .set(
-      {
-        ownerId,
-        token,
-        userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? "",
-        updatedAt: Date.now(),
-      },
-      { merge: true },
-    );
+  const database = getAdminDatabase();
+  const subscriptions = database.collection(SUBSCRIPTION_COLLECTION);
+  const batch = database.batch();
+  batch.set(
+    subscriptions.doc(id),
+    {
+      ownerId,
+      token,
+      userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? "",
+      updatedAt: Date.now(),
+    },
+    { merge: true },
+  );
+  batch.delete(
+    subscriptions.doc(createHash("sha256").update(token).digest("hex")),
+  );
+  await batch.commit();
   return NextResponse.json({ success: true });
 }
