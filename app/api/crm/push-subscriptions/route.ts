@@ -1,5 +1,5 @@
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
-import { getAdminDatabase } from "@/lib/firebaseAdmin";
+import { getAdminDatabase, getAdminMessaging } from "@/lib/firebaseAdmin";
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 
@@ -11,6 +11,7 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
     ownerId?: string;
     token?: string;
+    sendTest?: boolean;
   } | null;
   const ownerId = payload?.ownerId?.trim() ?? "";
   const token = payload?.token?.trim() ?? "";
@@ -25,6 +26,31 @@ export async function POST(request: Request) {
   }
 
   const id = createHash("sha256").update(token).digest("hex");
+  if (payload?.sendTest === true) {
+    try {
+      await getAdminMessaging().send({
+        token,
+        data: {
+          title: "Erinnerungen aktiviert",
+          body: "Dieses Gerät erhält jetzt Erinnerungen vor Besichtigungsterminen.",
+          link: `/admin/${ownerId}/crm`,
+        },
+        webpush: {
+          headers: { Urgency: "high" },
+          fcmOptions: { link: `/admin/${ownerId}/crm` },
+        },
+      });
+    } catch (error) {
+      console.error("Push-Testnachricht konnte nicht gesendet werden.", error);
+      return NextResponse.json(
+        {
+          error:
+            "Das Gerät wurde erkannt, aber die Test-Benachrichtigung konnte nicht zugestellt werden.",
+        },
+        { status: 502 },
+      );
+    }
+  }
   await getAdminDatabase()
     .collection(SUBSCRIPTION_COLLECTION)
     .doc(id)

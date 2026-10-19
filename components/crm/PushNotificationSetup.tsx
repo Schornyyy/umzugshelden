@@ -15,6 +15,9 @@ type PushNotificationSetupProps = {
   ownerId: string;
 };
 
+const notificationStorageKey = (ownerId: string) =>
+  `crm-push-notifications:${ownerId}`;
+
 function waitForActiveServiceWorker(
   registration: ServiceWorkerRegistration,
   timeoutMs = 15_000,
@@ -65,6 +68,63 @@ function waitForActiveServiceWorker(
   });
 }
 
+async function registerPushDevice(ownerId: string, sendTest: boolean) {
+  if (!(await isSupported()) || !("serviceWorker" in navigator)) {
+    throw new Error("Push wird von diesem Browser nicht unterstützt.");
+  }
+  const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY?.trim();
+  if (!vapidKey) {
+    throw new Error(
+      "NEXT_PUBLIC_FIREBASE_VAPID_KEY ist noch nicht konfiguriert.",
+    );
+  }
+  const permission = sendTest
+    ? await Notification.requestPermission()
+    : Notification.permission;
+  if (permission !== "granted") {
+    throw new Error("Benachrichtigungen wurden nicht freigegeben.");
+  }
+
+  const pendingRegistration = await navigator.serviceWorker.register(
+    "/firebase-messaging-sw.js",
+    { scope: "/" },
+  );
+  await pendingRegistration.update();
+  const registration = await waitForActiveServiceWorker(pendingRegistration);
+  if (!registration.active) {
+    throw new Error(
+      "Der Benachrichtigungsdienst ist noch nicht aktiv. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
+    );
+  }
+  const token = await getToken(getMessaging(), {
+    vapidKey,
+    serviceWorkerRegistration: registration,
+  });
+  if (!token) {
+    throw new Error("Für dieses Gerät konnte kein Push-Token erstellt werden.");
+  }
+
+  await auth.authStateReady();
+  const idToken = await auth.currentUser?.getIdToken(true);
+  if (!idToken) throw new Error("Die Anmeldung ist abgelaufen.");
+  const response = await fetch("/api/crm/push-subscriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ ownerId, token, sendTest }),
+  });
+  const result = (await response.json().catch(() => null)) as {
+    error?: string;
+  } | null;
+  if (!response.ok) {
+    throw new Error(
+      result?.error || "Das Gerät konnte nicht registriert werden.",
+    );
+  }
+}
+
 export default function PushNotificationSetup({
   ownerId,
 }: PushNotificationSetupProps) {
@@ -74,7 +134,6 @@ export default function PushNotificationSetup({
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (status !== "enabled") return;
     let unsubscribe: (() => void) | undefined;
     void isSupported().then((supported) => {
       if (!supported) return;
@@ -95,65 +154,48 @@ export default function PushNotificationSetup({
       });
     });
     return () => unsubscribe?.();
-  }, [status]);
+  }, []);
+
+  useEffect(() => {
+    if (
+      typeof Notification === "undefined" ||
+      Notification.permission !== "granted" ||
+      localStorage.getItem(notificationStorageKey(ownerId)) !== "enabled"
+    ) {
+      return;
+    }
+
+    let active = true;
+    setStatus("loading");
+    void registerPushDevice(ownerId, false)
+      .then(() => {
+        if (active) setStatus("enabled");
+      })
+      .catch((caughtError) => {
+        console.error(
+          "Push-Benachrichtigungen konnten nicht wiederhergestellt werden.",
+          caughtError,
+        );
+        localStorage.removeItem(notificationStorageKey(ownerId));
+        if (!active) return;
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : "Push-Benachrichtigungen konnten nicht wiederhergestellt werden.",
+        );
+        setStatus("error");
+      });
+    return () => {
+      active = false;
+    };
+  }, [ownerId]);
 
   async function enableNotifications() {
     setStatus("loading");
     setError("");
     try {
-      if (!(await isSupported()) || !("serviceWorker" in navigator)) {
-        setStatus("unsupported");
-        return;
-      }
-      const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY?.trim();
-      if (!vapidKey) {
-        throw new Error(
-          "NEXT_PUBLIC_FIREBASE_VAPID_KEY ist noch nicht konfiguriert.",
-        );
-      }
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        throw new Error("Benachrichtigungen wurden nicht freigegeben.");
-      }
-
-      const pendingRegistration = await navigator.serviceWorker.register(
-        "/firebase-messaging-sw.js",
-        { scope: "/" },
-      );
-      await pendingRegistration.update();
-      const registration =
-        await waitForActiveServiceWorker(pendingRegistration);
-      if (!registration.active) {
-        throw new Error(
-          "Der Benachrichtigungsdienst ist noch nicht aktiv. Bitte laden Sie die Seite neu und versuchen Sie es erneut.",
-        );
-      }
-      const token = await getToken(getMessaging(), {
-        vapidKey,
-        serviceWorkerRegistration: registration,
-      });
-      if (!token) {
-        throw new Error("Für dieses Gerät konnte kein Push-Token erstellt werden.");
-      }
-
-      const idToken = await auth.currentUser?.getIdToken(true);
-      if (!idToken) throw new Error("Die Anmeldung ist abgelaufen.");
-      const response = await fetch("/api/crm/push-subscriptions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ownerId, token }),
-      });
-      const result = (await response.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      if (!response.ok) {
-        throw new Error(
-          result?.error || "Das Gerät konnte nicht registriert werden.",
-        );
-      }
+      await registerPushDevice(ownerId, true);
+      localStorage.setItem(notificationStorageKey(ownerId), "enabled");
       setStatus("enabled");
     } catch (caughtError) {
       console.error("Push-Benachrichtigungen konnten nicht aktiviert werden.", caughtError);
