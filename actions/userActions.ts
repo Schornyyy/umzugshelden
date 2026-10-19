@@ -5,6 +5,40 @@ import type { User } from "@/types/UserType";
 import { redirect } from "next/navigation";
 
 const USERS_COLLECTION = "users_umzugshelden";
+const CRM_CUSTOMERS_COLLECTION = "crm_customers_umzugshelden";
+const CRM_INVOICES_COLLECTION = "crm_invoices_umzugshelden";
+const CRM_HANDOVER_COLLECTION = "crm_handover_protocols_umzugshelden";
+const OFFER_COLLECTION = "offer_calculators_umzugshelden";
+
+async function getCrmDataScore(ownerId: string): Promise<number> {
+	const database = getAdminDatabase();
+	const [customers, invoices, handovers, offers] = await Promise.all([
+		database
+			.collection(CRM_CUSTOMERS_COLLECTION)
+			.where("ownerId", "==", ownerId)
+			.count()
+			.get(),
+		database
+			.collection(CRM_INVOICES_COLLECTION)
+			.where("ownerId", "==", ownerId)
+			.count()
+			.get(),
+		database
+			.collection(CRM_HANDOVER_COLLECTION)
+			.where("ownerId", "==", ownerId)
+			.count()
+			.get(),
+		database.collection(OFFER_COLLECTION).doc(ownerId).get(),
+	]);
+	const savedCalculations = offers.data()?.savedCalculations;
+
+	return (
+		customers.data().count +
+		invoices.data().count +
+		handovers.data().count +
+		(Array.isArray(savedCalculations) ? savedCalculations.length : 0)
+	);
+}
 
 /**
  * Create a new user in Firestore.
@@ -34,11 +68,22 @@ export async function getUserByEmail(email: string): Promise<(User & { id: strin
 	const snaps = await getAdminDatabase()
 		.collection(USERS_COLLECTION)
 		.where("email", "==", email)
-		.limit(1)
 		.get();
-	const first = snaps.docs[0];
-	if (!first) return null;
-	return { ...(first.data() as User), id: first.id };
+	if (snaps.empty) return null;
+	if (snaps.size === 1) {
+		const account = snaps.docs[0];
+		return { ...(account.data() as User), id: account.id };
+	}
+
+	const scoredAccounts = await Promise.all(
+		snaps.docs.map(async (account) => ({
+			account,
+			score: await getCrmDataScore(account.id),
+		}))
+	);
+	scoredAccounts.sort((left, right) => right.score - left.score);
+	const selected = scoredAccounts[0].account;
+	return { ...(selected.data() as User), id: selected.id };
 }
 
 /**

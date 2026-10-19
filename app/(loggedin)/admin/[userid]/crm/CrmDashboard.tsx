@@ -1,6 +1,8 @@
 "use client";
 
+import { listRequestsByOwner } from "@/actions/requestsActions";
 import { Button } from "@/components/ui/button";
+import PushNotificationSetup from "@/components/crm/PushNotificationSetup";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +66,7 @@ import {
   NotebookPen,
   Phone,
   Plus,
+  Play,
   ReceiptText,
   Save,
   Search,
@@ -246,6 +249,9 @@ type CrmDashboardProps = {
 
 export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   const { companyData } = useCompanyData();
+  const crmOwnerId = companyData?.id;
+  const requestOwnerId =
+    process.env.NEXT_PUBLIC_OWNERID?.trim() || crmOwnerId;
   const [customers, setCustomers] = useState<CrmCustomer[]>([]);
   const [offers, setOffers] = useState<SavedOfferSummary[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
@@ -255,6 +261,9 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<CrmCustomerStatus | "all">("all");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadWarning, setLoadWarning] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [feedback, setFeedback] = useState<"idle" | "saved" | "error">("idle");
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
@@ -287,35 +296,127 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   const deferredSearch = useDeferredValue(search.trim().toLocaleLowerCase("de-DE"));
 
   useEffect(() => {
-    const ownerId = companyData?.id;
-    if (!ownerId) return;
+    if (!crmOwnerId || !requestOwnerId) return;
     let active = true;
 
-    async function loadCrm(companyId: string) {
+    async function loadCrm(companyId: string, requestsCompanyId: string) {
       setIsLoading(true);
+      setLoadError("");
+      setLoadWarning("");
       try {
-        const [customerSnapshot, offerSnapshot] = await Promise.all([
-          getDocs(query(collection(database, CRM_COLLECTION), where("ownerId", "==", companyId))),
-          getDoc(doc(database, OFFER_COLLECTION, companyId)),
-        ]);
+        const warnings: string[] = [];
+        let requests: Awaited<ReturnType<typeof listRequestsByOwner>> = [];
+        try {
+          requests = await listRequestsByOwner(requestsCompanyId);
+        } catch (error) {
+          console.error("Anfragen konnten nicht zusätzlich geladen werden.", error);
+          warnings.push(
+            "Neue und historische Website-Anfragen sind derzeit nicht verfügbar."
+          );
+        }
         if (!active) return;
 
-        const loadedCustomers = customerSnapshot.docs
-          .map((customerDoc) => {
-            const customer = customerDoc.data() as CrmCustomer;
+        let loadedCustomers: CrmCustomer[] = [];
+        try {
+          const customerSnapshot = await getDocs(
+            query(
+              collection(database, CRM_COLLECTION),
+              where("ownerId", "==", companyId)
+            )
+          );
+          loadedCustomers = customerSnapshot.docs.map((customerDoc) => {
+            const storedCustomer = customerDoc.data() as CrmCustomer;
+            const id = storedCustomer.id || customerDoc.id;
             return {
-              ...customer,
+              ...storedCustomer,
+              id,
               customerNumber:
-                customer.customerNumber ||
-                createCustomerNumber(customer.id, customer.createdAt),
-              tags: customer.tags ?? [],
-              notes: customer.notes ?? [],
-              appointments: customer.appointments ?? [],
-              orders: (customer.orders ?? []).map(normalizeCrmOrder),
+                storedCustomer.customerNumber ||
+                createCustomerNumber(id, storedCustomer.createdAt),
+              tags: Array.isArray(storedCustomer.tags) ? storedCustomer.tags : [],
+              notes: Array.isArray(storedCustomer.notes) ? storedCustomer.notes : [],
+              appointments: Array.isArray(storedCustomer.appointments)
+                ? storedCustomer.appointments
+                : [],
+              orders: Array.isArray(storedCustomer.orders)
+                ? storedCustomer.orders.map(normalizeCrmOrder)
+                : [],
             };
-          })
-          .sort((left, right) => right.updatedAt - left.updatedAt);
-        const savedCalculations = (offerSnapshot.data()?.savedCalculations ?? []) as SavedOfferSummary[];
+          });
+        } catch (error) {
+          console.error("Erweiterte CRM-Kundendaten konnten nicht geladen werden.", error);
+          warnings.push(
+            "Anfragen wurden geladen, aber ergänzende CRM-Kundendaten sind derzeit nicht verfügbar."
+          );
+        }
+
+        let offerData: Record<string, unknown> | undefined;
+        try {
+          const offerSnapshot = await getDoc(
+            doc(database, OFFER_COLLECTION, companyId)
+          );
+          offerData = offerSnapshot.data();
+        } catch (error) {
+          console.error("CRM-Angebotsdaten konnten nicht geladen werden.", error);
+          warnings.push(
+            "Angebote und Aufgabenvorlagen sind derzeit nicht verfügbar."
+          );
+        }
+        if (!active) return;
+
+        const customersById = new Map(
+          loadedCustomers.map((customer) => [customer.id, customer])
+        );
+        for (const request of requests) {
+          const id = request.id;
+          if (customersById.has(id)) continue;
+
+          const createdAt =
+            typeof request.createdAt === "number" ? request.createdAt : 0;
+          const requestNotes: CrmNote[] = [];
+          if (request.message?.trim()) {
+            requestNotes.push({
+              id: `${id}-request`,
+              text: request.message.trim(),
+              createdAt,
+            });
+          }
+          for (const [index, notice] of (request.notices ?? []).entries()) {
+            requestNotes.push({
+              id: `${id}-notice-${index}`,
+              text: [notice.titel, notice.msg].filter(Boolean).join(": "),
+              createdAt: notice.createdAt ?? createdAt,
+            });
+          }
+
+          customersById.set(id, {
+            id,
+            ownerId: request.ownerId || companyId,
+            customerNumber: createCustomerNumber(id, createdAt),
+            name: request.name?.trim() || "Unbekannte Anfrage",
+            company: "",
+            email: request.email?.trim() || "",
+            phone: request.phone?.trim() || "",
+            street: "",
+            postalCode: "",
+            city: "",
+            status: "lead",
+            source: "Website-Anfrage",
+            tags: ["Website-Anfrage"],
+            notes: requestNotes,
+            appointments: [],
+            orders: [],
+            createdAt,
+            updatedAt: createdAt,
+          });
+        }
+        loadedCustomers = [...customersById.values()].sort(
+          (left, right) => right.updatedAt - left.updatedAt
+        );
+        const savedCalculationsValue = offerData?.savedCalculations;
+        const savedCalculations = Array.isArray(savedCalculationsValue)
+          ? (savedCalculationsValue as SavedOfferSummary[])
+          : [];
         const analyzedCustomers = loadedCustomers.map((customer) => ({
           ...customer,
           orders: customer.orders.map((order) => {
@@ -328,11 +429,18 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
               : order;
           }),
         }));
-        const savedTaskTemplates = offerSnapshot.data()?.taskTemplates;
+        const savedTaskTemplates = offerData?.taskTemplates;
         const savedTemplateCatalogVersion =
-          offerSnapshot.data()?.taskTemplateCatalogVersion ?? 0;
+          typeof offerData?.taskTemplateCatalogVersion === "number"
+            ? offerData.taskTemplateCatalogVersion
+            : 0;
         const existingTemplates = Array.isArray(savedTaskTemplates)
-          ? (savedTaskTemplates as CrmTaskTemplate[])
+          ? (savedTaskTemplates as CrmTaskTemplate[]).filter(
+              (template) =>
+                template &&
+                typeof template.id === "string" &&
+                Array.isArray(template.tasks)
+            )
           : [];
         const upgradedExistingTemplates = existingTemplates.map((template) => {
           const defaultTemplate = DEFAULT_CRM_TASK_TEMPLATES.find(
@@ -385,22 +493,28 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
         setCustomers(analyzedCustomers);
         setOffers(savedCalculations);
         setTaskTemplates(templates);
+        setLoadWarning(warnings.join(" "));
         setSelectedCustomerId(
           (current) => current ?? customerId ?? analyzedCustomers[0]?.id ?? null
         );
         setFeedback("idle");
-      } catch {
-        if (active) setFeedback("error");
+      } catch (error) {
+        console.error("Anfragen konnten nicht in das CRM geladen werden.", error);
+        if (active) {
+          setLoadError(
+            "Die Anfragen konnten nicht geladen werden. Bitte versuche es erneut."
+          );
+        }
       } finally {
         if (active) setIsLoading(false);
       }
     }
 
-    void loadCrm(ownerId);
+    void loadCrm(crmOwnerId, requestOwnerId);
     return () => {
       active = false;
     };
-  }, [companyData?.id, customerId]);
+  }, [crmOwnerId, requestOwnerId, customerId, loadAttempt]);
 
   useEffect(() => {
     const customer = customers.find((item) => item.id === selectedCustomerId) ?? null;
@@ -457,7 +571,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   }
 
   async function createCustomer() {
-    const ownerId = companyData?.id;
+    const ownerId = crmOwnerId;
     const name = newCustomer.name.trim();
     if (!ownerId || !name) return;
 
@@ -562,7 +676,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   }
 
   async function requestGoogleReview() {
-    const ownerId = companyData?.id;
+    const ownerId = crmOwnerId;
     if (!draft || !ownerId) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
       setReviewFeedback({
@@ -959,7 +1073,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     taskId: string,
     file: File
   ) {
-    const ownerId = companyData?.id;
+    const ownerId = crmOwnerId;
     const customer = draft;
     const orderTask = customer?.orders
       .find((order) => order.id === orderId)
@@ -996,7 +1110,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   }
 
   async function saveTaskTemplates(nextTemplates: CrmTaskTemplate[]) {
-    const ownerId = companyData?.id;
+    const ownerId = crmOwnerId;
     if (!ownerId) return false;
     setIsSavingTemplates(true);
     try {
@@ -1084,16 +1198,47 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     );
   }
 
+  if (loadError) {
+    return (
+      <div
+        className='flex min-h-72 flex-col items-center justify-center gap-4 rounded-md border border-red-200 bg-red-50 px-6 text-center'
+        role='alert'>
+        <div>
+          <p className='font-semibold text-red-800'>CRM konnte nicht geladen werden</p>
+          <p className='mt-1 text-sm text-red-700'>{loadError}</p>
+        </div>
+        <Button
+          type='button'
+          variant='outline'
+          onClick={() => setLoadAttempt((current) => current + 1)}>
+          Erneut laden
+        </Button>
+      </div>
+    );
+  }
+
+  const loadWarningBanner = loadWarning ? (
+    <div
+      className='mb-5 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800'
+      role='status'>
+      {loadWarning}
+    </div>
+  ) : null;
+
   if (view === "dashboard") {
     return (
       <main className='pb-4'>
+        {loadWarningBanner}
         <header className='mb-5 flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end'>
           <div>
             <p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>Kunden & Vertrieb</p>
             <h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>CRM Dashboard</h1>
             <p className='mt-2 text-sm text-slate-600'>Die nächsten Kundentermine, Aufgaben und Vertriebszahlen auf einen Blick.</p>
           </div>
-          <Button asChild><Link href={`/admin/${companyData?.id}/crm/customers`}><UsersRound /> Kunden öffnen</Link></Button>
+          <div className='flex flex-wrap items-start justify-end gap-2'>
+            {crmOwnerId && <PushNotificationSetup ownerId={crmOwnerId} />}
+            <Button asChild><Link href={`/admin/${companyData?.id}/crm/customers`}><UsersRound /> Kunden öffnen</Link></Button>
+          </div>
         </header>
 
         <section className='mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4' aria-label='CRM Kennzahlen'>
@@ -1127,6 +1272,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   if (view === "customers") {
     return (
       <main className='pb-4'>
+        {loadWarningBanner}
         <header className='mb-5 flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-end'>
           <div><p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>Kunden & Vertrieb</p><h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>Kundenübersicht</h1><p className='mt-2 text-sm text-slate-600'>{customers.length} Kundenakten durchsuchen und verwalten.</p></div>
           <Button onClick={() => setIsCustomerDialogOpen(true)}><Plus /> Kunde anlegen</Button>
@@ -1149,6 +1295,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
   return (
     <main className='mx-auto w-full max-w-[1500px] pb-4'>
+      {loadWarningBanner}
       <header className='mb-5 flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end'>
         <div>
           <Link href={`/admin/${companyData?.id}/crm/customers`} className='mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-blue-700'><ArrowLeft size={16} /> Zur Kundenübersicht</Link>
@@ -1273,7 +1420,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
               <div className='space-y-6'>
                 <section>
                   <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><CalendarDays size={17} /> Termine & Aufgaben</h3><Button variant='outline' size='sm' onClick={openAppointmentDialog}><Plus /> Neu</Button></div>
-                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex items-start gap-3 p-3 ${appointment.completed ? "bg-slate-50 opacity-65" : "bg-white"}`}><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span></p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div>)}</div>}
+                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-start ${appointment.completed ? "bg-slate-50" : "bg-white"}`}><div className='flex min-w-0 flex-1 items-start gap-3'><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through opacity-65" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span>{appointment.session?.startedAt && <><span>·</span><span className='font-medium text-emerald-700'>{appointment.session.endedAt ? "Protokoll gespeichert" : "Tracking läuft"}</span></>}</p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div></div><div className='flex shrink-0 justify-end gap-1'>{appointment.type === "visit" && <Button asChild variant={appointment.session?.startedAt ? "outline" : "default"} size='sm'><Link href={`/admin/${companyData?.id}/crm/customers/${draft.id}/appointments/${appointment.id}`}><Play size={15} /> {appointment.session?.startedAt ? "Termin öffnen" : "Besichtigungstermin starten"}</Link></Button>}<Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div></div>)}</div>}
                 </section>
 
                 <section className='border-t border-slate-200 pt-5'>

@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/optimize-blogs",
       "schedule": "*/59 * * * *"
+    },
+    {
+      "path": "/api/cron/crm-appointment-reminders",
+      "schedule": "* * * * *"
     }
   ]
 }

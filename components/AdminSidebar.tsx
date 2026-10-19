@@ -29,6 +29,7 @@ import {
   MapPinned,
   MessageSquareQuote,
   PackageCheck,
+  Trash2,
   UsersRound,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
@@ -87,6 +88,28 @@ const data = {
           title: "Kalkulator",
           url: "/crm/calculator",
           icon: Calculator,
+          exact: true,
+        },
+        {
+          title: "Umzugspreisberechnung",
+          url: "/crm/calculator/pricing",
+          icon: Calculator,
+          exact: true,
+          subItem: true,
+        },
+        {
+          title: "Entrümpelungskalkulation",
+          url: "/crm/calculator/clearance",
+          icon: Trash2,
+          exact: true,
+          subItem: true,
+        },
+        {
+          title: "Entrümpelungspreise",
+          url: "/crm/calculator/clearance/pricing",
+          icon: Calculator,
+          exact: true,
+          subItem: true,
         },
         {
           title: "Material-Preisliste",
@@ -168,6 +191,12 @@ export function AdminSideBar({
                               item.url === "/citys" &&
                               pathname.startsWith(
                                 `/admin/${companyData?.id}/citys/freigaben`,
+                              )
+                            ) &&
+                            !(
+                              item.url === "/crm/calculator" &&
+                              pathname.startsWith(
+                                `/admin/${companyData?.id}/crm/calculator/pricing`,
                               )
                             )
                       }

@@ -90,6 +90,7 @@ export type CrmOfferDocument = {
   validUntil?: string;
   paymentTerms?: string;
   grossTotal?: number;
+  acceptedPriceGross?: number;
   employees?: number;
   hoursPerEmployee?: number;
   kilometers?: number;
@@ -538,7 +539,13 @@ export function createOfferDocumentHtml(
   const netTotal = directCost + surcharge - discount;
   const vatPercent = safeNumber(rates.vatPercent);
   const vat = netTotal * (vatPercent / 100);
-  const grossTotal = netTotal + vat;
+  const calculatedGrossTotal = netTotal + vat;
+  const acceptedGrossTotal =
+    safeNumber(offer.acceptedPriceGross) ||
+    safeNumber(offer.grossTotal) ||
+    calculatedGrossTotal;
+  const acceptedNetTotal = acceptedGrossTotal / (1 + vatPercent / 100);
+  const acceptedVat = acceptedGrossTotal - acceptedNetTotal;
   const services = (planning.serviceTypes ?? [])
     .map((service) => serviceLabels[service] ?? service)
     .join(", ");
@@ -637,7 +644,7 @@ tr, .header, .card, .totals { break-inside: avoid; }
 ${planning.oldAddress || planning.newAddress ? `<section class="grid"><div class="card"><p class="label">Auszug / Einsatzort</p><strong>${escapeHtml(planning.oldAddress || "Nicht angegeben")}</strong><div class="muted">Etage: ${escapeHtml(planning.oldFloor || "-")} · Aufzug: ${planning.oldElevator ? "vorhanden" : "nicht vorhanden"}</div></div><div class="card"><p class="label">Einzug / Zielort</p><strong>${escapeHtml(planning.newAddress || "Nicht angegeben")}</strong><div class="muted">Etage: ${escapeHtml(planning.newFloor || "-")} · Aufzug: ${planning.newElevator ? "vorhanden" : "nicht vorhanden"}</div></div></section>` : ""}
 ${scopeHtml}
 <h2>Leistungen und Kosten</h2><table><thead><tr><th>Position / Berechnung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis</th><th>Gesamt</th></tr></thead><tbody>${costRowsHtml || '<tr><td>Leistung nach Vereinbarung</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>'}</tbody></table>
-<section class="totals"><div class="total-row"><span>Direkte Kosten</span><strong>${formatCurrency(directCost)}</strong></div><div class="total-row"><span>Aufschlag (${formatNumber(surchargePercent)} %)</span><strong>${formatCurrency(surcharge)}</strong></div>${discount > 0 ? `<div class="total-row"><span>Rabatt (${formatNumber(discountPercent)} %)</span><strong>-${formatCurrency(discount)}</strong></div>` : ""}<div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(netTotal)}</strong></div><div class="total-row"><span>MwSt. (${formatNumber(vatPercent)} %)</span><strong>${formatCurrency(vat)}</strong></div><div class="total-row gross"><span>Gesamtbetrag brutto</span><strong>${formatCurrency(grossTotal)}</strong></div></section>
+<section class="totals"><div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(acceptedNetTotal)}</strong></div><div class="total-row"><span>MwSt. (${formatNumber(vatPercent)} %)</span><strong>${formatCurrency(acceptedVat)}</strong></div><div class="total-row gross"><span>Akzeptierter Angebotspreis</span><strong>${formatCurrency(acceptedGrossTotal)}</strong></div></section>
 ${inventoryHtml}${planning.notes ? `<div class="notes"><strong>Hinweise zur Ausführung:</strong><br>${escapeHtml(planning.notes).replaceAll("\n", "<br>")}</div>` : ""}
 <div class="terms"><p><strong>Zahlungsbedingung:</strong> ${escapeHtml(offer.paymentTerms?.trim() || DEFAULT_OFFER_PAYMENT_TERMS)}</p><p><strong>Vertragsschluss:</strong> Dieses Angebot ist freibleibend. Ein Vertrag kommt durch unsere Auftragsbestätigung oder den Beginn der Leistungserbringung zustande.</p><p><strong>Grundlage:</strong> Es gelten unsere AGB unter umzugshelden.io/agb.</p></div>
 <div class="notice"><strong>Unverbindlicher Kostenanschlag:</strong> Die Kalkulation basiert auf den aktuell erfassten Angaben. Wird eine wesentliche Überschreitung erwartet, informieren wir den Auftraggeber unverzüglich (§ 649 BGB). Änderungen oder Zusatzleistungen werden nur nach Abstimmung ausgeführt und gesondert berechnet.</div>

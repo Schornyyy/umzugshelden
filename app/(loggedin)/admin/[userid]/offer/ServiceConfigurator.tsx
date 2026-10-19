@@ -262,6 +262,7 @@ function ClearanceServiceCalculator(props: Omit<ServiceConfiguratorProps, "servi
         <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Weitere Angaben zu Entsorgung und Aufwand</summary>
         <div className='mt-4 grid gap-4 sm:grid-cols-2'>
           <TextField label='Etage / Bereich' value={planning.oldFloor} onChange={(value) => onPlanningChange("oldFloor", value)} placeholder='z. B. Keller und 2. OG' />
+          <NumberField label='Etage für die Preisberechnung' value={planning.oldFloorLevel} onChange={(value) => onPlanningChange("oldFloorLevel", value)} suffix='OG' step='1' />
           <NumberField label='Sondermüll / Problemstoffe' value={planning.clearanceHazardousVolumeM3} onChange={(value) => onPlanningChange("clearanceHazardousVolumeM3", value)} suffix='m³' step='0.1' />
           <NumberField label='Container inkl. Stellung' value={planning.clearanceContainerCount} onChange={(value) => onPlanningChange("clearanceContainerCount", value)} suffix='Stk.' />
           <NumberField label='Schwere Gegenstände' value={planning.clearanceHeavyItems} onChange={(value) => onPlanningChange("clearanceHeavyItems", value)} suffix='Stk.' />

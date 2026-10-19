@@ -13,6 +13,20 @@ export interface CrmNote {
   createdAt: number;
 }
 
+export interface CrmAppointmentPhoto {
+  id: string;
+  url: string;
+  name: string;
+  uploadedAt: number;
+}
+
+export interface CrmAppointmentSession {
+  startedAt: number;
+  endedAt?: number;
+  note: string;
+  photos: CrmAppointmentPhoto[];
+}
+
 export interface CrmAppointment {
   id: string;
   title: string;
@@ -22,6 +36,8 @@ export interface CrmAppointment {
   details: string;
   completed: boolean;
   createdAt: number;
+  reminderSentAt?: number;
+  session?: CrmAppointmentSession;
 }
 
 export type CrmOrderTaskPhase = "before" | "during" | "after";

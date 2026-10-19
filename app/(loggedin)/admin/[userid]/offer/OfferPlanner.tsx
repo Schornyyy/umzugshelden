@@ -17,6 +17,15 @@ import {
   DEFAULT_OFFER_PAYMENT_TERMS,
   OFFER_ISSUER,
 } from "@/lib/crmOfferDocument";
+import {
+  calculateConfiguredSurcharges,
+  defaultOfferPricingSettings,
+  getClearanceEmployeesForVolume,
+  getEmployeesForVolume,
+  normalizeOfferPricingSettings,
+  type OfferPricingSettings,
+  type VehiclePricingItem,
+} from "@/lib/offerPricingSettings";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type { CrmCustomer } from "@/types/Crm";
 import type { AssistantOfferDraft } from "@/types/OfferAssistant";
@@ -40,6 +49,7 @@ import {
   Paintbrush,
   Printer,
   Save,
+  Search,
   Trash2,
   Users,
   Warehouse,
@@ -281,6 +291,7 @@ type Calculation = {
   logisticsCost: number;
   otherCost: number;
   discountPercent: number;
+  acceptedPriceGross: number;
   packageName?: string;
   positionLabels: Record<string, string>;
   autoEstimate: boolean;
@@ -300,6 +311,7 @@ type CalculatorData = {
   savedCalculations: SavedCalculation[];
   packages: OfferPackage[];
   materialCatalog: MaterialCatalogItem[];
+  pricingSettings: OfferPricingSettings;
 };
 
 const storageCollection = "offer_calculators_umzugshelden";
@@ -320,13 +332,6 @@ const serviceOptions: Array<{
   { id: "storage", label: "Einlagerung", description: "Volumen, Dauer und Transport", icon: Warehouse },
 ];
 
-const vehicleOptions = [
-  { id: "transporter", name: "Sprinter", capacityM3: 12, dailyRate: 120 },
-  { id: "truck-3-5t", name: "3,5-t Koffer", capacityM3: 20, dailyRate: 95 },
-  { id: "truck-7-5t", name: "7,5-t LKW", capacityM3: 35, dailyRate: 165 },
-  { id: "truck-12t", name: "12-t LKW", capacityM3: 50, dailyRate: 235 },
-] as const;
-
 const planningSteps: Array<{
   id: PlanningStep;
   label: string;
@@ -338,14 +343,6 @@ const planningSteps: Array<{
   { id: "inventory", label: "Inventar", shortLabel: "3", icon: Box },
   { id: "price", label: "Angebot", shortLabel: "4", icon: Euro },
   { id: "finish", label: "Abschluss", shortLabel: "5", icon: Check },
-];
-
-const commonInventoryItems = [
-  { name: "Sofa", volumeM3: 1.8 },
-  { name: "Bett", volumeM3: 1.4 },
-  { name: "Kleiderschrank", volumeM3: 2.2 },
-  { name: "Waschmaschine", volumeM3: 0.4 },
-  { name: "Umzugskarton", volumeM3: 0.08 },
 ];
 
 const emptyInventoryItemDraft: InventoryItemDraft = {
@@ -522,12 +519,17 @@ function createOfferNumber() {
   return `ANG-${datePart}-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
 }
 
-function createCalculation(): Calculation {
+function createCalculation(fixedService?: ServiceKey): Calculation {
   const validUntil = new Date();
   validUntil.setDate(validUntil.getDate() + 14);
+  const planning = createPlanning();
+  if (fixedService) planning.serviceTypes = [fixedService];
 
   return {
-    title: "Neues Angebot",
+    title:
+      fixedService === "clearance"
+        ? "Entrümpelungsangebot"
+        : "Neues Angebot",
     customer: "",
     customerAddress: "",
     offerNumber: createOfferNumber(),
@@ -543,9 +545,10 @@ function createCalculation(): Calculation {
     logisticsCost: 0,
     otherCost: 0,
     discountPercent: 0,
+    acceptedPriceGross: 0,
     positionLabels: {},
     autoEstimate: true,
-    planning: createPlanning(),
+    planning,
   };
 }
 
@@ -686,16 +689,22 @@ function calculateExtraServices(extraServices: ServiceLine[]) {
   );
 }
 
-function calculateRecommendedVehicles(requiredVolumeM3: number): VehicleSelection[] {
-  if (requiredVolumeM3 <= 0) return [];
+function calculateRecommendedVehicles(
+  requiredVolumeM3: number,
+  vehicles: VehiclePricingItem[]
+): VehicleSelection[] {
+  if (requiredVolumeM3 <= 0 || vehicles.length === 0) return [];
 
   const selectedVehicles: VehicleSelection[] = [];
   let remainingVolume = requiredVolumeM3;
+  const sortedVehicles = [...vehicles].sort(
+    (left, right) => left.capacityM3 - right.capacityM3
+  );
 
   while (remainingVolume > 0.01) {
-    const vehicle = vehicleOptions.find(
+    const vehicle = sortedVehicles.find(
       (option) => option.capacityM3 >= remainingVolume
-    ) ?? vehicleOptions[vehicleOptions.length - 1];
+    ) ?? sortedVehicles[sortedVehicles.length - 1];
     const existing = selectedVehicles.find(
       (selection) => selection.vehicleId === vehicle.id
     );
@@ -713,10 +722,11 @@ function calculateRecommendedVehicles(requiredVolumeM3: number): VehicleSelectio
 
 function calculateVehicleCost(
   selections: VehicleSelection[],
-  vehicleDays: number
+  vehicleDays: number,
+  vehicles: VehiclePricingItem[]
 ) {
   return selections.reduce((total, selection) => {
-    const vehicle = vehicleOptions.find(
+    const vehicle = vehicles.find(
       (option) => option.id === selection.vehicleId
     );
     return total + (vehicle?.dailyRate ?? 0) * selection.quantity * vehicleDays;
@@ -751,7 +761,8 @@ function calculateServiceRecommendation(
   calculation: Calculation,
   rates: Rates,
   volume: number,
-  materialCatalog: MaterialCatalogItem[]
+  materialCatalog: MaterialCatalogItem[],
+  pricingSettings: OfferPricingSettings
 ): ServiceRecommendation {
   const { planning } = calculation;
   const hasService = planning.serviceTypes.length > 0;
@@ -802,11 +813,10 @@ function calculateServiceRecommendation(
         (moveTrips - 1) * 1.5
     );
     labourHours += moveLabourHours;
-    const volumeBasedCrew = volume > 35 ? 4 : volume > 15 ? 3 : 2;
+    const volumeBasedCrew = getEmployeesForVolume(volume, pricingSettings);
     employees = Math.max(
       employees,
-      volumeBasedCrew,
-      planning.moveCrewPreference
+      volumeBasedCrew
     );
     requiredVehicleVolume = Math.max(requiredVehicleVolume, volume / moveTrips);
     const moveLogistics =
@@ -837,16 +847,49 @@ function calculateServiceRecommendation(
     const clearanceVolume = planning.disposalVolumeM3 || volume;
     const totalClearanceVolume =
       clearanceVolume + planning.clearanceHazardousVolumeM3;
+    const clearanceSettings = pricingSettings.clearance;
+    const clearanceComplexityFactor =
+      planning.moveComplexity === "easy"
+        ? clearanceSettings.easyComplexityFactor
+        : planning.moveComplexity === "difficult"
+          ? clearanceSettings.difficultComplexityFactor
+          : clearanceSettings.standardComplexityFactor;
+    const clearanceFloorFactor =
+      planning.oldFloorLevel *
+        (planning.oldElevator
+          ? clearanceSettings.floorFactorWithElevator
+          : clearanceSettings.floorFactorWithoutElevator) +
+      planning.newFloorLevel *
+        (planning.newElevator
+          ? clearanceSettings.floorFactorWithElevator
+          : clearanceSettings.floorFactorWithoutElevator);
+    const clearanceCarryFactor = Math.min(
+      (totalCarryDistance / 100) *
+        clearanceSettings.carryDistanceFactorPer100M,
+      clearanceSettings.maximumCarryDistanceFactor
+    );
+    const clearanceBaseHours =
+      clearanceVolume * clearanceSettings.laborHoursPerM3 +
+      planning.clearanceHazardousVolumeM3 *
+        clearanceSettings.hazardousLaborHoursPerM3 +
+      planning.clearanceHeavyItems * clearanceSettings.heavyItemLaborHours;
     let clearanceHours = Math.max(
-      3,
-      totalClearanceVolume * 0.45 * accessFactor +
-        planning.clearanceHeavyItems * 0.75
+      clearanceSettings.minimumLaborHours,
+      clearanceBaseHours *
+        clearanceComplexityFactor *
+        (1 + clearanceFloorFactor + clearanceCarryFactor)
     );
     if (planning.clearanceBroomClean) {
-      clearanceHours += Math.max(1, totalClearanceVolume * 0.06);
+      clearanceHours += Math.max(
+        clearanceSettings.broomCleanMinimumHours,
+        totalClearanceVolume * clearanceSettings.broomCleanHoursPerM3
+      );
     }
     labourHours += clearanceHours;
-    employees = Math.max(employees, totalClearanceVolume > 20 ? 3 : 2);
+    employees = Math.max(
+      employees,
+      getClearanceEmployeesForVolume(totalClearanceVolume, pricingSettings)
+    );
     if (planning.clearanceDisposalIncluded) {
       requiredVehicleVolume = Math.max(requiredVehicleVolume, totalClearanceVolume);
     }
@@ -1109,7 +1152,10 @@ function calculateServiceRecommendation(
     employees: roundedEmployees,
     hoursPerEmployee,
     vehicleDays,
-    vehicleSelections: calculateRecommendedVehicles(requiredVehicleVolume),
+    vehicleSelections: calculateRecommendedVehicles(
+      requiredVehicleVolume,
+      pricingSettings.vehicleCatalog
+    ),
     materialCost: Math.round(materialCost * 100) / 100,
     disposalCost: Math.round(disposalCost * 100) / 100,
     storageCost: Math.round(storageCost * 100) / 100,
@@ -1121,10 +1167,15 @@ function calculateServiceRecommendation(
   };
 }
 
-function calculatePricing(calculation: Calculation, rates: Rates) {
+function calculatePricing(
+  calculation: Calculation,
+  rates: Rates,
+  pricingSettings: OfferPricingSettings = defaultOfferPricingSettings
+) {
   const vehicleCost = calculateVehicleCost(
     calculation.planning.vehicleSelections,
-    calculation.vehicleDays
+    calculation.vehicleDays,
+    pricingSettings.vehicleCatalog
   );
   const directCost =
     calculation.employees *
@@ -1139,15 +1190,24 @@ function calculatePricing(calculation: Calculation, rates: Rates) {
     calculation.logisticsCost +
     calculation.otherCost +
     calculateExtraServices(calculation.planning.extraServices);
-  const surcharge = directCost * (rates.surchargePercent / 100);
-  const subtotal = directCost + surcharge;
+  const configuredSurcharges = calculateConfiguredSurcharges(
+    calculation.planning,
+    pricingSettings
+  );
+  const minimumNetTotal = directCost + configuredSurcharges.total;
+  const percentageSurcharge =
+    minimumNetTotal * (rates.surchargePercent / 100);
+  const surcharge = percentageSurcharge + configuredSurcharges.total;
+  const subtotal = minimumNetTotal + percentageSurcharge;
   const discountPercent = Math.min(
     100,
     Math.max(0, calculation.discountPercent ?? 0)
   );
-  const discount = subtotal * (discountPercent / 100);
-  const netTotal = subtotal - discount;
+  const requestedDiscount = subtotal * (discountPercent / 100);
+  const netTotal = Math.max(minimumNetTotal, subtotal - requestedDiscount);
+  const discount = subtotal - netTotal;
   const vat = netTotal * (rates.vatPercent / 100);
+  const minimumVat = minimumNetTotal * (rates.vatPercent / 100);
   return {
     employeeCost:
       calculation.employees * calculation.hoursPerEmployee * rates.employeeHourlyRate,
@@ -1155,17 +1215,27 @@ function calculatePricing(calculation: Calculation, rates: Rates) {
     mileageCost: calculation.kilometers * rates.kilometerRate,
     extraServiceCost: calculateExtraServices(calculation.planning.extraServices),
     directCost,
+    percentageSurcharge,
+    floorSurcharge: configuredSurcharges.floorSurcharge,
+    carryDistanceSurcharge: configuredSurcharges.carryDistanceSurcharge,
     surcharge,
     discount,
     discountPercent,
+    minimumNetTotal,
+    minimumVat,
+    minimumGrossTotal: minimumNetTotal + minimumVat,
     netTotal,
     vat,
     grossTotal: netTotal + vat,
   };
 }
 
-function calculateGrossTotal(calculation: Calculation, rates: Rates) {
-  return calculatePricing(calculation, rates).grossTotal;
+function calculateGrossTotal(
+  calculation: Calculation,
+  rates: Rates,
+  pricingSettings: OfferPricingSettings = defaultOfferPricingSettings
+) {
+  return calculatePricing(calculation, rates, pricingSettings).grossTotal;
 }
 
 function NumberField({
@@ -1174,12 +1244,14 @@ function NumberField({
   onChange,
   suffix,
   step = "1",
+  disabled = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
   suffix?: string;
   step?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>
@@ -1190,8 +1262,9 @@ function NumberField({
           min='0'
           step={step}
           value={value}
+          disabled={disabled}
           onChange={(event) => onChange(toNumber(event.target.value))}
-          className='h-11 w-full rounded-md border border-slate-200 bg-white px-3 pr-14 text-slate-950 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20'
+          className='h-11 w-full rounded-md border border-slate-200 bg-white px-3 pr-14 text-slate-950 shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:bg-slate-100 disabled:text-slate-600'
         />
         {suffix && (
           <span className='pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-slate-500'>
@@ -1265,15 +1338,17 @@ type CalculationRow = {
 function getCalculationRows(
   calculation: Calculation,
   rates: Rates,
-  materialCatalog: MaterialCatalogItem[]
+  materialCatalog: MaterialCatalogItem[],
+  pricingSettings: OfferPricingSettings
 ): CalculationRow[] {
-  const pricing = calculatePricing(calculation, rates);
+  const pricing = calculatePricing(calculation, rates, pricingSettings);
   const volume = calculateVolume(calculation.planning.rooms);
   const recommendation = calculateServiceRecommendation(
     calculation,
     rates,
     volume,
-    materialCatalog
+    materialCatalog,
+    pricingSettings
   );
   const positionLabels = calculation.positionLabels ?? {};
   const resolveLabel = (id: string, fallback: string) =>
@@ -1449,7 +1524,7 @@ function getCalculationRows(
       value: pricing.employeeCost,
     }] : []),
     ...calculation.planning.vehicleSelections.flatMap((selection) => {
-      const vehicle = vehicleOptions.find(
+      const vehicle = pricingSettings.vehicleCatalog.find(
         (option) => option.id === selection.vehicleId
       );
       if (!vehicle) return [];
@@ -1520,26 +1595,30 @@ function CalculationBreakdown({
   calculation,
   rates,
   materialCatalog,
+  pricingSettings,
   onPrint,
   onRenamePosition,
 }: {
   calculation: Calculation;
   rates: Rates;
   materialCatalog: MaterialCatalogItem[];
+  pricingSettings: OfferPricingSettings;
   onPrint: () => void;
   onRenamePosition: (id: string, label: string) => void;
 }) {
-  const pricing = calculatePricing(calculation, rates);
+  const pricing = calculatePricing(calculation, rates, pricingSettings);
   const recommendation = calculateServiceRecommendation(
     calculation,
     rates,
     calculateVolume(calculation.planning.rooms),
-    materialCatalog
+    materialCatalog,
+    pricingSettings
   );
   const calculationRows = getCalculationRows(
     calculation,
     rates,
-    materialCatalog
+    materialCatalog,
+    pricingSettings
   );
 
   return (
@@ -1612,9 +1691,11 @@ function CalculationBreakdown({
           <strong className='tabular-nums text-slate-950'>{formatCurrency(pricing.directCost)}</strong>
         </div>
         <div className='flex items-start justify-between gap-4 text-sm'>
-          <span className='text-slate-600'>Aufschlag ({rates.surchargePercent}% von {formatCurrency(pricing.directCost)})</span>
-          <strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.surcharge)}</strong>
+          <span className='text-slate-600'>Verhandlungsaufschlag ({rates.surchargePercent}% vom Mindestpreis netto)</span>
+          <strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.percentageSurcharge)}</strong>
         </div>
+        {pricing.floorSurcharge > 0 && <div className='flex items-start justify-between gap-4 text-sm'><span className='text-slate-600'>Etagenzuschlag</span><strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.floorSurcharge)}</strong></div>}
+        {pricing.carryDistanceSurcharge > 0 && <div className='flex items-start justify-between gap-4 text-sm'><span className='text-slate-600'>Tragewegzuschlag</span><strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.carryDistanceSurcharge)}</strong></div>}
         {pricing.discount > 0 && (
           <div className='flex items-start justify-between gap-4 text-sm'>
             <span className='text-slate-600'>Kombi-Rabatt ({pricing.discountPercent}%)</span>
@@ -1630,8 +1711,12 @@ function CalculationBreakdown({
           <strong className='shrink-0 tabular-nums text-slate-950'>{formatCurrency(pricing.vat)}</strong>
         </div>
         <div className='flex items-center justify-between gap-4 border-t border-slate-300 pt-3'>
-          <span className='font-semibold text-slate-950'>Angebotspreis brutto</span>
+          <span className='font-semibold text-slate-950'>Zu verhandelnder Preis</span>
           <strong className='text-xl tabular-nums text-slate-950'>{formatCurrency(pricing.grossTotal)}</strong>
+        </div>
+        <div className='flex items-center justify-between gap-4 rounded-md bg-red-50 px-3 py-2'>
+          <span className='font-semibold text-red-800'>Mindestpreis</span>
+          <strong className='text-lg tabular-nums text-red-800'>{formatCurrency(pricing.minimumGrossTotal)}</strong>
         </div>
       </div>
     </div>
@@ -1646,14 +1731,18 @@ function escapePrintHtml(value: string) {
     .replaceAll('"', "&quot;");
 }
 
-export default function OfferPlanner() {
+type OfferPlannerProps = {
+  fixedService?: ServiceKey;
+};
+
+export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
   const { companyData } = useCompanyData();
   const searchParams = useSearchParams();
   const requestedCustomerId = searchParams.get("customerId");
   const requestedOfferId = searchParams.get("offerId");
   const [rates, setRates] = useState<Rates>(defaultRates);
   const [calculation, setCalculation] = useState<Calculation>(() =>
-    createCalculation()
+    createCalculation(fixedService)
   );
   const [savedCalculations, setSavedCalculations] = useState<
     SavedCalculation[]
@@ -1661,6 +1750,9 @@ export default function OfferPlanner() {
   const [packages, setPackages] = useState<OfferPackage[]>(defaultPackages);
   const [materialCatalog, setMaterialCatalog] = useState<MaterialCatalogItem[]>(
     () => defaultMaterialCatalog.map((item) => ({ ...item }))
+  );
+  const [pricingSettings, setPricingSettings] = useState<OfferPricingSettings>(
+    () => normalizeOfferPricingSettings(defaultOfferPricingSettings)
   );
   const [newPackageName, setNewPackageName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -1673,6 +1765,7 @@ export default function OfferPlanner() {
   const [isCostEstimateDialogOpen, setIsCostEstimateDialogOpen] = useState(false);
   const [customInventoryRoomId, setCustomInventoryRoomId] = useState<string | null>(null);
   const [inventoryItemDraft, setInventoryItemDraft] = useState<InventoryItemDraft>(emptyInventoryItemDraft);
+  const [furnitureCatalogSearch, setFurnitureCatalogSearch] = useState("");
   const [costEstimatePrintOptions, setCostEstimatePrintOptions] =
     useState<CostEstimatePrintOptions>(defaultCostEstimatePrintOptions);
 
@@ -1709,6 +1802,9 @@ export default function OfferPlanner() {
         const loadedMaterialCatalog = normalizeMaterialCatalog(
           data?.materialCatalog
         );
+        const loadedPricingSettings = normalizeOfferPricingSettings(
+          data?.pricingSettings
+        );
         const loadedSavedCalculations = (data?.savedCalculations ?? []).map(
           (saved) => {
             const normalized = normalizeCalculation(saved);
@@ -1719,7 +1815,12 @@ export default function OfferPlanner() {
               id: saved.id,
               createdAt: saved.createdAt,
               grossTotal:
-                saved.grossTotal ?? calculateGrossTotal(normalized, savedRates),
+                saved.grossTotal ??
+                calculateGrossTotal(
+                  normalized,
+                  savedRates,
+                  loadedPricingSettings
+                ),
               rates: savedRates,
             };
           }
@@ -1732,8 +1833,10 @@ export default function OfferPlanner() {
         let nextCalculation = requestedOffer
           ? normalizeCalculation(requestedOffer)
           : requestedCustomerId
-            ? createCalculation()
-            : normalizeCalculation(data?.calculation);
+            ? createCalculation(fixedService)
+            : fixedService
+              ? createCalculation(fixedService)
+              : normalizeCalculation(data?.calculation);
 
         if (requestedCustomerId) {
           const customerSnapshot = await getDoc(
@@ -1763,6 +1866,21 @@ export default function OfferPlanner() {
               },
             };
           }
+          if (fixedService) {
+            nextCalculation = {
+              ...nextCalculation,
+              title:
+                requestedOffer || nextCalculation.title !== "Neues Angebot"
+                  ? nextCalculation.title
+                  : fixedService === "clearance"
+                    ? "Entrümpelungsangebot"
+                    : nextCalculation.title,
+              planning: {
+                ...nextCalculation.planning,
+                serviceTypes: [fixedService],
+              },
+            };
+          }
         }
 
         if (active) {
@@ -1773,6 +1891,7 @@ export default function OfferPlanner() {
           setCalculation(nextCalculation);
           setSavedCalculations(loadedSavedCalculations);
           setMaterialCatalog(loadedMaterialCatalog);
+          setPricingSettings(loadedPricingSettings);
           if (data?.packages?.length) setPackages(data.packages);
         }
       } catch {
@@ -1786,20 +1905,37 @@ export default function OfferPlanner() {
     return () => {
       active = false;
     };
-  }, [companyData?.id, requestedCustomerId, requestedOfferId]);
+  }, [companyData?.id, fixedService, requestedCustomerId, requestedOfferId]);
 
   const volume = calculateVolume(calculation.planning.rooms);
+  const visibleFurnitureCatalog = pricingSettings.furnitureCatalog.filter(
+    (item) => {
+      const needle = furnitureCatalogSearch
+        .trim()
+        .toLocaleLowerCase("de-DE");
+      return (
+        !needle ||
+        `${item.name} ${item.category}`
+          .toLocaleLowerCase("de-DE")
+          .includes(needle)
+      );
+    }
+  );
   const recommendation = calculateServiceRecommendation(
     calculation,
     rates,
     volume,
-    materialCatalog
+    materialCatalog,
+    pricingSettings
   );
 
   useEffect(() => {
-    if (!calculation.autoEstimate) return;
-
     setCalculation((current) => {
+      if (!current.autoEstimate) {
+        return current.employees === recommendation.employees
+          ? current
+          : { ...current, employees: recommendation.employees };
+      }
       const vehiclesMatch =
         current.planning.vehicleSelections.length ===
           recommendation.vehicleSelections.length &&
@@ -1847,7 +1983,8 @@ export default function OfferPlanner() {
     netTotal,
     vat,
     grossTotal,
-  } = calculatePricing(calculation, rates);
+    minimumGrossTotal,
+  } = calculatePricing(calculation, rates, pricingSettings);
   const selectedServices = new Set(calculation.planning.serviceTypes);
   const activeSiteService =
     activeServiceTab && calculation.planning.serviceTypes.includes(activeServiceTab)
@@ -2015,6 +2152,7 @@ export default function OfferPlanner() {
           savedCalculations: nextSavedCalculations,
           packages: nextPackages,
           materialCatalog: nextMaterialCatalog,
+          pricingSettings,
           updatedAt: Date.now(),
         }),
         { merge: true }
@@ -2033,6 +2171,14 @@ export default function OfferPlanner() {
   }
 
   async function saveCalculation() {
+    const pricing = calculatePricing(calculation, rates, pricingSettings);
+    if (
+      calculation.acceptedPriceGross > 0 &&
+      calculation.acceptedPriceGross < pricing.minimumGrossTotal
+    ) {
+      setStatus("error");
+      return;
+    }
     const savedCalculation: SavedCalculation = {
       ...calculation,
       planning: {
@@ -2048,7 +2194,10 @@ export default function OfferPlanner() {
       rates: { ...rates },
       id: crypto.randomUUID(),
       createdAt: Date.now(),
-      grossTotal: calculateGrossTotal(calculation, rates),
+      grossTotal:
+        calculation.acceptedPriceGross >= pricing.minimumGrossTotal
+          ? calculation.acceptedPriceGross
+          : pricing.grossTotal,
     };
     await persist([savedCalculation, ...savedCalculations]);
   }
@@ -2446,12 +2595,19 @@ export default function OfferPlanner() {
 
   function printCostEstimate() {
     setPrintError(null);
+    const pricing = calculatePricing(calculation, rates, pricingSettings);
     if (
       !(calculation.customer.trim() || calculation.planning.contactName.trim()) ||
       calculation.planning.serviceTypes.length === 0
     ) {
       setPrintError(
         "Für ein Angebot müssen ein Kunde und mindestens eine Leistung erfasst sein."
+      );
+      return;
+    }
+    if (calculation.acceptedPriceGross < pricing.minimumGrossTotal) {
+      setPrintError(
+        `Der akzeptierte Preis muss mindestens ${formatCurrency(pricing.minimumGrossTotal)} betragen.`
       );
       return;
     }
@@ -2464,11 +2620,14 @@ export default function OfferPlanner() {
       return;
     }
 
-    const pricing = calculatePricing(calculation, rates);
+    const acceptedNetTotal =
+      calculation.acceptedPriceGross / (1 + rates.vatPercent / 100);
+    const acceptedVat = calculation.acceptedPriceGross - acceptedNetTotal;
     const calculationRows = getCalculationRows(
       calculation,
       rates,
-      materialCatalog
+      materialCatalog,
+      pricingSettings
     );
     const rowsHtml = calculationRows
       .map(
@@ -2609,12 +2768,9 @@ export default function OfferPlanner() {
         <h2>Leistungen und Kosten</h2>
         <table><thead><tr><th>Position / Berechnung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis</th><th>Gesamt</th></tr></thead><tbody>${rowsHtml}</tbody></table>
         <section class="totals">
-          <div class="total-row"><span>Direkte Kosten</span><strong>${formatCurrency(pricing.directCost)}</strong></div>
-          <div class="total-row"><span>Aufschlag (${rates.surchargePercent}%)</span><strong>${formatCurrency(pricing.surcharge)}</strong></div>
-          ${pricing.discount > 0 ? `<div class="total-row"><span>Kombi-Rabatt (${pricing.discountPercent}%)</span><strong>-${formatCurrency(pricing.discount)}</strong></div>` : ""}
-          <div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(pricing.netTotal)}</strong></div>
-          <div class="total-row"><span>MwSt. (${rates.vatPercent}%)</span><strong>${formatCurrency(pricing.vat)}</strong></div>
-          <div class="total-row gross"><span>Gesamtbetrag brutto</span><strong>${formatCurrency(pricing.grossTotal)}</strong></div>
+          <div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(acceptedNetTotal)}</strong></div>
+          <div class="total-row"><span>MwSt. (${rates.vatPercent}%)</span><strong>${formatCurrency(acceptedVat)}</strong></div>
+          <div class="total-row gross"><span>Akzeptierter Angebotspreis</span><strong>${formatCurrency(calculation.acceptedPriceGross)}</strong></div>
         </section>
         ${packingListHtml}
         ${notesHtml}
@@ -2748,14 +2904,21 @@ export default function OfferPlanner() {
               <Link href={`/admin/${companyData?.id}/crm/customers/${calculation.customerId}`}><ArrowLeft /> Zur Kundenakte</Link>
             </Button>
           )}
-          <p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>Angebote & Vor-Ort-Aufnahme</p>
-          <h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>Dienstleistungs-Planer</h1>
-          <p className='mt-2 max-w-3xl text-sm leading-6 text-slate-600'>Aufnahme, Ressourcenplanung und Angebot in einem durchgaengigen Ablauf.</p>
+          <p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>{fixedService === "clearance" ? "Entrümpelung & Haushaltsauflösung" : "Angebote & Vor-Ort-Aufnahme"}</p>
+          <h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>{fixedService === "clearance" ? "Entrümpelungs-Kalkulator" : "Dienstleistungs-Planer"}</h1>
+          <p className='mt-2 max-w-3xl text-sm leading-6 text-slate-600'>{fixedService === "clearance" ? "Volumen, Personal, Fahrzeuge, Entsorgung und Wertanrechnung in einem vollständigen Festpreisangebot kalkulieren." : "Aufnahme, Ressourcenplanung und Angebot in einem durchgaengigen Ablauf."}</p>
         </div>
         <div className='flex flex-wrap items-center gap-2 sm:gap-3'>
           {status === "saved" && <span className='flex items-center gap-1.5 text-sm font-medium text-emerald-700'><Check size={16} /> Gespeichert</span>}
           {status === "error" && <span className='text-sm font-medium text-red-600'>Speichern fehlgeschlagen</span>}
-          <OfferAssistant onApply={applyAssistantDraft} />
+          {!fixedService && <OfferAssistant onApply={applyAssistantDraft} />}
+          {fixedService === "clearance" && (
+            <Button asChild variant='outline' className='flex-1 sm:flex-none'>
+              <Link href={`/admin/${companyData?.id}/crm/calculator/clearance/pricing`}>
+                <Euro /> Entrümpelungspreise
+              </Link>
+            </Button>
+          )}
           <Button asChild variant='outline' className='flex-1 sm:flex-none'><Link href={`/admin/${companyData?.id}/material-preisliste`}><PackageCheck /> Material-Preisliste</Link></Button>
           <Button variant='outline' className='flex-1 sm:flex-none' onClick={printCustomerDocument}><Printer /> Übersicht</Button>
           <Button variant='outline' className='flex-1 sm:flex-none' onClick={() => setIsCostEstimateDialogOpen(true)}><Printer /> Kostenvoranschlag</Button>
@@ -2775,9 +2938,39 @@ export default function OfferPlanner() {
           <DialogHeader>
             <DialogTitle>Kostenvoranschlag drucken</DialogTitle>
             <DialogDescription>
-              Leistungsumfang, Angebotsdaten, Preise und Bedingungen sind immer enthalten. Wähle hier zusätzliche Anlagen und Details.
+              Im Kundendokument erscheint nur der akzeptierte Angebotspreis. Interner Mindest- und Verhandlungspreis bleiben im Adminbereich.
             </DialogDescription>
           </DialogHeader>
+          <div className='rounded-md border border-blue-200 bg-blue-50 p-4'>
+            <label className='text-sm font-semibold text-slate-950'>
+              Akzeptierter Angebotspreis brutto
+              <div className='relative mt-2'>
+                <input
+                  type='number'
+                  min={minimumGrossTotal}
+                  step='0.01'
+                  value={calculation.acceptedPriceGross || ""}
+                  onChange={(event) =>
+                    updateCalculation(
+                      "acceptedPriceGross",
+                      toNumber(event.target.value)
+                    )
+                  }
+                  placeholder={formatNumber(grossTotal)}
+                  className='h-11 w-full rounded-md border border-blue-200 bg-white px-3 pr-10 text-base font-semibold outline-none focus:border-blue-500'
+                />
+                <span className='pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500'>€</span>
+              </div>
+            </label>
+            <div className='mt-2 flex flex-wrap items-center justify-between gap-2 text-xs'>
+              <span className={calculation.acceptedPriceGross > 0 && calculation.acceptedPriceGross < minimumGrossTotal ? "font-medium text-red-700" : "text-slate-600"}>
+                Mindestpreis: {formatCurrency(minimumGrossTotal)}
+              </span>
+              <Button type='button' variant='ghost' size='sm' onClick={() => updateCalculation("acceptedPriceGross", Math.round(grossTotal * 100) / 100)}>
+                Verhandlungspreis übernehmen
+              </Button>
+            </div>
+          </div>
           <div className='grid gap-3 py-2 sm:grid-cols-2'>
             <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
               <Checkbox checked={costEstimatePrintOptions.siteDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("siteDetails", checked === true)} />
@@ -2802,7 +2995,7 @@ export default function OfferPlanner() {
           </div>
           <DialogFooter>
             <Button type='button' variant='outline' onClick={() => setIsCostEstimateDialogOpen(false)}>Abbrechen</Button>
-            <Button type='button' onClick={() => { setIsCostEstimateDialogOpen(false); printCostEstimate(); }}><Printer /> Jetzt drucken</Button>
+            <Button type='button' disabled={calculation.acceptedPriceGross < minimumGrossTotal} onClick={() => { setIsCostEstimateDialogOpen(false); printCostEstimate(); }}><Printer /> Jetzt drucken</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -2977,10 +3170,17 @@ export default function OfferPlanner() {
           {activeStep === "order" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
             <SectionHeading icon={ClipboardList} title='Auftrag & Kunde' description='Die Eckdaten sind auf der Kundenansicht und in der gespeicherten Planung sichtbar.' />
             <div className='mb-6 border-b border-slate-200 pb-5'>
-              <p className='mb-1 text-sm font-semibold text-slate-950'>1. Dienstleistungen waehlen</p>
-              <p className='mb-3 text-sm text-slate-600'>Mehrfachauswahl moeglich – kombinierte Leistungen lassen sich als Kombi-Paket mit Rabatt anbieten.</p>
-              <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
-                {serviceOptions.map((service) => {
+              <p className='mb-1 text-sm font-semibold text-slate-950'>{fixedService ? "1. Leistung" : "1. Dienstleistungen waehlen"}</p>
+              {fixedService ? (
+                <div className='mt-3 flex items-start gap-3 rounded-md border border-blue-500 bg-blue-50 p-4 ring-1 ring-blue-200'>
+                  <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white'><Trash2 size={19} /></span>
+                  <span><span className='block text-sm font-semibold text-slate-950'>Entrümpelung</span><span className='mt-1 block text-xs leading-5 text-slate-600'>Volumen, Personal, Fahrzeuge, Entsorgung, Sondermüll, Container und Wertanrechnung.</span></span>
+                </div>
+              ) : (
+                <>
+                  <p className='mb-3 text-sm text-slate-600'>Mehrfachauswahl moeglich – kombinierte Leistungen lassen sich als Kombi-Paket mit Rabatt anbieten.</p>
+                  <div className='grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
+                    {serviceOptions.map((service) => {
                   const checked = selectedServices.has(service.id);
                   const Icon = service.icon;
                   return <button key={service.id} type='button' onClick={() => toggleService(service.id)} aria-pressed={checked} className={`group flex min-h-28 items-start gap-3 rounded-md border p-3 text-left transition ${checked ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200" : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"}`}>
@@ -2988,9 +3188,11 @@ export default function OfferPlanner() {
                     <span><span className='block text-sm font-semibold text-slate-950'>{service.label}</span>
                     <span className='mt-1 block text-xs leading-5 text-slate-600'>{service.description}</span></span>
                   </button>;
-                })}
-              </div>
-              <details className='mt-5 rounded-md border border-amber-200 bg-amber-50/60 p-4'>
+                    })}
+                  </div>
+                </>
+              )}
+              {!fixedService && <details className='mt-5 rounded-md border border-amber-200 bg-amber-50/60 p-4'>
                 <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Kombi-Pakete verwalten (optional)</summary>
                 <div className='flex flex-wrap items-center justify-between gap-2'>
                   <div>
@@ -3021,7 +3223,7 @@ export default function OfferPlanner() {
                   <Button type='button' variant='outline' size='sm' onClick={saveCurrentSelectionAsPackage} disabled={!newPackageName.trim() || selectedServices.size === 0}><PackagePlus /> Als Paket speichern</Button>
                 </div>
                 <p className='mt-2 text-xs text-slate-500'>Pakete werden mit „Entwurf speichern“ dauerhaft gesichert.</p>
-              </details>
+              </details>}
             </div>
             {selectedServices.size === 0 ? <p className='rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600'>Waehle mindestens eine Dienstleistung, um die passende Aufnahme und Angebotslogik zu starten.</p> : <div className='space-y-4'>
               <div className='grid gap-4 sm:grid-cols-3'>
@@ -3097,8 +3299,50 @@ export default function OfferPlanner() {
                 </div>
                 <div className='mt-3 flex flex-wrap items-center gap-2'>
                   <Button type='button' variant='outline' size='sm' onClick={() => openInventoryItemDialog(room.id)}><PackagePlus /> Eigener Gegenstand</Button>
-                  <span className='text-xs text-slate-500'>Schnell hinzufügen:</span>
-                  {commonInventoryItems.map((item) => <button key={item.name} type='button' onClick={() => addCommonInventoryItem(room.id, item)} className='rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:border-primary hover:text-primary'>{item.name}</button>)}
+                  <span className='text-xs text-slate-500'>Aus Möbelkatalog:</span>
+                  <label className='relative min-w-56 flex-1 sm:max-w-72'>
+                    <Search className='pointer-events-none absolute left-3 top-2.5 text-slate-400' size={16} />
+                    <input
+                      value={furnitureCatalogSearch}
+                      onChange={(event) => setFurnitureCatalogSearch(event.target.value)}
+                      placeholder='Möbel suchen ...'
+                      className='h-9 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none focus:border-primary'
+                    />
+                  </label>
+                  <select
+                    defaultValue=''
+                    onChange={(event) => {
+                      const item = pricingSettings.furnitureCatalog.find(
+                        (candidate) => candidate.id === event.target.value
+                      );
+                      if (item) {
+                        addCommonInventoryItem(room.id, {
+                          name: item.name,
+                          volumeM3: item.volumeM3,
+                        });
+                      }
+                      event.target.value = "";
+                    }}
+                    className='h-9 min-w-64 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-primary'>
+                    <option value=''>Möbelstück auswählen ...</option>
+                    {Object.entries(
+                      visibleFurnitureCatalog.reduce<Record<string, typeof visibleFurnitureCatalog>>(
+                        (groups, item) => {
+                          (groups[item.category] ??= []).push(item);
+                          return groups;
+                        },
+                        {}
+                      )
+                    ).map(([category, items]) => (
+                      <optgroup key={category} label={category}>
+                        {items.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} ({item.volumeM3} m³)
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
                 </div>
               </div>)}
             </div>
@@ -3144,10 +3388,10 @@ export default function OfferPlanner() {
               <NumberField label='Mitarbeiter-Stundensatz' value={rates.employeeHourlyRate} onChange={(value) => updateRate("employeeHourlyRate", value)} suffix='EUR / Std.' step='0.01' />
               <NumberField label='Fahrtkosten pro Kilometer' value={rates.kilometerRate} onChange={(value) => updateRate("kilometerRate", value)} suffix='EUR / km' step='0.01' />
               <NumberField label='Planungs- & Auftragspauschale' value={rates.planningFee} onChange={(value) => updateRate("planningFee", value)} suffix='EUR' step='0.01' />
-              <NumberField label='Aufschlag / Gewinnmarge' value={rates.surchargePercent} onChange={(value) => updateRate("surchargePercent", value)} suffix='%' step='0.1' />
+              <NumberField label='Verhandlungsaufschlag' value={rates.surchargePercent} onChange={(value) => updateRate("surchargePercent", value)} suffix='%' step='0.1' />
               <NumberField label='Mehrwertsteuer' value={rates.vatPercent} onChange={(value) => updateRate("vatPercent", value)} suffix='%' step='0.1' />
               <NumberField label='Kombi-Rabatt' value={calculation.discountPercent} onChange={(value) => updateCalculation("discountPercent", Math.min(100, value))} suffix='%' step='0.5' />
-              <NumberField label='Mitarbeiter' value={calculation.employees} onChange={(value) => updateManualCalculation("employees", value)} suffix='Personen' />
+              <NumberField label='Mitarbeiter nach m³-Staffel' value={calculation.employees} onChange={() => undefined} suffix='Personen' disabled />
               <NumberField label='Stunden je Mitarbeiter' value={calculation.hoursPerEmployee} onChange={(value) => updateManualCalculation("hoursPerEmployee", value)} suffix='Std.' step='0.25' />
               {needsVehicle && <NumberField label='Fahrzeugtage' value={calculation.vehicleDays} onChange={(value) => updateManualCalculation("vehicleDays", value)} suffix='Tage' step='0.5' />}
               {usesMoveInventory && <NumberField label='Logistik (Lift / Zone)' value={calculation.logisticsCost} onChange={(value) => updateManualCalculation("logisticsCost", value)} suffix='EUR' step='0.01' />}
@@ -3160,7 +3404,7 @@ export default function OfferPlanner() {
               <p className='text-sm font-semibold text-slate-950'>Fahrzeugplanung</p>
               <p className='mt-1 text-sm text-slate-600'>Die Automatik waehlt nach dem erfassten Volumen. Eine Mengenanpassung schaltet auf manuelle Planung.</p>
               <div className='mt-3 grid gap-3 sm:grid-cols-2'>
-                {vehicleOptions.map((vehicle) => {
+                {pricingSettings.vehicleCatalog.map((vehicle) => {
                   const selection = calculation.planning.vehicleSelections.find((item) => item.vehicleId === vehicle.id);
                   return <NumberField key={vehicle.id} label={`${vehicle.name} (${vehicle.capacityM3} m3, ${formatCurrency(vehicle.dailyRate)}/Tag)`} value={selection?.quantity ?? 0} onChange={(value) => updateVehicleSelection(vehicle.id, value)} suffix='Stk.' />;
                 })}
@@ -3195,7 +3439,7 @@ export default function OfferPlanner() {
               <div className='mb-3 flex items-center justify-between'><p className='text-sm font-medium text-slate-700'>Zusatzleistungen</p><Button type='button' variant='outline' size='sm' onClick={addExtraService}><PackagePlus /> Zusatzleistung</Button></div>
               <div className='space-y-2'>{calculation.planning.extraServices.map((service) => <div key={service.id} className='grid grid-cols-[minmax(0,1fr)_72px_120px_36px] gap-2'><input value={service.name} onChange={(event) => updateExtraService(service.id, { name: event.target.value })} aria-label='Zusatzleistung' className='h-9 min-w-0 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><input type='number' min='0' value={service.quantity} onChange={(event) => updateExtraService(service.id, { quantity: toNumber(event.target.value) })} aria-label='Menge' className='h-9 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-primary' /><div className='relative'><input type='number' min='0' step='0.01' value={service.unitPrice} onChange={(event) => updateExtraService(service.id, { unitPrice: toNumber(event.target.value) })} aria-label='Einzelpreis' className='h-9 w-full rounded-md border border-slate-300 px-2 pr-9 text-sm outline-none focus:border-primary' /><span className='pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-slate-500'>EUR</span></div><Button type='button' variant='ghost' size='icon' title='Zusatzleistung entfernen' onClick={() => removeExtraService(service.id)}><Trash2 className='text-red-600' /></Button></div>)}</div>
             </div>
-            </> : <CalculationBreakdown calculation={calculation} rates={rates} materialCatalog={materialCatalog} onPrint={() => setIsCostEstimateDialogOpen(true)} onRenamePosition={renamePosition} />}
+            </> : <CalculationBreakdown calculation={calculation} rates={rates} materialCatalog={materialCatalog} pricingSettings={pricingSettings} onPrint={() => setIsCostEstimateDialogOpen(true)} onRenamePosition={renamePosition} />}
           </section>}
 
           {activeStep === "price" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
@@ -3208,7 +3452,7 @@ export default function OfferPlanner() {
 
           {activeStep === "finish" && <section className='rounded-lg border border-slate-200 bg-white p-4 shadow-sm sm:p-6'>
             <SectionHeading icon={Save} title='Gespeicherte Planungen' description='Jede gespeicherte Planung enthält Inventar, Fotos und die ursprünglichen Konditionen.' />
-            {savedCalculations.length === 0 ? <p className='py-6 text-center text-sm text-slate-500'>Noch keine Planung gespeichert.</p> : <div className='divide-y divide-slate-200'>{savedCalculations.map((item) => <div key={item.id} className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between'><button type='button' onClick={() => loadCalculation(item)} className='min-w-0 text-left'><p className='truncate font-medium text-slate-950'>{item.title || "Unbenannte Planung"}</p><p className='mt-1 text-sm text-slate-600'>{item.customer || item.planning.contactName || "Ohne Kundenzuordnung"} · {new Date(item.createdAt).toLocaleDateString("de-DE")} · {calculateVolume(item.planning.rooms).toFixed(2)} m³</p></button><div className='flex shrink-0 items-center gap-3'><span className='font-semibold text-slate-950'>{formatCurrency(calculateGrossTotal(item, item.rates))}</span><Button variant='ghost' size='icon' title='Planung löschen' onClick={() => void deleteCalculation(item.id)} disabled={isSaving}><Trash2 className='text-red-600' /></Button></div></div>)}</div>}
+            {savedCalculations.length === 0 ? <p className='py-6 text-center text-sm text-slate-500'>Noch keine Planung gespeichert.</p> : <div className='divide-y divide-slate-200'>{savedCalculations.map((item) => <div key={item.id} className='flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between'><button type='button' onClick={() => loadCalculation(item)} className='min-w-0 text-left'><p className='truncate font-medium text-slate-950'>{item.title || "Unbenannte Planung"}</p><p className='mt-1 text-sm text-slate-600'>{item.customer || item.planning.contactName || "Ohne Kundenzuordnung"} · {new Date(item.createdAt).toLocaleDateString("de-DE")} · {calculateVolume(item.planning.rooms).toFixed(2)} m³</p></button><div className='flex shrink-0 items-center gap-3'><span className='font-semibold text-slate-950'>{formatCurrency(calculateGrossTotal(item, item.rates, pricingSettings))}</span><Button variant='ghost' size='icon' title='Planung löschen' onClick={() => void deleteCalculation(item.id)} disabled={isSaving}><Trash2 className='text-red-600' /></Button></div></div>)}</div>}
           </section>}
           <div className='flex items-center justify-between gap-3 border-t border-slate-200 pt-5'>
             <Button type='button' variant='outline' onClick={goToPreviousStep} disabled={activeNavIndex <= 0}>
@@ -3227,9 +3471,14 @@ export default function OfferPlanner() {
         </div>
 
         <aside className='sticky top-6 hidden rounded-lg border border-slate-800 bg-slate-950 p-6 text-white shadow-xl xl:block'>
-          <p className='text-sm font-medium text-slate-300'>Voraussichtlicher Angebotspreis</p>
+          <p className='text-sm font-medium text-slate-300'>Zu verhandelnder Preis</p>
           <p className='mt-2 text-4xl font-bold'>{formatCurrency(grossTotal)}</p>
-          <p className='mt-1 text-sm text-slate-400'>inkl. {rates.vatPercent}% MwSt.</p>
+          <p className='mt-1 text-sm text-slate-400'>Mindestpreis plus {rates.surchargePercent}% Verhandlungsspielraum</p>
+          <div className='mt-4 rounded-md border border-red-400/30 bg-red-500/10 px-3 py-3'>
+            <p className='text-xs font-semibold uppercase tracking-[0.12em] text-red-200'>Mindestpreis</p>
+            <p className='mt-1 text-2xl font-bold text-white'>{formatCurrency(minimumGrossTotal)}</p>
+            <p className='mt-1 text-xs text-red-100/70'>Nicht unterschreiten · inkl. {rates.vatPercent}% MwSt.</p>
+          </div>
           <div className='mt-6 grid grid-cols-2 gap-3 border-y border-white/15 py-5'><div><p className='text-xs text-slate-400'>Volumen</p><p className='mt-1 text-xl font-semibold'>{volume.toFixed(2)} m³</p></div><div><p className='text-xs text-slate-400'>Laufweg</p><p className='mt-1 text-xl font-semibold'>{calculation.planning.carryDistanceM} m</p></div></div>
           <div className='mt-5 space-y-3 text-sm'>
             <div className='flex items-center justify-between gap-3 text-slate-300'><span className='flex items-center gap-2'><Users size={15} /> Personal</span><span>{formatCurrency(employeeCost)}</span></div>
@@ -3247,8 +3496,9 @@ export default function OfferPlanner() {
       </div>
       <div className='fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950 px-4 py-3 text-white shadow-xl xl:hidden'>
         <div className='min-w-0'>
-          <p className='text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400'>Aktuelles Angebot</p>
+          <p className='text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400'>Zu verhandelnder Preis</p>
           <p className='truncate text-xl font-bold'>{formatCurrency(grossTotal)}</p>
+          <p className='truncate text-xs font-medium text-red-300'>Mindestpreis {formatCurrency(minimumGrossTotal)}</p>
         </div>
         <Button type='button' size='sm' className='shrink-0 bg-blue-600 px-3 text-white hover:bg-blue-500' onClick={() => setActiveStep("price")}>
           <Euro /> Angebot

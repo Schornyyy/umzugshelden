@@ -75,6 +75,11 @@ export function downloadAppointmentCalendar(
     `DESCRIPTION:${escapeCalendarText(calendarDescription(customer, appointment))}`,
     `LOCATION:${escapeCalendarText(location)}`,
     "STATUS:CONFIRMED",
+    "BEGIN:VALARM",
+    "TRIGGER:-PT10M",
+    "ACTION:DISPLAY",
+    "DESCRIPTION:Besichtigungstermin starten",
+    "END:VALARM",
     "END:VEVENT",
     "END:VCALENDAR",
   ].join("\r\n");
