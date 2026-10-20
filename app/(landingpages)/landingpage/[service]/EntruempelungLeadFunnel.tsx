@@ -139,6 +139,7 @@ export default function EntruempelungLeadFunnel() {
         service: "entruempelung",
         source: "google_ads_landingpage",
       });
+      analyticsWindow.gtag?.("event", "Kontakt_formular");
       setSubmitted(true);
       setLead(initialLead);
     } catch (caughtError) {
@@ -183,7 +184,10 @@ export default function EntruempelungLeadFunnel() {
     }`;
 
   return (
-    <form onSubmit={submitLead} className="flex min-h-[480px] flex-col">
+    <form
+      id="kontakt-formular"
+      onSubmit={submitLead}
+      className="flex min-h-[480px] flex-col">
       <div className="mb-6 flex gap-2" aria-label={`Schritt ${step} von 4`}>
         {[1, 2, 3, 4].map((item) => (
           <span
