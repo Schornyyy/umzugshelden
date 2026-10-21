@@ -24,6 +24,25 @@ export type VehiclePricingItem = {
   dailyRate: number;
 };
 
+export type FurnitureAssemblyCatalogItem = {
+  id: string;
+  name: string;
+  category: string;
+  assemblyMinutes: number;
+  dismantlingMinutes: number;
+  materialCost: number;
+};
+
+export type FurnitureAssemblyCalculationSettings = {
+  catalog: FurnitureAssemblyCatalogItem[];
+  minimumLaborHours: number;
+  minimumEmployees: number;
+  twoPersonThresholdMinutes: number;
+  easyComplexityFactor: number;
+  standardComplexityFactor: number;
+  difficultComplexityFactor: number;
+};
+
 export type ClearanceCalculationSettings = {
   employeeRules: EmployeeVolumeRule[];
   minimumLaborHours: number;
@@ -48,6 +67,7 @@ export type OfferPricingSettings = {
   waiveFloorSurchargeWithElevator: boolean;
   furnitureCatalog: FurnitureCatalogItem[];
   vehicleCatalog: VehiclePricingItem[];
+  furnitureAssembly: FurnitureAssemblyCalculationSettings;
   clearance: ClearanceCalculationSettings;
 };
 
@@ -101,6 +121,21 @@ export const defaultFurnitureCatalog: FurnitureCatalogItem[] = [
   furniture("grill", "Grill", "Garten", 0.5),
 ];
 
+export const defaultFurnitureAssemblyCatalog: FurnitureAssemblyCatalogItem[] = [
+  { id: "assembly-bed-single", name: "Einzelbett", category: "Betten", assemblyMinutes: 45, dismantlingMinutes: 30, materialCost: 3 },
+  { id: "assembly-bed-double", name: "Doppelbett", category: "Betten", assemblyMinutes: 60, dismantlingMinutes: 40, materialCost: 5 },
+  { id: "assembly-wardrobe-2", name: "Kleiderschrank, 2-türig", category: "Schränke", assemblyMinutes: 75, dismantlingMinutes: 45, materialCost: 5 },
+  { id: "assembly-wardrobe-4", name: "Kleiderschrank, 4-türig", category: "Schränke", assemblyMinutes: 150, dismantlingMinutes: 90, materialCost: 10 },
+  { id: "assembly-pax-meter", name: "PAX-Schrank je Meter", category: "Schränke", assemblyMinutes: 75, dismantlingMinutes: 45, materialCost: 6 },
+  { id: "assembly-shelf-small", name: "Regal, klein", category: "Regale", assemblyMinutes: 30, dismantlingMinutes: 20, materialCost: 3 },
+  { id: "assembly-shelf-large", name: "Regal, groß", category: "Regale", assemblyMinutes: 60, dismantlingMinutes: 35, materialCost: 5 },
+  { id: "assembly-table", name: "Tisch / Schreibtisch", category: "Tische", assemblyMinutes: 30, dismantlingMinutes: 20, materialCost: 3 },
+  { id: "assembly-sideboard", name: "Kommode / Sideboard", category: "Schränke", assemblyMinutes: 50, dismantlingMinutes: 30, materialCost: 4 },
+  { id: "assembly-kitchen-cabinet", name: "Küchenschrank", category: "Küche", assemblyMinutes: 60, dismantlingMinutes: 40, materialCost: 8 },
+  { id: "assembly-wall-cabinet", name: "Hängeschrank inkl. Befestigung", category: "Wandmontage", assemblyMinutes: 60, dismantlingMinutes: 30, materialCost: 12 },
+  { id: "assembly-curtain", name: "Gardinenstange / Schiene", category: "Wandmontage", assemblyMinutes: 45, dismantlingMinutes: 20, materialCost: 10 },
+];
+
 export const defaultOfferPricingSettings: OfferPricingSettings = {
   employeeRules: [
     { id: "employees-15", upToVolumeM3: 15, employees: 2 },
@@ -127,6 +162,15 @@ export const defaultOfferPricingSettings: OfferPricingSettings = {
     { id: "truck-7-5t", name: "7,5-t LKW", capacityM3: 35, dailyRate: 165 },
     { id: "truck-12t", name: "12-t LKW", capacityM3: 50, dailyRate: 235 },
   ],
+  furnitureAssembly: {
+    catalog: defaultFurnitureAssemblyCatalog,
+    minimumLaborHours: 2,
+    minimumEmployees: 1,
+    twoPersonThresholdMinutes: 180,
+    easyComplexityFactor: 0.85,
+    standardComplexityFactor: 1,
+    difficultComplexityFactor: 1.35,
+  },
   clearance: {
     employeeRules: [
       { id: "clearance-employees-20", upToVolumeM3: 20, employees: 2 },
@@ -196,6 +240,25 @@ export function normalizeOfferPricingSettings(
     raw.clearance && typeof raw.clearance === "object"
       ? raw.clearance
       : defaultOfferPricingSettings.clearance;
+  const rawFurnitureAssembly =
+    raw.furnitureAssembly && typeof raw.furnitureAssembly === "object"
+      ? raw.furnitureAssembly
+      : defaultOfferPricingSettings.furnitureAssembly;
+  const furnitureAssemblyCatalog = Array.isArray(rawFurnitureAssembly.catalog)
+    ? rawFurnitureAssembly.catalog.filter(
+        (item) =>
+          item &&
+          typeof item.id === "string" &&
+          typeof item.name === "string" &&
+          typeof item.category === "string" &&
+          typeof item.assemblyMinutes === "number" &&
+          item.assemblyMinutes >= 0 &&
+          typeof item.dismantlingMinutes === "number" &&
+          item.dismantlingMinutes >= 0 &&
+          typeof item.materialCost === "number" &&
+          item.materialCost >= 0
+      )
+    : [];
   const nonNegative = (value: unknown, fallback: number) =>
     typeof value === "number" && Number.isFinite(value) && value >= 0
       ? value
@@ -225,6 +288,41 @@ export function normalizeOfferPricingSettings(
       vehicleCatalog.length > 0
         ? vehicleCatalog
         : defaultOfferPricingSettings.vehicleCatalog.map((item) => ({ ...item })),
+    furnitureAssembly: {
+      catalog:
+        furnitureAssemblyCatalog.length > 0
+          ? furnitureAssemblyCatalog
+          : defaultFurnitureAssemblyCatalog.map((item) => ({ ...item })),
+      minimumLaborHours: nonNegative(
+        rawFurnitureAssembly.minimumLaborHours,
+        defaultOfferPricingSettings.furnitureAssembly.minimumLaborHours
+      ),
+      minimumEmployees: Math.max(
+        1,
+        Math.round(
+          nonNegative(
+            rawFurnitureAssembly.minimumEmployees,
+            defaultOfferPricingSettings.furnitureAssembly.minimumEmployees
+          )
+        )
+      ),
+      twoPersonThresholdMinutes: nonNegative(
+        rawFurnitureAssembly.twoPersonThresholdMinutes,
+        defaultOfferPricingSettings.furnitureAssembly.twoPersonThresholdMinutes
+      ),
+      easyComplexityFactor: nonNegative(
+        rawFurnitureAssembly.easyComplexityFactor,
+        defaultOfferPricingSettings.furnitureAssembly.easyComplexityFactor
+      ),
+      standardComplexityFactor: nonNegative(
+        rawFurnitureAssembly.standardComplexityFactor,
+        defaultOfferPricingSettings.furnitureAssembly.standardComplexityFactor
+      ),
+      difficultComplexityFactor: nonNegative(
+        rawFurnitureAssembly.difficultComplexityFactor,
+        defaultOfferPricingSettings.furnitureAssembly.difficultComplexityFactor
+      ),
+    },
     clearance: {
       employeeRules: normalizeThresholdRules(
         rawClearance.employeeRules,

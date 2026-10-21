@@ -198,6 +198,12 @@ type VehicleSelection = {
   quantity: number;
 };
 
+export type FurnitureAssemblySelection = {
+  itemId: string;
+  assemblyQuantity: number;
+  dismantlingQuantity: number;
+};
+
 export type PlanningDetails = {
   serviceTypes: ServiceKey[];
   scopeDescription: string;
@@ -254,6 +260,7 @@ export type PlanningDetails = {
   paintWallpaper: boolean;
   paintMaterials: PaintMaterialLine[];
   furniturePieces: number;
+  furnitureAssemblyItems: FurnitureAssemblySelection[];
   movingBoxes: number;
   unpackingBoxes: number;
   fragileItemCount: number;
@@ -482,6 +489,7 @@ function createPlanning(): PlanningDetails {
     paintWallpaper: true,
     paintMaterials: [],
     furniturePieces: 0,
+    furnitureAssemblyItems: [],
     movingBoxes: 0,
     unpackingBoxes: 0,
     fragileItemCount: 0,
@@ -609,6 +617,16 @@ function normalizePlanning(planning?: Partial<PlanningDetails>): PlanningDetails
     })),
     photoUrls: planning?.photoUrls ?? [],
     vehicleSelections: planning?.vehicleSelections ?? [],
+    furnitureAssemblyItems: (planning?.furnitureAssemblyItems ?? []).filter(
+      (item) =>
+        item &&
+        typeof item.itemId === "string" &&
+        item.itemId &&
+        Number.isFinite(item.assemblyQuantity) &&
+        item.assemblyQuantity >= 0 &&
+        Number.isFinite(item.dismantlingQuantity) &&
+        item.dismantlingQuantity >= 0
+    ),
   };
 }
 
@@ -1054,27 +1072,82 @@ function calculateServiceRecommendation(
   }
 
   if (selectedServices.has("furnitureAssembly")) {
+    const assemblySettings = pricingSettings.furnitureAssembly;
     const assemblyFactor =
-      planning.moveComplexity === "easy"
-        ? 0.85
+        planning.moveComplexity === "easy"
+          ? assemblySettings.easyComplexityFactor
         : planning.moveComplexity === "difficult"
-          ? 1.35
-          : 1;
+            ? assemblySettings.difficultComplexityFactor
+            : assemblySettings.standardComplexityFactor;
+    const configuredAssemblyMinutes = planning.furnitureAssemblyItems.reduce(
+        (total, selection) => {
+          const item = assemblySettings.catalog.find(
+            (candidate) => candidate.id === selection.itemId
+          );
+          if (!item) return total;
+          return (
+            total +
+            selection.assemblyQuantity * item.assemblyMinutes +
+            selection.dismantlingQuantity * item.dismantlingMinutes
+          );
+        },
+        0
+    );
+    const configuredMaterialCost = planning.furnitureAssemblyItems.reduce(
+        (total, selection) => {
+          const item = assemblySettings.catalog.find(
+            (candidate) => candidate.id === selection.itemId
+          );
+          return item
+            ? total +
+                (selection.assemblyQuantity + selection.dismantlingQuantity) *
+                  item.materialCost
+            : total;
+        },
+        0
+    );
+    const usesConfiguredCatalog = planning.furnitureAssemblyItems.length > 0;
+    const legacyMinutes =
+        planning.furniturePieces * rates.furnitureAssemblyMinutesPerPiece;
+    const calculatedAssemblyHours =
+        ((usesConfiguredCatalog ? configuredAssemblyMinutes : legacyMinutes) *
+          assemblyFactor) /
+          60 +
+        planning.dismantlingHours;
     const assemblyHours =
-      (planning.furniturePieces * rates.furnitureAssemblyMinutesPerPiece * assemblyFactor) /
-        60 +
-      planning.dismantlingHours;
+        calculatedAssemblyHours > 0
+          ? Math.max(assemblySettings.minimumLaborHours, calculatedAssemblyHours)
+          : 0;
     labourHours += assemblyHours;
-    employees = Math.max(employees, planning.furniturePieces > 8 ? 2 : 1);
+    const assemblyEmployees =
+        configuredAssemblyMinutes >= assemblySettings.twoPersonThresholdMinutes
+          ? Math.max(2, assemblySettings.minimumEmployees)
+          : assemblySettings.minimumEmployees;
+    employees = Math.max(employees, assemblyEmployees);
+    materialCost += configuredMaterialCost;
     serviceShares.push({
-      service: "furnitureAssembly",
-      labourHours: assemblyHours,
-      materialCost: 0,
+        service: "furnitureAssembly",
+        labourHours: assemblyHours,
+        materialCost: configuredMaterialCost,
       disposalCost: 0,
       storageCost: 0,
       logisticsCost: 0,
     });
-    explanations.push(`${planning.furniturePieces} Moebelteile zur Montage`);
+    if (usesConfiguredCatalog) {
+      const assemblyCount = planning.furnitureAssemblyItems.reduce(
+        (total, item) => total + item.assemblyQuantity,
+        0
+      );
+      const dismantlingCount = planning.furnitureAssemblyItems.reduce(
+        (total, item) => total + item.dismantlingQuantity,
+        0
+      );
+      explanations.push(
+        `${assemblyCount} Möbelaufbau, ${dismantlingCount} Möbelabbau laut Leistungskatalog`
+      );
+    } else {
+      explanations.push(`${planning.furniturePieces} Möbelteile zur Montage`);
+    }
   }
 
   if (selectedServices.has("packing")) {
@@ -2012,6 +2085,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
         calculation.planning.paintAreaM2 > 0 ||
         calculation.planning.disposalVolumeM3 > 0 ||
         calculation.planning.furniturePieces > 0 ||
+        calculation.planning.furnitureAssemblyItems.length > 0 ||
         calculation.planning.movingBoxes > 0 ||
         calculation.planning.storageVolumeM3 > 0 ||
         calculation.planning.photoUrls.length > 0
@@ -3259,6 +3333,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
                   recommendedBoxes={recommendation.boxes}
                   calculatedMaterials={recommendation.materials}
                   materialCatalog={materialCatalog}
+                  pricingSettings={pricingSettings}
                   onPlanningChange={updatePlanning}
                   onKilometersChange={(value) => updateCalculation("kilometers", value)}
                 />

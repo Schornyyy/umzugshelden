@@ -25,6 +25,7 @@ import {
   summarizePaintColorAreas,
   type PaintColorPlan,
 } from "./paintColorPlanning";
+import type { OfferPricingSettings } from "@/lib/offerPricingSettings";
 
 type ServiceConfiguratorProps = {
   service: ServiceKey;
@@ -33,6 +34,7 @@ type ServiceConfiguratorProps = {
   recommendedBoxes: number;
   calculatedMaterials: CalculatedMaterial[];
   materialCatalog: MaterialCatalogItem[];
+  pricingSettings: OfferPricingSettings;
   onPlanningChange: <Key extends keyof PlanningDetails>(
     key: Key,
     value: PlanningDetails[Key]
@@ -676,15 +678,133 @@ function PaintingServiceCalculator(props: Omit<ServiceConfiguratorProps, "servic
 }
 
 function FurnitureServiceCalculator(props: Omit<ServiceConfiguratorProps, "service">) {
-  const { planning, kilometers, onPlanningChange, onKilometersChange } = props;
+  const {
+    planning,
+    kilometers,
+    onPlanningChange,
+    onKilometersChange,
+    pricingSettings,
+  } = props;
+  const assemblyCatalog = pricingSettings.furnitureAssembly.catalog;
+  const totalMinutes = planning.furnitureAssemblyItems.reduce(
+    (total, selection) => {
+      const item = assemblyCatalog.find(
+        (candidate) => candidate.id === selection.itemId
+      );
+      return item
+        ? total +
+            selection.assemblyQuantity * item.assemblyMinutes +
+            selection.dismantlingQuantity * item.dismantlingMinutes
+        : total;
+    },
+    0
+  );
+
+  function addAssemblyItem(itemId: string) {
+    if (!itemId) return;
+    const existing = planning.furnitureAssemblyItems.find(
+      (item) => item.itemId === itemId
+    );
+    onPlanningChange(
+      "furnitureAssemblyItems",
+      existing
+        ? planning.furnitureAssemblyItems.map((item) =>
+            item.itemId === itemId
+              ? { ...item, assemblyQuantity: item.assemblyQuantity + 1 }
+              : item
+          )
+        : [
+            ...planning.furnitureAssemblyItems,
+            { itemId, assemblyQuantity: 1, dismantlingQuantity: 0 },
+          ]
+    );
+  }
+
+  function updateAssemblyItem(
+    itemId: string,
+    key: "assemblyQuantity" | "dismantlingQuantity",
+    value: number
+  ) {
+    onPlanningChange(
+      "furnitureAssemblyItems",
+      planning.furnitureAssemblyItems.map((item) =>
+        item.itemId === itemId
+          ? { ...item, [key]: Math.max(0, Math.round(value)) }
+          : item
+      )
+    );
+  }
+
   return (
     <div>
-      <ServiceHeader icon={Wrench} title='Möbelmontage kalkulieren' description='Stückzahl, Demontagezeit, Komplexität und Anfahrt ergeben den voraussichtlichen Aufwand.' />
+      <ServiceHeader icon={Wrench} title='Möbelmontage kalkulieren' description='Auf- und Abbau werden je Möbeltyp anhand der zentral hinterlegten Zeiten und Materialpauschalen berechnet.' />
       <AddressFields planning={planning} kilometers={kilometers} onPlanningChange={onPlanningChange} onKilometersChange={onKilometersChange} destination={false} />
-      <div className='mt-4 max-w-sm'><NumberField label='Möbelteile zur Montage' value={planning.furniturePieces} onChange={(value) => onPlanningChange("furniturePieces", value)} suffix='Teile' /></div>
+      <div className='mt-5 rounded-md border border-slate-200 bg-slate-50 p-4'>
+        <div className='flex flex-col justify-between gap-3 sm:flex-row sm:items-end'>
+          <div>
+            <p className='text-sm font-semibold text-slate-950'>Leistungen erfassen</p>
+            <p className='mt-1 text-sm text-slate-600'>Möbel auswählen und getrennt angeben, wie oft sie auf- oder abgebaut werden.</p>
+          </div>
+          <select
+            defaultValue=''
+            onChange={(event) => {
+              addAssemblyItem(event.target.value);
+              event.target.value = "";
+            }}
+            className='h-10 min-w-64 rounded-md border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500'>
+            <option value=''>Möbelstück hinzufügen ...</option>
+            {Object.entries(
+              assemblyCatalog.reduce<Record<string, typeof assemblyCatalog>>(
+                (groups, item) => {
+                  (groups[item.category] ??= []).push(item);
+                  return groups;
+                },
+                {}
+              )
+            ).map(([category, items]) => (
+              <optgroup key={category} label={category}>
+                {items.map((item) => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+        {planning.furnitureAssemblyItems.length === 0 ? (
+          <p className='mt-4 rounded-md border border-dashed border-slate-300 bg-white px-3 py-5 text-center text-sm text-slate-500'>Noch keine Montageleistung erfasst.</p>
+        ) : (
+          <div className='mt-4 space-y-2'>
+            {planning.furnitureAssemblyItems.map((selection) => {
+              const item = assemblyCatalog.find(
+                (candidate) => candidate.id === selection.itemId
+              );
+              if (!item) return null;
+              return (
+                <div key={selection.itemId} className='grid gap-3 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(180px,1fr)_120px_120px_40px] sm:items-end'>
+                  <div>
+                    <p className='text-sm font-semibold text-slate-950'>{item.name}</p>
+                    <p className='mt-1 text-xs text-slate-500'>Aufbau {item.assemblyMinutes} Min. · Abbau {item.dismantlingMinutes} Min. · Material {currencyFormatter.format(item.materialCost)} je Vorgang</p>
+                  </div>
+                  <NumberField label='Aufbau' value={selection.assemblyQuantity} onChange={(value) => updateAssemblyItem(selection.itemId, "assemblyQuantity", value)} suffix='Stk.' />
+                  <NumberField label='Abbau' value={selection.dismantlingQuantity} onChange={(value) => updateAssemblyItem(selection.itemId, "dismantlingQuantity", value)} suffix='Stk.' />
+                  <button type='button' title='Leistung entfernen' onClick={() => onPlanningChange("furnitureAssemblyItems", planning.furnitureAssemblyItems.filter((item) => item.itemId !== selection.itemId))} className='flex h-10 w-10 items-center justify-center rounded-md text-red-600 hover:bg-red-50'>
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {totalMinutes > 0 && (
+          <div className='mt-4 flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-950'>
+            <span>Hinterlegter Grundaufwand</span>
+            <strong>{(totalMinutes / 60).toFixed(2)} Personenstunden</strong>
+          </div>
+        )}
+      </div>
       <details className='mt-4 rounded-md border border-slate-200 bg-slate-50 p-4'>
         <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Weitere Angaben zur Montage</summary>
-        <div className='mt-4'><NumberField label='Zusätzliche Demontage' value={planning.dismantlingHours} onChange={(value) => onPlanningChange("dismantlingHours", value)} suffix='Std.' step='0.25' /></div>
+        <div className='mt-4'><NumberField label='Zusätzlicher Sonderaufwand' value={planning.dismantlingHours} onChange={(value) => onPlanningChange("dismantlingHours", value)} suffix='Std.' step='0.25' /></div>
         <ComplexitySelector value={planning.moveComplexity} onChange={(value) => onPlanningChange("moveComplexity", value)} />
       </details>
     </div>

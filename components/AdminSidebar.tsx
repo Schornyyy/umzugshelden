@@ -31,6 +31,7 @@ import {
   PackageCheck,
   Trash2,
   UsersRound,
+  Wrench,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/config/firebase";
@@ -107,6 +108,20 @@ const data = {
         {
           title: "Entrümpelungspreise",
           url: "/crm/calculator/clearance/pricing",
+          icon: Calculator,
+          exact: true,
+          subItem: true,
+        },
+        {
+          title: "Möbelmontage kalkulieren",
+          url: "/crm/calculator/furniture-assembly",
+          icon: Wrench,
+          exact: true,
+          subItem: true,
+        },
+        {
+          title: "Möbelmontagepreise",
+          url: "/crm/calculator/furniture-assembly/pricing",
           icon: Calculator,
           exact: true,
           subItem: true,
