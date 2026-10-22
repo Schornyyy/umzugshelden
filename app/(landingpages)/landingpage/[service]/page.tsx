@@ -1,5 +1,7 @@
 import ReviewCarousel from "@/components/reviews/ReviewCarousel";
 import type { Metadata } from "next";
+import { readdir } from "node:fs/promises";
+import path from "node:path";
 import {
   ArrowRight,
   BadgeCheck,
@@ -24,6 +26,13 @@ import EntruempelungLeadFunnel from "./EntruempelungLeadFunnel";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";
+const PROJECT_IMAGE_DIRECTORY = path.join(
+  process.cwd(),
+  "public",
+  "images",
+  "entruempelung",
+);
+const PROJECT_IMAGE_EXTENSIONS = /\.(avif|jpe?g|png|webp)$/i;
 
 export const metadata: Metadata = {
   title: "Entrümpelung zum Festpreis | Kostenlose Besichtigung",
@@ -56,7 +65,7 @@ const promises = [
   },
 ];
 
-const process = [
+const processSteps = [
   {
     icon: Calculator,
     title: "Angebot anfordern",
@@ -113,6 +122,35 @@ function normalizeServiceSlug(value: string) {
   }
 }
 
+async function getProjectImages() {
+  try {
+    const entries = await readdir(PROJECT_IMAGE_DIRECTORY, {
+      withFileTypes: true,
+    });
+
+    const images = entries
+      .filter(
+        (entry) =>
+          entry.isFile() && PROJECT_IMAGE_EXTENSIONS.test(entry.name),
+      )
+      .map((entry) => `/images/entruempelung/${encodeURIComponent(entry.name)}`)
+      .sort((first, second) =>
+        first.localeCompare(second, "de", { numeric: true }),
+      );
+
+    return images.length > 0 ? images : ["/images/entrümpelung.webp"];
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return ["/images/entrümpelung.webp"];
+    }
+    throw error;
+  }
+}
+
 export default async function EntruempelungLandingpage({
   params,
   searchParams,
@@ -120,7 +158,11 @@ export default async function EntruempelungLandingpage({
   params: Promise<{ service: string }>;
   searchParams: Promise<{ stadt?: string | string[] }>;
 }) {
-  const [{ service }, { stadt }] = await Promise.all([params, searchParams]);
+  const [{ service }, { stadt }, projectImages] = await Promise.all([
+    params,
+    searchParams,
+    getProjectImages(),
+  ]);
   const normalizedService = normalizeServiceSlug(service);
   if (
     normalizedService !== "entrümpelung" &&
@@ -262,7 +304,7 @@ export default async function EntruempelungLandingpage({
                 den Ablauf von der ersten Einschätzung bis zur Übergabe.
               </p>
               <div className="mt-8 space-y-6">
-                {process.map(({ icon: Icon, title, text }, index) => (
+                {processSteps.map(({ icon: Icon, title, text }, index) => (
                   <div key={title} className="flex gap-4">
                     <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-navy text-white">
                       <Icon size={22} />
@@ -353,17 +395,18 @@ export default async function EntruempelungLandingpage({
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-sm font-bold uppercase tracking-[0.16em] text-primary">
-              Das Leistungsziel
+              Einblicke in unsere Arbeit
             </p>
             <h2 className="mt-3 text-3xl font-bold text-navy sm:text-4xl">
-              Vom vollen Raum zur besenreinen Übergabe
+              Ausgangssituationen aus verschiedenen Projekten
             </h2>
             <p className="mt-4 text-slate-600">
-              Bewegen Sie den Regler und sehen Sie, was wir für Sie übernehmen.
+              Jedes Objekt ist anders. Diese Aufnahmen zeigen Räume vor Beginn
+              unserer Entrümpelungsarbeiten.
             </p>
           </div>
           <div className="mx-auto mt-10 max-w-4xl">
-            <AblaufVergleich />
+            <AblaufVergleich images={projectImages} />
           </div>
         </div>
       </section>
