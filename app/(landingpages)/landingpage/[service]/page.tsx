@@ -238,6 +238,8 @@ export default async function EntruempelungLandingpage({
         </div>
       </section>
 
+      <ReviewCarousel />
+
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-7xl gap-4 px-4 py-6 sm:grid-cols-3 sm:px-6 lg:px-8">
           {[
@@ -410,8 +412,6 @@ export default async function EntruempelungLandingpage({
           </div>
         </div>
       </section>
-
-      <ReviewCarousel />
 
       <section className="bg-slate-50 py-16 sm:py-20">
         <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
