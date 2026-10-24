@@ -4,6 +4,7 @@ import Cookies from "js-cookie";
 import { Switch } from "@/components/ui/switch";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 type CookieConsent = {
   essential: boolean;
@@ -12,6 +13,8 @@ type CookieConsent = {
 };
 
 const CookieBanner: React.FC = () => {
+  const pathname = usePathname();
+  const isLandingpage = pathname.startsWith("/landingpage/");
   const [showBanner, setShowBanner] = useState<boolean>(false);
   const [consent, setConsent] = useState<CookieConsent>({
     essential: true, // Immer aktiv
@@ -20,13 +23,34 @@ const CookieBanner: React.FC = () => {
   });
 
   useEffect(() => {
+    if (isLandingpage) {
+      const acceptedConsent: CookieConsent = {
+        essential: true,
+        analytics: true,
+        marketing: true,
+      };
+      Cookies.set(
+        "cookieConsentGScreatives",
+        JSON.stringify(acceptedConsent),
+        { expires: 365 },
+      );
+      setConsent(acceptedConsent);
+      setShowBanner(false);
+      window.dispatchEvent(
+        new CustomEvent("cookieConsentUpdated", {
+          detail: acceptedConsent,
+        }),
+      );
+      return;
+    }
+
     const savedConsent = Cookies.get("cookieConsentGScreatives");
     if (!savedConsent) {
       setShowBanner(true);
     } else {
       setConsent(JSON.parse(savedConsent));
     }
-  }, []);
+  }, [isLandingpage]);
 
   const handleAccept = () => {
     Cookies.set("cookieConsentGScreatives", JSON.stringify(consent), {
@@ -44,7 +68,7 @@ const CookieBanner: React.FC = () => {
     setConsent((prev) => ({ ...prev, [category]: !prev[category] }));
   };
 
-  if (!showBanner) return null;
+  if (isLandingpage || !showBanner) return null;
 
   return (
     <motion.div

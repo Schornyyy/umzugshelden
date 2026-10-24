@@ -1,6 +1,7 @@
 "use client";
 
 import { createRequest } from "@/actions/requestsActions";
+import { trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import {
   ArrowLeft,
   ArrowRight,
@@ -106,40 +107,45 @@ export default function EntruempelungLeadFunnel() {
         message,
       });
 
-      const emailResponse = await fetch("/api/send-email", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: "info@umzugshelden.io",
-          subject: `Entrümpelungs-Anfrage von ${lead.name.trim()}`,
-          replacements: {
-            name: lead.name.trim(),
-            phone: lead.phone.trim(),
-            email: lead.email.trim(),
-            message,
-          },
-          templatePath: "ContactEmailTemplate.html",
-          tracking: false,
-        }),
-      });
-      const emailResult = (await emailResponse.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      if (!emailResponse.ok || emailResult?.error) {
-        console.error(
-          "Landingpage-Anfrage wurde gespeichert, E-Mail-Versand fehlgeschlagen.",
-          emailResult?.error,
-        );
-      }
-
-      const analyticsWindow = window as typeof window & {
-        gtag?: (command: "event", name: string, values?: object) => void;
-      };
-      analyticsWindow.gtag?.("event", "generate_lead", {
+      trackGoogleAnalyticsEvent("generate_lead", {
         service: "entruempelung",
         source: "google_ads_landingpage",
       });
-      analyticsWindow.gtag?.("event", "Kontakt_formular");
+      trackGoogleAnalyticsEvent("Kontakt_formular");
+
+      try {
+        const emailResponse = await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: "info@umzugshelden.io",
+            subject: `Entrümpelungs-Anfrage von ${lead.name.trim()}`,
+            replacements: {
+              name: lead.name.trim(),
+              phone: lead.phone.trim(),
+              email: lead.email.trim(),
+              message,
+            },
+            templatePath: "ContactEmailTemplate.html",
+            tracking: false,
+          }),
+        });
+        const emailResult = (await emailResponse.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        if (!emailResponse.ok || emailResult?.error) {
+          console.error(
+            "Landingpage-Anfrage wurde gespeichert, E-Mail-Versand fehlgeschlagen.",
+            emailResult?.error,
+          );
+        }
+      } catch (emailError) {
+        console.error(
+          "Landingpage-Anfrage wurde gespeichert, E-Mail-Versand fehlgeschlagen.",
+          emailError,
+        );
+      }
+
       setSubmitted(true);
       setLead(initialLead);
     } catch (caughtError) {

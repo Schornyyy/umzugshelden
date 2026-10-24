@@ -823,13 +823,18 @@ function PackingServiceCalculator(props: Omit<ServiceConfiguratorProps, "service
     <div>
       <ServiceHeader icon={PackagePlus} title='Ein- und Auspackservice kalkulieren' description='Kartons, Auspackumfang, empfindliche Gegenstände und Anfahrt werden einzeln angesetzt.' />
       <AddressFields planning={planning} kilometers={kilometers} onPlanningChange={onPlanningChange} onKilometersChange={onKilometersChange} destination={false} />
-      <div className='mt-4 max-w-sm'><NumberField label='Kartons einpacken (0 = automatisch)' value={planning.movingBoxes} onChange={(value) => onPlanningChange("movingBoxes", value)} suffix='Stk.' /></div>
+      <div className='mt-4 grid gap-4 sm:grid-cols-3'>
+        <NumberField label='Wohnfläche' value={planning.livingAreaM2} onChange={(value) => onPlanningChange("livingAreaM2", value)} suffix='m²' />
+        <NumberField label='Haushaltsgröße' value={planning.householdSize} onChange={(value) => onPlanningChange("householdSize", Math.max(1, Math.round(value)))} suffix='Personen' />
+        <NumberField label='Zu packende Räume' value={planning.packingRoomCount} onChange={(value) => onPlanningChange("packingRoomCount", Math.max(1, Math.round(value)))} suffix='Räume' />
+      </div>
+      <div className='mt-4 max-w-sm'><NumberField label='Kartons einpacken (0 = Staffel/Inventar)' value={planning.movingBoxes} onChange={(value) => onPlanningChange("movingBoxes", Math.round(value))} suffix='Stk.' /></div>
       {planning.movingBoxes === 0 && recommendedBoxes > 0 && (
-        <p className='mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'>Automatisch angesetzt: <strong>{recommendedBoxes} Kartons</strong> aus dem erfassten Umzugsvolumen.</p>
+        <p className='mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900'>Automatisch angesetzt: <strong>{recommendedBoxes} Kartons</strong> aus Wohnfläche, Haushaltsgröße, Räumen und erfasstem Inventar. Der höchste ermittelte Bedarf wird verwendet.</p>
       )}
       <details className='mt-4 rounded-md border border-slate-200 bg-slate-50 p-4'>
         <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Weitere Angaben zum Packservice</summary>
-        <div className='mt-4 grid gap-4 sm:grid-cols-2'><NumberField label='Kartons auspacken' value={planning.unpackingBoxes} onChange={(value) => onPlanningChange("unpackingBoxes", value)} suffix='Stk.' /><NumberField label='Empfindliche Gegenstände' value={planning.fragileItemCount} onChange={(value) => onPlanningChange("fragileItemCount", value)} suffix='Stk.' /></div>
+        <div className='mt-4 grid gap-4 sm:grid-cols-2'><NumberField label='Kartons auspacken' value={planning.unpackingBoxes} onChange={(value) => onPlanningChange("unpackingBoxes", Math.round(value))} suffix='Stk.' /><NumberField label='Empfindliche Gegenstände' value={planning.fragileItemCount} onChange={(value) => onPlanningChange("fragileItemCount", Math.round(value))} suffix='Stk.' /></div>
       </details>
     </div>
   );

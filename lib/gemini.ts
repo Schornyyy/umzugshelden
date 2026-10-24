@@ -35,6 +35,10 @@ export async function generateGeminiJson(input: {
   systemInstruction: string;
   prompt: string;
   temperature: number;
+  inlineData?: Array<{
+    mimeType: string;
+    data: string;
+  }>;
   timeoutMs?: number;
   maxOutputTokens?: number;
   thinkingBudget?: number;
@@ -64,7 +68,15 @@ export async function generateGeminiJson(input: {
           contents: [
             {
               role: "user",
-              parts: [{ text: input.prompt }],
+              parts: [
+                ...(input.inlineData ?? []).map((item) => ({
+                  inlineData: {
+                    mimeType: item.mimeType,
+                    data: item.data,
+                  },
+                })),
+                { text: input.prompt },
+              ],
             },
           ],
           generationConfig: {

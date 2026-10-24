@@ -11,7 +11,16 @@ import {
 } from "@/components/ui/dialog";
 import { auth } from "@/config/firebase";
 import type { AssistantOfferDraft } from "@/types/OfferAssistant";
-import { Check, LoaderCircle, Mic, MicOff, Sparkles } from "lucide-react";
+import {
+  Check,
+  FileText,
+  LoaderCircle,
+  Mic,
+  MicOff,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type SpeechRecognitionResultLike = {
@@ -52,6 +61,20 @@ function getSpeechRecognition(): SpeechRecognitionConstructor | null {
 const exampleText =
   "z. B.: Umzug für Familie Müller am 15.10. von der Hauptstraße 12 in Köln, 3. OG ohne Aufzug, in die Gartenstraße 5, EG. Wohnzimmer: Sofa, zwei Regale, Fernseher. Schlafzimmer: Doppelbett, Kleiderschrank. Etwa 30 Kartons, Einpackservice gewünscht, Halteverbotszone nötig.";
 
+const selectableServices = [
+  { id: "move", label: "Umzug / Transport" },
+  { id: "packing", label: "Kartons ein- und auspacken" },
+  { id: "furnitureAssembly", label: "Möbelmontage / Demontage" },
+] as const;
+
+const MAX_PDF_COUNT = 3;
+const MAX_PDF_SIZE = 8 * 1024 * 1024;
+const MAX_TOTAL_PDF_SIZE = 12 * 1024 * 1024;
+
+function formatFileSize(bytes: number) {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function summarizeDraft(draft: AssistantOfferDraft): string[] {
   const summary: string[] = [];
   if (draft.services?.length) summary.push(`${draft.services.length} Dienstleistung(en) erkannt`);
@@ -63,6 +86,15 @@ function summarizeDraft(draft: AssistantOfferDraft): string[] {
       0
     );
     summary.push(`${draft.rooms.length} Raum/Räume mit ${itemCount} Positionen (~${volume.toFixed(1)} m³)`);
+    const measuredItems = draft.rooms.reduce(
+      (total, room) =>
+        total +
+        room.items.filter(
+          (item) => item.lengthCm && item.widthCm && item.heightCm
+        ).length,
+      0
+    );
+    if (measuredItems) summary.push(`${measuredItems} Positionen mit vollständigen Maßen`);
   }
   if (draft.oldAddress || draft.newAddress) summary.push("Adressen erkannt");
   if (draft.contactName || draft.customer) summary.push(`Kunde: ${draft.customer || draft.contactName}`);
@@ -85,6 +117,10 @@ export default function OfferAssistant({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<AssistantOfferDraft | null>(null);
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [includeAssembly, setIncludeAssembly] = useState(true);
+  const [includeDismantling, setIncludeDismantling] = useState(true);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const speechSupported = getSpeechRecognition() !== null;
 
@@ -138,7 +174,7 @@ export default function OfferAssistant({
   }
 
   async function analyze() {
-    if (!text.trim() || isProcessing) return;
+    if ((!text.trim() && pdfFiles.length === 0) || isProcessing) return;
     stopListening();
     setIsProcessing(true);
     setError(null);
@@ -149,20 +185,50 @@ export default function OfferAssistant({
         setError("Keine aktive Anmeldung gefunden. Bitte neu einloggen.");
         return;
       }
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${idToken}`,
+      };
+      let body: BodyInit;
+      if (pdfFiles.length > 0) {
+        const formData = new FormData();
+        formData.set("text", text.trim());
+        pdfFiles.forEach((file) => formData.append("files", file));
+        body = formData;
+      } else {
+        headers["content-type"] = "application/json";
+        body = JSON.stringify({ text: text.trim() });
+      }
       const response = await fetch("/api/admin/offer-assistant", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ text: text.trim() }),
+        headers,
+        body,
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) {
         setError(data.error || "Die KI-Anfrage ist fehlgeschlagen.");
         return;
       }
-      setDraft(data.draft as AssistantOfferDraft);
+      const nextDraft = data.draft as AssistantOfferDraft;
+      setDraft(nextDraft);
+      const recognizedServices = new Set(nextDraft.services ?? []);
+      if (nextDraft.rooms?.length) recognizedServices.add("move");
+      if (nextDraft.movingBoxes || nextDraft.unpackingBoxes) {
+        recognizedServices.add("packing");
+      }
+      if (
+        nextDraft.rooms?.some((room) =>
+          room.items.some(
+            (item) => item.assemblyQuantity || item.dismantlingQuantity
+          )
+        )
+      ) {
+        recognizedServices.add("furnitureAssembly");
+      }
+      setSelectedServices(
+        selectableServices
+          .map((service) => service.id)
+          .filter((service) => recognizedServices.has(service))
+      );
     } catch {
       setError("Die KI-Anfrage ist fehlgeschlagen. Bitte erneut versuchen.");
     } finally {
@@ -172,10 +238,59 @@ export default function OfferAssistant({
 
   function applyDraft() {
     if (!draft) return;
-    onApply(draft);
+    onApply({
+      ...draft,
+      services: selectedServices,
+      rooms: draft.rooms?.map((room) => ({
+        ...room,
+        items: room.items.map((item) => ({
+          ...item,
+          assemblyQuantity:
+            selectedServices.includes("furnitureAssembly") && includeAssembly
+              ? item.assemblyQuantity || item.quantity
+              : 0,
+          dismantlingQuantity:
+            selectedServices.includes("furnitureAssembly") && includeDismantling
+              ? item.dismantlingQuantity || item.quantity
+              : 0,
+        })),
+      })),
+    });
     setIsOpen(false);
     setDraft(null);
     setText("");
+    setPdfFiles([]);
+  }
+
+  function addPdfFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    const nextFiles = [...pdfFiles, ...Array.from(fileList)];
+    if (nextFiles.length > MAX_PDF_COUNT) {
+      setError(`Maximal ${MAX_PDF_COUNT} PDFs pro Analyse.`);
+      return;
+    }
+    if (
+      nextFiles.some(
+        (file) =>
+          file.type !== "application/pdf" ||
+          !file.name.toLocaleLowerCase("de-DE").endsWith(".pdf") ||
+          file.size === 0 ||
+          file.size > MAX_PDF_SIZE
+      )
+    ) {
+      setError("Bitte nur gültige PDFs bis maximal 8 MB je Datei auswählen.");
+      return;
+    }
+    if (
+      nextFiles.reduce((total, file) => total + file.size, 0) >
+      MAX_TOTAL_PDF_SIZE
+    ) {
+      setError("Die PDFs dürfen zusammen maximal 12 MB groß sein.");
+      return;
+    }
+    setPdfFiles(nextFiles);
+    setDraft(null);
+    setError(null);
   }
 
   function handleOpenChange(open: boolean) {
@@ -183,6 +298,7 @@ export default function OfferAssistant({
     if (!open) {
       stopListening();
       setError(null);
+      setDraft(null);
     }
   }
 
@@ -198,8 +314,9 @@ export default function OfferAssistant({
               <Sparkles size={18} className='text-blue-600' /> KI-Angebotsassistent
             </DialogTitle>
             <DialogDescription>
-              Beschreibe den Auftrag per Sprache oder Text. Die KI erstellt daraus Inventar,
-              Leistungen und die Angebotsdaten.
+              Lade Inventarlisten als PDF hoch oder beschreibe den Auftrag per
+              Sprache beziehungsweise Text. Die KI liest Möbel, Maße, Kartons
+              und Leistungen aus.
             </DialogDescription>
           </DialogHeader>
           <div className='space-y-3'>
@@ -210,6 +327,48 @@ export default function OfferAssistant({
               placeholder={exampleText}
               className='w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20'
             />
+            <div className='rounded-md border border-dashed border-blue-300 bg-blue-50/60 p-4'>
+              <label className='flex cursor-pointer items-center justify-center gap-2 rounded-md border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-800 transition hover:bg-blue-50'>
+                <Upload size={17} />
+                PDF-Inventarliste auswählen
+                <input
+                  type='file'
+                  accept='application/pdf,.pdf'
+                  multiple
+                  className='sr-only'
+                  onChange={(event) => {
+                    addPdfFiles(event.target.files);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              <p className='mt-2 text-center text-xs text-blue-700'>
+                Bis zu 3 PDFs, jeweils maximal 8 MB und zusammen maximal 12 MB.
+              </p>
+              {pdfFiles.length > 0 && (
+                <div className='mt-3 space-y-2'>
+                  {pdfFiles.map((file, index) => (
+                    <div key={`${file.name}-${file.size}-${index}`} className='flex items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700'>
+                      <FileText size={16} className='shrink-0 text-blue-600' />
+                      <span className='min-w-0 flex-1 truncate'>{file.name}</span>
+                      <span className='text-xs text-slate-500'>{formatFileSize(file.size)}</span>
+                      <button
+                        type='button'
+                        title='PDF entfernen'
+                        onClick={() => {
+                          setPdfFiles((current) =>
+                            current.filter((_, fileIndex) => fileIndex !== index)
+                          );
+                          setDraft(null);
+                        }}
+                        className='rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600'>
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className='flex flex-wrap items-center gap-2'>
               <Button
                 type='button'
@@ -229,7 +388,7 @@ export default function OfferAssistant({
                 type='button'
                 className='ml-auto'
                 onClick={() => void analyze()}
-                disabled={!text.trim() || isProcessing}>
+                disabled={(!text.trim() && pdfFiles.length === 0) || isProcessing}>
                 {isProcessing ? <LoaderCircle className='animate-spin' /> : <Sparkles />}
                 {isProcessing ? "Wird analysiert ..." : "Angebot erstellen"}
               </Button>
@@ -240,7 +399,7 @@ export default function OfferAssistant({
               </p>
             )}
             {draft && (
-              <div className='rounded-md border border-emerald-200 bg-emerald-50 p-4'>
+              <div className='space-y-4 rounded-md border border-emerald-200 bg-emerald-50 p-4'>
                 <p className='text-sm font-semibold text-emerald-900'>Ergebnis der Analyse</p>
                 <ul className='mt-2 space-y-1 text-sm text-emerald-900'>
                   {summarizeDraft(draft).map((line) => (
@@ -249,7 +408,67 @@ export default function OfferAssistant({
                     </li>
                   ))}
                 </ul>
-                <p className='mt-3 text-xs text-emerald-800'>
+                <div>
+                  <p className='text-sm font-semibold text-emerald-950'>
+                    Welche Leistungen übernehmen?
+                  </p>
+                  <div className='mt-2 grid gap-2 sm:grid-cols-3'>
+                    {selectableServices.map((service) => (
+                      <label key={service.id} className='flex cursor-pointer items-start gap-2 rounded-md border border-emerald-200 bg-white p-3 text-sm text-slate-800'>
+                        <input
+                          type='checkbox'
+                          checked={selectedServices.includes(service.id)}
+                          onChange={(event) =>
+                            setSelectedServices((current) =>
+                              event.target.checked
+                                ? [...new Set([...current, service.id])]
+                                : current.filter((item) => item !== service.id)
+                            )
+                          }
+                          className='mt-0.5 h-4 w-4 accent-emerald-600'
+                        />
+                        {service.label}
+                      </label>
+                    ))}
+                  </div>
+                  {selectedServices.includes("furnitureAssembly") && (
+                    <div className='mt-2 flex flex-wrap gap-4 rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm'>
+                      <label className='flex items-center gap-2'>
+                        <input type='checkbox' checked={includeAssembly} onChange={(event) => setIncludeAssembly(event.target.checked)} className='h-4 w-4 accent-emerald-600' />
+                        Möbel aufbauen
+                      </label>
+                      <label className='flex items-center gap-2'>
+                        <input type='checkbox' checked={includeDismantling} onChange={(event) => setIncludeDismantling(event.target.checked)} className='h-4 w-4 accent-emerald-600' />
+                        Möbel abbauen
+                      </label>
+                    </div>
+                  )}
+                </div>
+                {draft.rooms?.some((room) => room.items.length > 0) && (
+                  <div>
+                    <p className='text-sm font-semibold text-emerald-950'>
+                      Erkannte Möbel und Maße
+                    </p>
+                    <div className='mt-2 max-h-52 overflow-y-auto rounded-md border border-emerald-200 bg-white'>
+                      {draft.rooms.flatMap((room) =>
+                        room.items.map((item, index) => (
+                          <div key={`${room.name}-${item.name}-${index}`} className='grid grid-cols-[1fr_auto] gap-3 border-b border-slate-100 px-3 py-2 text-sm last:border-0'>
+                            <span>
+                              <strong>{item.quantity}× {item.name}</strong>
+                              <span className='ml-2 text-xs text-slate-500'>{room.name}</span>
+                            </span>
+                            <span className='text-xs tabular-nums text-slate-600'>
+                              {item.lengthCm && item.widthCm && item.heightCm
+                                ? `${item.lengthCm} × ${item.widthCm} × ${item.heightCm} cm`
+                                : `${item.volumeM3.toFixed(2)} m³`}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+                <p className='text-xs text-emerald-800'>
                   Beim Übernehmen werden erkannte Werte in die Planung eingetragen. Vorhandenes
                   Inventar wird ersetzt, alle Werte bleiben danach manuell anpassbar.
                 </p>

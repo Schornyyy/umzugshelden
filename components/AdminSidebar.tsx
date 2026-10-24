@@ -29,6 +29,7 @@ import {
   MapPinned,
   MessageSquareQuote,
   PackageCheck,
+  PackagePlus,
   Trash2,
   UsersRound,
   Wrench,
@@ -122,6 +123,20 @@ const data = {
         {
           title: "Möbelmontagepreise",
           url: "/crm/calculator/furniture-assembly/pricing",
+          icon: Calculator,
+          exact: true,
+          subItem: true,
+        },
+        {
+          title: "Ein-/Auspacken kalkulieren",
+          url: "/crm/calculator/packing",
+          icon: PackagePlus,
+          exact: true,
+          subItem: true,
+        },
+        {
+          title: "Ein-/Auspackpreise",
+          url: "/crm/calculator/packing/pricing",
           icon: Calculator,
           exact: true,
           subItem: true,

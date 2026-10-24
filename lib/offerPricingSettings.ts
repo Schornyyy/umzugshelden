@@ -11,6 +11,18 @@ export type EmployeeVolumeRule = {
   employees: number;
 };
 
+export type PackingBoxRule = {
+  id: string;
+  upToAreaM2: number | null;
+  boxes: number;
+};
+
+export type PackingEmployeeRule = {
+  id: string;
+  upToBoxes: number | null;
+  employees: number;
+};
+
 export type FixedSurchargeRule = {
   id: string;
   upToValue: number | null;
@@ -60,6 +72,18 @@ export type ClearanceCalculationSettings = {
   maximumCarryDistanceFactor: number;
 };
 
+export type PackingCalculationSettings = {
+  boxRules: PackingBoxRule[];
+  employeeRules: PackingEmployeeRule[];
+  boxesPerPerson: number;
+  boxesPerRoom: number;
+  boxesPerVolumeM3: number;
+  packingMinutesPerBox: number;
+  unpackingMinutesPerBox: number;
+  fragileMinutesPerItem: number;
+  minimumLaborHours: number;
+};
+
 export type OfferPricingSettings = {
   employeeRules: EmployeeVolumeRule[];
   floorSurchargeRules: FixedSurchargeRule[];
@@ -69,6 +93,7 @@ export type OfferPricingSettings = {
   vehicleCatalog: VehiclePricingItem[];
   furnitureAssembly: FurnitureAssemblyCalculationSettings;
   clearance: ClearanceCalculationSettings;
+  packing: PackingCalculationSettings;
 };
 
 const furniture = (
@@ -190,9 +215,31 @@ export const defaultOfferPricingSettings: OfferPricingSettings = {
     carryDistanceFactorPer100M: 1,
     maximumCarryDistanceFactor: 0.5,
   },
+  packing: {
+    boxRules: [
+      { id: "packing-area-30", upToAreaM2: 30, boxes: 20 },
+      { id: "packing-area-50", upToAreaM2: 50, boxes: 30 },
+      { id: "packing-area-70", upToAreaM2: 70, boxes: 40 },
+      { id: "packing-area-90", upToAreaM2: 90, boxes: 50 },
+      { id: "packing-area-120", upToAreaM2: 120, boxes: 65 },
+      { id: "packing-area-open", upToAreaM2: null, boxes: 80 },
+    ],
+    employeeRules: [
+      { id: "packing-employees-40", upToBoxes: 40, employees: 1 },
+      { id: "packing-employees-80", upToBoxes: 80, employees: 2 },
+      { id: "packing-employees-open", upToBoxes: null, employees: 3 },
+    ],
+    boxesPerPerson: 12,
+    boxesPerRoom: 10,
+    boxesPerVolumeM3: 10,
+    packingMinutesPerBox: 5,
+    unpackingMinutesPerBox: 3,
+    fragileMinutesPerItem: 5,
+    minimumLaborHours: 1,
+  },
 };
 
-function normalizeThresholdRules<T extends EmployeeVolumeRule | FixedSurchargeRule>(
+function normalizeThresholdRules<T extends { id: string }>(
   value: unknown,
   fallback: T[]
 ): T[] {
@@ -244,6 +291,10 @@ export function normalizeOfferPricingSettings(
     raw.furnitureAssembly && typeof raw.furnitureAssembly === "object"
       ? raw.furnitureAssembly
       : defaultOfferPricingSettings.furnitureAssembly;
+  const rawPacking =
+    raw.packing && typeof raw.packing === "object"
+      ? raw.packing
+      : defaultOfferPricingSettings.packing;
   const furnitureAssemblyCatalog = Array.isArray(rawFurnitureAssembly.catalog)
     ? rawFurnitureAssembly.catalog.filter(
         (item) =>
@@ -264,6 +315,7 @@ export function normalizeOfferPricingSettings(
       ? value
       : fallback;
   const clearanceDefaults = defaultOfferPricingSettings.clearance;
+  const packingDefaults = defaultOfferPricingSettings.packing;
 
   return {
     employeeRules: normalizeThresholdRules(
@@ -381,6 +433,44 @@ export function normalizeOfferPricingSettings(
         clearanceDefaults.maximumCarryDistanceFactor
       ),
     },
+    packing: {
+      boxRules: normalizeThresholdRules(
+        rawPacking.boxRules,
+        packingDefaults.boxRules
+      ),
+      employeeRules: normalizeThresholdRules(
+        rawPacking.employeeRules,
+        packingDefaults.employeeRules
+      ),
+      boxesPerPerson: nonNegative(
+        rawPacking.boxesPerPerson,
+        packingDefaults.boxesPerPerson
+      ),
+      boxesPerRoom: nonNegative(
+        rawPacking.boxesPerRoom,
+        packingDefaults.boxesPerRoom
+      ),
+      boxesPerVolumeM3: nonNegative(
+        rawPacking.boxesPerVolumeM3,
+        packingDefaults.boxesPerVolumeM3
+      ),
+      packingMinutesPerBox: nonNegative(
+        rawPacking.packingMinutesPerBox,
+        packingDefaults.packingMinutesPerBox
+      ),
+      unpackingMinutesPerBox: nonNegative(
+        rawPacking.unpackingMinutesPerBox,
+        packingDefaults.unpackingMinutesPerBox
+      ),
+      fragileMinutesPerItem: nonNegative(
+        rawPacking.fragileMinutesPerItem,
+        packingDefaults.fragileMinutesPerItem
+      ),
+      minimumLaborHours: nonNegative(
+        rawPacking.minimumLaborHours,
+        packingDefaults.minimumLaborHours
+      ),
+    },
   };
 }
 
@@ -411,6 +501,40 @@ export function getClearanceEmployeesForVolume(
     .map((rule) => ({ ...rule, upToValue: rule.upToVolumeM3 }))
     .sort((left, right) => (left.upToValue ?? Infinity) - (right.upToValue ?? Infinity));
   return matchingRule(volumeM3, rules)?.employees ?? 1;
+}
+
+export function getPackingBoxEstimate(
+  livingAreaM2: number,
+  householdSize: number,
+  roomCount: number,
+  inventoryVolumeM3: number,
+  settings: OfferPricingSettings
+) {
+  const packing = settings.packing;
+  const areaRule = [...packing.boxRules]
+    .map((rule) => ({ ...rule, upToValue: rule.upToAreaM2 }))
+    .sort((left, right) => (left.upToValue ?? Infinity) - (right.upToValue ?? Infinity))
+    .find((rule) => rule.upToValue === null || livingAreaM2 <= rule.upToValue);
+
+  return Math.ceil(
+    Math.max(
+      livingAreaM2 > 0 ? areaRule?.boxes ?? 0 : 0,
+      householdSize * packing.boxesPerPerson,
+      roomCount * packing.boxesPerRoom,
+      inventoryVolumeM3 * packing.boxesPerVolumeM3
+    )
+  );
+}
+
+export function getPackingEmployeesForBoxes(
+  boxCount: number,
+  settings: OfferPricingSettings
+) {
+  const rule = [...settings.packing.employeeRules]
+    .map((item) => ({ ...item, upToValue: item.upToBoxes }))
+    .sort((left, right) => (left.upToValue ?? Infinity) - (right.upToValue ?? Infinity))
+    .find((item) => item.upToValue === null || boxCount <= item.upToValue);
+  return rule?.employees ?? 1;
 }
 
 export function getFixedSurcharge(

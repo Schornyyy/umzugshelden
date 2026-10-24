@@ -2,6 +2,11 @@ export type AssistantInventoryItem = {
   name: string;
   quantity: number;
   volumeM3: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  assemblyQuantity?: number;
+  dismantlingQuantity?: number;
 };
 
 export type AssistantRoom = {
@@ -34,6 +39,10 @@ export type AssistantOfferDraft = {
   rooms?: AssistantRoom[];
   movingBoxes?: number;
   unpackingBoxes?: number;
+  fragileItemCount?: number;
+  householdSize?: number;
+  packingRoomCount?: number;
+  livingAreaM2?: number;
   furniturePieces?: number;
   dismantlingHours?: number;
   paintAreaM2?: number;

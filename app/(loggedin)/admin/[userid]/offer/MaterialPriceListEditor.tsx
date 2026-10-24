@@ -104,6 +104,7 @@ export default function MaterialPriceListEditor({
         materialType,
         ...materialTypeDefaults[materialType],
         netPrice: 0,
+        requirementFactor: service === "packing" ? 1 : undefined,
         enabled: true,
       },
     ]);
@@ -231,7 +232,7 @@ export default function MaterialPriceListEditor({
               <div className='space-y-2'>
                 {items.map((item) => (
                   <div key={item.id} className='rounded-md border border-slate-200 bg-white p-3'>
-                    <div className='grid gap-3 lg:grid-cols-[36px_minmax(190px,1.4fr)_180px_130px_100px_100px_110px_120px_36px] lg:items-end'>
+                    <div className='grid gap-3 lg:grid-cols-[36px_minmax(180px,1.4fr)_170px_110px_90px_90px_105px_105px_115px_36px] lg:items-end'>
               <label className='flex h-10 items-center justify-center' title='Material verwenden'>
                 <input
                   type='checkbox'
@@ -282,6 +283,14 @@ export default function MaterialPriceListEditor({
                 <label className='flex flex-col gap-1 text-xs font-medium text-slate-600' title='Länge mal Breite ergibt die Fläche des Gebindes'>
                   Breite (m)
                   <input type='number' min='0.01' step='0.01' value={item.widthM ?? getDefaultMaterialWidthM(item.materialType)} onChange={(event) => updateMaterial(item.id, { widthM: toNumber(event.target.value) })} className='h-10 rounded-md border border-slate-200 px-2 text-sm text-slate-950 outline-none focus:border-blue-500' />
+                </label>
+              ) : (
+                <div className='hidden lg:block' aria-hidden='true' />
+              )}
+              {activeService === "packing" ? (
+                <label className='flex flex-col gap-1 text-xs font-medium text-slate-600' title='Materialbedarf je berechnetem Umzugskarton'>
+                  Bedarf/Karton
+                  <input type='number' min='0' step='0.01' value={item.requirementFactor ?? 1} onChange={(event) => updateMaterial(item.id, { requirementFactor: toNumber(event.target.value) })} className='h-10 rounded-md border border-slate-200 px-2 text-sm text-slate-950 outline-none focus:border-blue-500' />
                 </label>
               ) : (
                 <div className='hidden lg:block' aria-hidden='true' />

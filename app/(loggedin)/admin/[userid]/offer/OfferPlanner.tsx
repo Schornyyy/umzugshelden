@@ -22,6 +22,8 @@ import {
   defaultOfferPricingSettings,
   getClearanceEmployeesForVolume,
   getEmployeesForVolume,
+  getPackingBoxEstimate,
+  getPackingEmployeesForBoxes,
   normalizeOfferPricingSettings,
   type OfferPricingSettings,
   type VehiclePricingItem,
@@ -264,6 +266,8 @@ export type PlanningDetails = {
   movingBoxes: number;
   unpackingBoxes: number;
   fragileItemCount: number;
+  householdSize: number;
+  packingRoomCount: number;
   storageVolumeM3: number;
   storageMonths: number;
   disposalVolumeM3: number;
@@ -493,6 +497,8 @@ function createPlanning(): PlanningDetails {
     movingBoxes: 0,
     unpackingBoxes: 0,
     fragileItemCount: 0,
+    householdSize: 1,
+    packingRoomCount: 1,
     storageVolumeM3: 0,
     storageMonths: 1,
     disposalVolumeM3: 0,
@@ -537,6 +543,8 @@ function createCalculation(fixedService?: ServiceKey): Calculation {
     title:
       fixedService === "clearance"
         ? "Entrümpelungsangebot"
+        : fixedService === "packing"
+          ? "Angebot Ein- und Auspackservice"
         : "Neues Angebot",
     customer: "",
     customerAddress: "",
@@ -1151,11 +1159,25 @@ function calculateServiceRecommendation(
   }
 
   if (selectedServices.has("packing")) {
-    boxes = planning.movingBoxes || Math.ceil(volume * 10);
-    const packingHours =
-      ((boxes + planning.unpackingBoxes) * rates.packingMinutesPerBox +
-        planning.fragileItemCount * 5) /
+    const packingSettings = pricingSettings.packing;
+    boxes =
+      planning.movingBoxes ||
+      getPackingBoxEstimate(
+        planning.livingAreaM2,
+        planning.householdSize,
+        planning.packingRoomCount,
+        volume,
+        pricingSettings
+      );
+    const calculatedPackingHours =
+      (boxes * packingSettings.packingMinutesPerBox +
+        planning.unpackingBoxes * packingSettings.unpackingMinutesPerBox +
+        planning.fragileItemCount * packingSettings.fragileMinutesPerItem) /
       60;
+    const packingHours =
+      calculatedPackingHours > 0
+        ? Math.max(packingSettings.minimumLaborHours, calculatedPackingHours)
+        : 0;
     labourHours += packingHours;
     const packingMaterials = calculateMaterials(
       materialCatalog,
@@ -1173,7 +1195,13 @@ function calculateServiceRecommendation(
     const packingMaterial = sumMaterialNetTotal(packingMaterials);
     materials.push(...packingMaterials);
     materialCost += packingMaterial;
-    employees = Math.max(employees, boxes > 40 ? 2 : 1);
+    employees = Math.max(
+      employees,
+      getPackingEmployeesForBoxes(
+        Math.max(boxes, planning.unpackingBoxes),
+        pricingSettings
+      )
+    );
     serviceShares.push({
       service: "packing",
       labourHours: packingHours,
@@ -1182,7 +1210,9 @@ function calculateServiceRecommendation(
       storageCost: 0,
       logisticsCost: 0,
     });
-    explanations.push(`${boxes} Kartons fuer den Einpackservice`);
+    explanations.push(
+      `${boxes} Kartons einpacken, ${planning.unpackingBoxes} Kartons auspacken`
+    );
   }
 
   if (selectedServices.has("storage")) {
@@ -2001,6 +2031,13 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
     materialCatalog,
     pricingSettings
   );
+  const recommendedPackingBoxes = getPackingBoxEstimate(
+    calculation.planning.livingAreaM2,
+    calculation.planning.householdSize,
+    calculation.planning.packingRoomCount,
+    volume,
+    pricingSettings
+  );
 
   useEffect(() => {
     setCalculation((current) => {
@@ -2059,6 +2096,10 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
     minimumGrossTotal,
   } = calculatePricing(calculation, rates, pricingSettings);
   const selectedServices = new Set(calculation.planning.serviceTypes);
+  const fixedServiceOption = serviceOptions.find(
+    (service) => service.id === fixedService
+  );
+  const FixedServiceIcon = fixedServiceOption?.icon ?? Calculator;
   const activeSiteService =
     activeServiceTab && calculation.planning.serviceTypes.includes(activeServiceTab)
       ? activeServiceTab
@@ -2585,7 +2626,9 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       };
 
       const services = normalizeServiceTypes(draft.services ?? []);
-      if (services.length) planning.serviceTypes = services;
+      if ((!fixedService || fixedService === "packing") && services.length) {
+        planning.serviceTypes = services;
+      }
       assign("contactName", draft.contactName);
       assign("contactPhone", draft.contactPhone);
       assign("contactEmail", draft.contactEmail);
@@ -2605,6 +2648,10 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       assign("parkingRequired", draft.parkingRequired);
       assign("movingBoxes", draft.movingBoxes);
       assign("unpackingBoxes", draft.unpackingBoxes);
+      assign("fragileItemCount", draft.fragileItemCount);
+      assign("householdSize", draft.householdSize);
+      assign("packingRoomCount", draft.packingRoomCount);
+      assign("livingAreaM2", draft.livingAreaM2);
       assign("furniturePieces", draft.furniturePieces);
       assign("dismantlingHours", draft.dismantlingHours);
       assign("paintAreaM2", draft.paintAreaM2);
@@ -2635,8 +2682,80 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
             name: item.name,
             quantity: item.quantity,
             volumeM3: item.volumeM3,
+            lengthCm: item.lengthCm,
+            widthCm: item.widthCm,
+            heightCm: item.heightCm,
           })),
         }));
+
+        const normalizeItemName = (value: string) =>
+          value
+            .normalize("NFD")
+            .replace(/\p{M}/gu, "")
+            .toLocaleLowerCase("de-DE")
+            .replace(/[^a-z0-9]/g, "");
+        const assemblySelections = new Map<
+          string,
+          FurnitureAssemblySelection
+        >();
+        let assemblyItemCount = 0;
+        let dismantlingItemCount = 0;
+        let actionPositionCount = 0;
+        let matchedPositionCount = 0;
+
+        for (const room of draft.rooms) {
+          for (const item of room.items) {
+            const assemblyQuantity = Math.max(
+              0,
+              Math.round(item.assemblyQuantity ?? 0)
+            );
+            const dismantlingQuantity = Math.max(
+              0,
+              Math.round(item.dismantlingQuantity ?? 0)
+            );
+            if (assemblyQuantity === 0 && dismantlingQuantity === 0) continue;
+            assemblyItemCount += assemblyQuantity;
+            dismantlingItemCount += dismantlingQuantity;
+            actionPositionCount += 1;
+            const normalizedItemName = normalizeItemName(item.name);
+            const catalogItem = pricingSettings.furnitureAssembly.catalog.find(
+              (candidate) => {
+                const normalizedCandidate = normalizeItemName(candidate.name);
+                return (
+                  normalizedCandidate === normalizedItemName ||
+                  normalizedCandidate.includes(normalizedItemName) ||
+                  normalizedItemName.includes(normalizedCandidate)
+                );
+              }
+            );
+            if (!catalogItem) continue;
+            matchedPositionCount += 1;
+            const current = assemblySelections.get(catalogItem.id) ?? {
+              itemId: catalogItem.id,
+              assemblyQuantity: 0,
+              dismantlingQuantity: 0,
+            };
+            assemblySelections.set(catalogItem.id, {
+              itemId: catalogItem.id,
+              assemblyQuantity:
+                current.assemblyQuantity + assemblyQuantity,
+              dismantlingQuantity:
+                current.dismantlingQuantity + dismantlingQuantity,
+            });
+          }
+        }
+        planning.furniturePieces = assemblyItemCount;
+        if (
+          actionPositionCount > 0 &&
+          matchedPositionCount === actionPositionCount
+        ) {
+          planning.furnitureAssemblyItems = [...assemblySelections.values()];
+        } else {
+          planning.furnitureAssemblyItems = [];
+          planning.dismantlingHours +=
+            (dismantlingItemCount * rates.furnitureAssemblyMinutesPerPiece) /
+            60;
+        }
       }
       if (draft.notes) {
         planning.notes = planning.notes
@@ -2978,18 +3097,25 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
               <Link href={`/admin/${companyData?.id}/crm/customers/${calculation.customerId}`}><ArrowLeft /> Zur Kundenakte</Link>
             </Button>
           )}
-          <p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>{fixedService === "clearance" ? "Entrümpelung & Haushaltsauflösung" : "Angebote & Vor-Ort-Aufnahme"}</p>
-          <h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>{fixedService === "clearance" ? "Entrümpelungs-Kalkulator" : "Dienstleistungs-Planer"}</h1>
-          <p className='mt-2 max-w-3xl text-sm leading-6 text-slate-600'>{fixedService === "clearance" ? "Volumen, Personal, Fahrzeuge, Entsorgung und Wertanrechnung in einem vollständigen Festpreisangebot kalkulieren." : "Aufnahme, Ressourcenplanung und Angebot in einem durchgaengigen Ablauf."}</p>
+          <p className='mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700'>{fixedService === "clearance" ? "Entrümpelung & Haushaltsauflösung" : fixedService === "packing" ? "Ein- & Auspackservice" : "Angebote & Vor-Ort-Aufnahme"}</p>
+          <h1 className='text-2xl font-bold text-slate-950 sm:text-3xl'>{fixedService === "clearance" ? "Entrümpelungs-Kalkulator" : fixedService === "packing" ? "Ein-/Auspack-Kalkulator" : "Dienstleistungs-Planer"}</h1>
+          <p className='mt-2 max-w-3xl text-sm leading-6 text-slate-600'>{fixedService === "clearance" ? "Volumen, Personal, Fahrzeuge, Entsorgung und Wertanrechnung in einem vollständigen Festpreisangebot kalkulieren." : fixedService === "packing" ? "Kartons, Packmaterial, Personal und getrennten Ein- und Auspackaufwand nachvollziehbar kalkulieren." : "Aufnahme, Ressourcenplanung und Angebot in einem durchgaengigen Ablauf."}</p>
         </div>
         <div className='flex flex-wrap items-center gap-2 sm:gap-3'>
           {status === "saved" && <span className='flex items-center gap-1.5 text-sm font-medium text-emerald-700'><Check size={16} /> Gespeichert</span>}
           {status === "error" && <span className='text-sm font-medium text-red-600'>Speichern fehlgeschlagen</span>}
-          {!fixedService && <OfferAssistant onApply={applyAssistantDraft} />}
+          {(!fixedService || fixedService === "packing") && <OfferAssistant onApply={applyAssistantDraft} />}
           {fixedService === "clearance" && (
             <Button asChild variant='outline' className='flex-1 sm:flex-none'>
               <Link href={`/admin/${companyData?.id}/crm/calculator/clearance/pricing`}>
                 <Euro /> Entrümpelungspreise
+              </Link>
+            </Button>
+          )}
+          {fixedService === "packing" && (
+            <Button asChild variant='outline' className='flex-1 sm:flex-none'>
+              <Link href={`/admin/${companyData?.id}/crm/calculator/packing/pricing`}>
+                <Euro /> Packservice-Preise
               </Link>
             </Button>
           )}
@@ -3247,8 +3373,8 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
               <p className='mb-1 text-sm font-semibold text-slate-950'>{fixedService ? "1. Leistung" : "1. Dienstleistungen waehlen"}</p>
               {fixedService ? (
                 <div className='mt-3 flex items-start gap-3 rounded-md border border-blue-500 bg-blue-50 p-4 ring-1 ring-blue-200'>
-                  <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white'><Trash2 size={19} /></span>
-                  <span><span className='block text-sm font-semibold text-slate-950'>Entrümpelung</span><span className='mt-1 block text-xs leading-5 text-slate-600'>Volumen, Personal, Fahrzeuge, Entsorgung, Sondermüll, Container und Wertanrechnung.</span></span>
+                  <span className='flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white'><FixedServiceIcon size={19} /></span>
+                  <span><span className='block text-sm font-semibold text-slate-950'>{fixedServiceOption?.label ?? "Dienstleistung"}</span><span className='mt-1 block text-xs leading-5 text-slate-600'>{fixedServiceOption?.description ?? "Leistung kalkulieren"}</span></span>
                 </div>
               ) : (
                 <>
@@ -3330,7 +3456,11 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
                   service={activeSiteService}
                   planning={calculation.planning}
                   kilometers={calculation.kilometers}
-                  recommendedBoxes={recommendation.boxes}
+                  recommendedBoxes={
+                    activeServiceTab === "packing"
+                      ? recommendedPackingBoxes
+                      : recommendation.boxes
+                  }
                   calculatedMaterials={recommendation.materials}
                   materialCatalog={materialCatalog}
                   pricingSettings={pricingSettings}

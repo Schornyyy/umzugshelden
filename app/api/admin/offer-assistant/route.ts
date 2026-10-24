@@ -2,6 +2,7 @@ import type {
   AssistantOfferDraft,
   AssistantRoom,
 } from "@/types/OfferAssistant";
+import { generateGeminiJson } from "@/lib/gemini";
 import { NextResponse } from "next/server";
 
 // Public Firebase Web-API-Key (identisch mit config/firebase.ts)
@@ -44,10 +45,23 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt mit diesen optionalen Feldern (la
   "furnitureLiftRequired": boolean,
   "parkingRequired": boolean,       // Halteverbotszone
   "rooms": [                        // Inventar je Raum
-    { "name": string, "items": [ { "name": string, "quantity": number, "volumeM3": number } ] }
+    { "name": string, "items": [ {
+      "name": string,
+      "quantity": number,
+      "volumeM3": number,
+      "lengthCm": number,
+      "widthCm": number,
+      "heightCm": number,
+      "assemblyQuantity": number,    // Anzahl gewünschter Aufbauten
+      "dismantlingQuantity": number  // Anzahl gewünschter Abbauten
+    } ] }
   ],
   "movingBoxes": number,
   "unpackingBoxes": number,
+  "fragileItemCount": number,       // empfindliche Einzelstücke mit Sonderverpackung
+  "householdSize": number,
+  "packingRoomCount": number,       // Anzahl der zu packenden Räume
+  "livingAreaM2": number,
   "furniturePieces": number,        // Möbelteile zur Montage
   "dismantlingHours": number,
   "paintAreaM2": number,
@@ -66,8 +80,11 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt mit diesen optionalen Feldern (la
 
 Regeln:
 - Schätze für jedes Inventarstück ein realistisches Einzelvolumen in m³ (z. B. Sofa 1,8; Bett 1,4; Kleiderschrank 2,2; Waschmaschine 0,4; Umzugskarton 0,08).
+- Übernimm Möbelmaße aus Tabellen oder Listen exakt in Zentimetern. Rechne Angaben in Metern oder Millimetern in Zentimeter um. Erfinde keine Maße; lasse unbekannte Maßfelder weg.
+- Setze assemblyQuantity oder dismantlingQuantity nur, wenn Montage bzw. Demontage ausdrücklich genannt oder in einer entsprechenden Tabellenspalte markiert ist.
 - Ordne Gegenstände sinnvoll Räumen zu; wenn kein Raum genannt ist, verwende passende Standardräume.
 - Leite die Services aus dem Kontext ab (z. B. "einpacken" => packing, "entrümpeln" => clearance, "streichen" => painting).
+- Schätze Karton- oder Materialmengen nur, wenn der Text ausreichend Angaben zu Wohnfläche, Räumen, Personen oder Inventar enthält.
 - Erfinde keine Kontaktdaten oder Adressen.`;
 
 function toNumber(value: unknown): number | undefined {
@@ -97,14 +114,34 @@ function sanitizeRooms(value: unknown): AssistantRoom[] | undefined {
             name?: unknown;
             quantity?: unknown;
             volumeM3?: unknown;
+            lengthCm?: unknown;
+            widthCm?: unknown;
+            heightCm?: unknown;
+            assemblyQuantity?: unknown;
+            dismantlingQuantity?: unknown;
           };
           const name = toText(rawItem.name);
           if (!name) return [];
+          const lengthCm = toNumber(rawItem.lengthCm);
+          const widthCm = toNumber(rawItem.widthCm);
+          const heightCm = toNumber(rawItem.heightCm);
+          const dimensionVolume =
+            lengthCm && widthCm && heightCm
+              ? (lengthCm * widthCm * heightCm) / 1_000_000
+              : undefined;
           return [
             {
               name,
               quantity: Math.max(1, Math.round(toNumber(rawItem.quantity) ?? 1)),
-              volumeM3: Math.round((toNumber(rawItem.volumeM3) ?? 0.3) * 100) / 100,
+              volumeM3:
+                Math.round(
+                  (dimensionVolume ?? toNumber(rawItem.volumeM3) ?? 0.3) * 1000
+                ) / 1000,
+              lengthCm,
+              widthCm,
+              heightCm,
+              assemblyQuantity: toNumber(rawItem.assemblyQuantity),
+              dismantlingQuantity: toNumber(rawItem.dismantlingQuantity),
             },
           ];
         })
@@ -152,6 +189,10 @@ function sanitizeDraft(raw: Record<string, unknown>): AssistantOfferDraft {
     rooms: sanitizeRooms(raw.rooms),
     movingBoxes: toNumber(raw.movingBoxes),
     unpackingBoxes: toNumber(raw.unpackingBoxes),
+    fragileItemCount: toNumber(raw.fragileItemCount),
+    householdSize: toNumber(raw.householdSize),
+    packingRoomCount: toNumber(raw.packingRoomCount),
+    livingAreaM2: toNumber(raw.livingAreaM2),
     furniturePieces: toNumber(raw.furniturePieces),
     dismantlingHours: toNumber(raw.dismantlingHours),
     paintAreaM2: toNumber(raw.paintAreaM2),
@@ -185,15 +226,16 @@ async function verifyIdToken(idToken: string): Promise<boolean> {
   }
 }
 
-export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { success: false, error: "OPENAI_API_KEY fehlt in der Umgebung" },
-      { status: 500 }
-    );
-  }
+const MAX_PDF_COUNT = 3;
+const MAX_PDF_SIZE = 8 * 1024 * 1024;
+const MAX_TOTAL_PDF_SIZE = 12 * 1024 * 1024;
 
+type PdfInput = {
+  filename: string;
+  fileData: string;
+};
+
+export async function POST(request: Request) {
   const idToken = request.headers
     .get("authorization")
     ?.replace(/^Bearer\s+/i, "");
@@ -204,11 +246,74 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await request.json().catch(() => ({}));
-  const text = typeof body.text === "string" ? body.text.trim() : "";
-  if (!text) {
+  const contentType = request.headers.get("content-type") ?? "";
+  let text = "";
+  const pdfInputs: PdfInput[] = [];
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData().catch(() => null);
+    if (!formData) {
+      return NextResponse.json(
+        { success: false, error: "Upload konnte nicht verarbeitet werden" },
+        { status: 400 }
+      );
+    }
+    const rawText = formData.get("text");
+    text = typeof rawText === "string" ? rawText.trim() : "";
+    const files = formData
+      .getAll("files")
+      .filter((value): value is File => value instanceof File);
+    if (files.length > MAX_PDF_COUNT) {
+      return NextResponse.json(
+        { success: false, error: `Maximal ${MAX_PDF_COUNT} PDFs pro Analyse` },
+        { status: 400 }
+      );
+    }
+    if (files.reduce((total, file) => total + file.size, 0) > MAX_TOTAL_PDF_SIZE) {
+      return NextResponse.json(
+        { success: false, error: "Die PDFs dürfen zusammen maximal 12 MB groß sein" },
+        { status: 400 }
+      );
+    }
+    for (const file of files) {
+      if (
+        file.type !== "application/pdf" ||
+        !file.name.toLocaleLowerCase("de-DE").endsWith(".pdf") ||
+        file.size === 0 ||
+        file.size > MAX_PDF_SIZE
+      ) {
+        return NextResponse.json(
+          { success: false, error: `Ungültige PDF-Datei: ${file.name}` },
+          { status: 400 }
+        );
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      if (
+        bytes.length < 5 ||
+        bytes[0] !== 0x25 ||
+        bytes[1] !== 0x50 ||
+        bytes[2] !== 0x44 ||
+        bytes[3] !== 0x46 ||
+        bytes[4] !== 0x2d
+      ) {
+        return NextResponse.json(
+          { success: false, error: `Die Datei ${file.name} ist keine gültige PDF` },
+          { status: 400 }
+        );
+      }
+      pdfInputs.push({
+        filename: file.name.replace(/[^\p{L}\p{N}._ -]/gu, "_").slice(0, 120),
+        fileData: Buffer.from(bytes).toString("base64"),
+      });
+    }
+  } else {
+    const body = await request.json().catch(() => ({}));
+    text = typeof body.text === "string" ? body.text.trim() : "";
+  }
+
+  if (!text && pdfInputs.length === 0) {
     return NextResponse.json(
-      { success: false, error: "Kein Text übergeben" },
+      { success: false, error: "Kein Text oder PDF übergeben" },
       { status: 400 }
     );
   }
@@ -220,44 +325,40 @@ export async function POST(request: Request) {
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: text },
-        ],
-      }),
+    const prompt = [
+      pdfInputs.length > 0
+        ? `Analysiere diese PDF-Dateien: ${pdfInputs
+            .map((pdf) => pdf.filename)
+            .join(", ")}.`
+        : "",
+      text ||
+        "Lies alle Möbel-, Inventar-, Maß-, Karton- und Leistungsangaben aus den PDFs aus.",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    const parsed = await generateGeminiJson({
+      systemInstruction: systemPrompt,
+      prompt,
+      temperature: 0.2,
+      timeoutMs: 55_000,
+      maxOutputTokens: 8_192,
+      thinkingBudget: 0,
+      inlineData: pdfInputs.map((pdf) => ({
+        mimeType: "application/pdf",
+        data: pdf.fileData,
+      })),
     });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error("OpenAI request failed", response.status, detail);
-      return NextResponse.json(
-        { success: false, error: "KI-Anfrage fehlgeschlagen" },
-        { status: 502 }
-      );
-    }
-
-    const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
-    const parsed = JSON.parse(typeof content === "string" ? content : "{}");
     const draft = sanitizeDraft(
-      parsed && typeof parsed === "object" ? parsed : {}
+      parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : {}
     );
 
     return NextResponse.json({ success: true, draft });
   } catch (error) {
-    console.error("Offer assistant error", error);
+    console.error("Gemini offer assistant error", error);
     return NextResponse.json(
-      { success: false, error: "Antwort konnte nicht verarbeitet werden" },
+      { success: false, error: "Gemini-Antwort konnte nicht verarbeitet werden" },
       { status: 500 }
     );
   }

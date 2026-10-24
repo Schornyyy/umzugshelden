@@ -1,6 +1,7 @@
 import { CheckCircle2, Phone } from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import LandingpageAnalytics from "./LandingpageAnalytics";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";
@@ -12,6 +13,7 @@ export default function LandingpageLayout({
 }) {
   return (
     <div className="min-h-screen bg-white pb-16 text-slate-950 md:pb-0">
+      <LandingpageAnalytics />
       <div className="bg-navy px-4 py-2 text-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-5 gap-y-1 text-center text-xs font-semibold sm:text-sm">
           <span className="inline-flex items-center gap-1.5">

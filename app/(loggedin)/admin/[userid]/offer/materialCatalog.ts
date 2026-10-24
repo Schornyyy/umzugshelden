@@ -35,6 +35,7 @@ export type MaterialCatalogItem = {
   widthM?: number;
   packageLabel: string;
   netPrice: number;
+  requirementFactor?: number;
   enabled: boolean;
 };
 
@@ -278,6 +279,49 @@ export const defaultMaterialCatalog: MaterialCatalogItem[] = [
     widthM: 1,
     packageLabel: "Karton",
     netPrice: 2.5,
+    requirementFactor: 1,
+    enabled: true,
+  },
+  {
+    id: "packing-paper",
+    name: "Packpapier",
+    service: "packing",
+    materialType: "packingMaterial",
+    calculationBasis: "packingBoxCount",
+    unit: "kg",
+    packageSize: 10,
+    widthM: 1,
+    packageLabel: "Paket",
+    netPrice: 18,
+    requirementFactor: 0.2,
+    enabled: true,
+  },
+  {
+    id: "bubble-wrap",
+    name: "Luftpolsterfolie",
+    service: "packing",
+    materialType: "packingMaterial",
+    calculationBasis: "packingBoxCount",
+    unit: "m",
+    packageSize: 100,
+    widthM: 1,
+    packageLabel: "Rolle",
+    netPrice: 25,
+    requirementFactor: 1.5,
+    enabled: true,
+  },
+  {
+    id: "packing-tape",
+    name: "Packband",
+    service: "packing",
+    materialType: "packingMaterial",
+    calculationBasis: "packingBoxCount",
+    unit: "m",
+    packageSize: 66,
+    widthM: 1,
+    packageLabel: "Rolle",
+    netPrice: 3.5,
+    requirementFactor: 2,
     enabled: true,
   },
 ];
@@ -291,7 +335,7 @@ export function normalizeMaterialCatalog(
 
   const validBases = new Set(materialBasisOptions.map((option) => option.value));
   const validTypes = new Set(materialTypeOptions.map((option) => option.value));
-  return catalog.map((item) => {
+  const normalizedCatalog: MaterialCatalogItem[] = catalog.map((item) => {
     const materialType = validTypes.has(item.materialType)
       ? item.materialType
       : item.id === "paint" || item.calculationBasis === "coatedAreaM2"
@@ -336,9 +380,27 @@ export function normalizeMaterialCatalog(
             : getDefaultMaterialWidthM(materialType),
         packageLabel: item.packageLabel || "Gebinde",
         netPrice: Math.max(0, item.netPrice ?? 0),
+        requirementFactor:
+          typeof item.requirementFactor === "number" &&
+          Number.isFinite(item.requirementFactor) &&
+          item.requirementFactor >= 0
+            ? item.requirementFactor
+            : undefined,
         enabled: item.enabled !== false,
       };
     });
+
+  const existingIds = new Set(normalizedCatalog.map((item) => item.id));
+  const addedPackingDefaults = defaultMaterialCatalog.filter(
+    (item) =>
+      ["packing-paper", "bubble-wrap", "packing-tape"].includes(item.id) &&
+      !existingIds.has(item.id)
+  );
+
+  return [
+    ...normalizedCatalog,
+    ...addedPackingDefaults.map((item) => ({ ...item })),
+  ];
 }
 
 function automaticRequirementFactor(item: MaterialCatalogItem) {
@@ -373,7 +435,9 @@ export function calculateMaterials(
 ): CalculatedMaterial[] {
   return catalog.flatMap((item) => {
     const basisAmount = Math.max(0, context[item.calculationBasis] ?? 0);
-    const calculatedAmount = basisAmount * automaticRequirementFactor(item);
+    const calculatedAmount =
+      basisAmount *
+      (item.requirementFactor ?? automaticRequirementFactor(item));
     const widthM = Math.max(0, item.widthM ?? 0);
     const requiredAmount =
       item.unit === "m" && materialTypeUsesAreaWidth(item.materialType)
