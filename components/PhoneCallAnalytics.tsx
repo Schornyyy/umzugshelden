@@ -5,7 +5,7 @@ import { useEffect } from "react";
 
 const PHONE_EVENT_TIMEOUT_MS = 800;
 
-export default function LandingpageAnalytics() {
+export default function PhoneCallAnalytics() {
   useEffect(() => {
     function trackPhoneClick(event: MouseEvent) {
       const target = event.target;
@@ -15,6 +15,22 @@ export default function LandingpageAnalytics() {
       if (!phoneLink) return;
 
       const phoneHref = phoneLink.href;
+      const eventLabel =
+        phoneLink.dataset.analyticsLabel ??
+        phoneLink.getAttribute("aria-label") ??
+        phoneLink.id ??
+        phoneLink.textContent?.trim() ??
+        "";
+      const eventParameters = {
+        event_category: "Contact",
+        event_label: eventLabel,
+        phone_number:
+          phoneLink.getAttribute("href")?.replace(/^tel:/, "") ?? "",
+        link_text: phoneLink.textContent?.trim() ?? "",
+        page_location: window.location.href,
+        page_title: document.title,
+      };
+
       if (
         event.defaultPrevented ||
         event.button !== 0 ||
@@ -23,11 +39,7 @@ export default function LandingpageAnalytics() {
         event.shiftKey ||
         event.altKey
       ) {
-        trackGoogleAnalyticsEvent("click_to_call", {
-          phone_number: phoneLink.getAttribute("href")?.replace(/^tel:/, "") ?? "",
-          link_text: phoneLink.textContent?.trim() ?? "",
-          page_location: window.location.href,
-        });
+        trackGoogleAnalyticsEvent("phone_call_click", eventParameters);
         return;
       }
 
@@ -39,10 +51,8 @@ export default function LandingpageAnalytics() {
         window.location.href = phoneHref;
       };
 
-      const tracked = trackGoogleAnalyticsEvent("click_to_call", {
-        phone_number: phoneLink.getAttribute("href")?.replace(/^tel:/, "") ?? "",
-        link_text: phoneLink.textContent?.trim() ?? "",
-        page_location: window.location.href,
+      const tracked = trackGoogleAnalyticsEvent("phone_call_click", {
+        ...eventParameters,
         event_callback: continueToPhone,
         event_timeout: PHONE_EVENT_TIMEOUT_MS,
       });
@@ -51,6 +61,7 @@ export default function LandingpageAnalytics() {
         continueToPhone();
         return;
       }
+
       window.setTimeout(continueToPhone, PHONE_EVENT_TIMEOUT_MS);
     }
 

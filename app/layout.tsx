@@ -5,6 +5,7 @@ import CookieSettings from "@/components/CookieSettings";
 import { Toaster } from "@/components/ui/sonner";
 import { Raleway } from "next/font/google";
 import Script from "next/script";
+import PhoneCallAnalytics from "@/components/PhoneCallAnalytics";
 
 const raleway = Raleway({
   subsets: ["latin"],
@@ -43,6 +44,7 @@ export default function RootLayout({
         </Script>
       </head>
       <body>
+        <PhoneCallAnalytics />
         <CookieBanner />
         <CookieSettings />
         {children}
