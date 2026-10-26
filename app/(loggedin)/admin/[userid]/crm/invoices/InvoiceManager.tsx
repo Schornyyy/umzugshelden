@@ -32,6 +32,7 @@ import type {
 } from "@/types/Crm";
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -42,6 +43,7 @@ import {
 } from "firebase/firestore";
 import {
   AlertTriangle,
+  Ban,
   BellRing,
   Check,
   Download,
@@ -97,6 +99,8 @@ type OfferSnapshot = {
   customerId?: string;
   title: string;
   createdAt: number;
+  grossTotal?: number;
+  acceptedPriceGross?: number;
   employees: number;
   hoursPerEmployee: number;
   kilometers: number;
@@ -304,14 +308,28 @@ function offerToLines(offer: OfferSnapshot): CrmInvoiceLine[] {
     (total, line) => total + line.quantity * line.unitPrice,
     0
   );
-  addLine(
-    lines,
-    `Aufschlag (${offer.rates.surchargePercent} %)`,
-    1,
-    "pauschal",
-    directCost * (offer.rates.surchargePercent / 100)
-  );
-  return lines;
+  const acceptedGross =
+    Number(offer.acceptedPriceGross) > 0
+      ? Number(offer.acceptedPriceGross)
+      : Number(offer.grossTotal);
+  if (Number.isFinite(acceptedGross) && acceptedGross > 0) {
+    const targetNet = acceptedGross / (1 + offer.rates.vatPercent / 100);
+    if (directCost === 0) {
+      addLine(lines, "Leistung gemäß Angebot", 1, "pauschal", targetNet);
+      return lines;
+    }
+    const offerPriceFactor = targetNet / directCost;
+    return lines.map((line) => ({
+      ...line,
+      unitPrice: line.unitPrice * offerPriceFactor,
+    }));
+  }
+
+  const surchargeFactor = 1 + offer.rates.surchargePercent / 100;
+  return lines.map((line) => ({
+    ...line,
+    unitPrice: line.unitPrice * surchargeFactor,
+  }));
 }
 
 function customerAddress(customer: CrmCustomer) {
@@ -655,6 +673,7 @@ export default function InvoiceManager() {
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [invoiceEmailDraft, setInvoiceEmailDraft] =
     useState<InvoiceEmailDraft | null>(null);
@@ -1178,6 +1197,72 @@ export default function InvoiceManager() {
       setFeedback({
         type: "error",
         message: "Rechnung konnte nicht gespeichert werden.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function deleteOrDiscardInvoice() {
+    if (!draft || draftIsFinalized) return;
+
+    const label = draft.invoiceNumber || "diesen Rechnungsentwurf";
+    if (!window.confirm(`${label} wirklich endgültig löschen?`)) return;
+
+    if (!savedInvoice) {
+      setDraft(invoices[0] ?? null);
+      setFeedback({ type: "saved", message: "Rechnungsentwurf verworfen." });
+      return;
+    }
+
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(database, INVOICE_COLLECTION, savedInvoice.id));
+      const remainingInvoices = invoices.filter(
+        (invoice) => invoice.id !== savedInvoice.id
+      );
+      setInvoices(remainingInvoices);
+      setDraft(remainingInvoices[0] ?? null);
+      setFeedback({ type: "saved", message: "Rechnungsentwurf gelöscht." });
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "Rechnungsentwurf konnte nicht gelöscht werden.",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  async function cancelInvoice() {
+    if (!savedInvoice || !draftIsFinalized || savedInvoice.status === "cancelled") {
+      return;
+    }
+    if (
+      !window.confirm(
+        `${savedInvoice.invoiceNumber} wirklich stornieren? Die Rechnung bleibt als Nachweis erhalten.`
+      )
+    ) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const cancelledInvoice: CrmInvoice = {
+        ...savedInvoice,
+        status: "cancelled",
+        updatedAt: Date.now(),
+      };
+      await setDoc(
+        doc(database, INVOICE_COLLECTION, cancelledInvoice.id),
+        sanitizeForFirestore(cancelledInvoice)
+      );
+      updateInvoiceList(cancelledInvoice);
+      setFeedback({ type: "saved", message: "Rechnung storniert." });
+    } catch {
+      setFeedback({
+        type: "error",
+        message: "Rechnung konnte nicht storniert werden.",
       });
     } finally {
       setIsSaving(false);
@@ -1721,6 +1806,29 @@ export default function InvoiceManager() {
                   >
                     <Mail /> E-Mail
                   </Button>
+                  {draftIsFinalized ? (
+                    <Button
+                      variant="destructive"
+                      onClick={() => void cancelInvoice()}
+                      disabled={isSaving || draft.status === "cancelled"}
+                    >
+                      <Ban />
+                      {draft.status === "cancelled" ? "Storniert" : "Stornieren"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="destructive"
+                      onClick={() => void deleteOrDiscardInvoice()}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <LoaderCircle className="animate-spin" />
+                      ) : (
+                        <Trash2 />
+                      )}
+                      {savedInvoice ? "Löschen" : "Verwerfen"}
+                    </Button>
+                  )}
                   <Button onClick={() => void saveInvoice()} disabled={isSaving}>
                     {isSaving ? <LoaderCircle className="animate-spin" /> : <Save />}
                     Speichern

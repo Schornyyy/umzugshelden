@@ -2963,7 +2963,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
         <section class="totals">
           <div class="total-row net"><span>Nettosumme</span><strong>${formatCurrency(acceptedNetTotal)}</strong></div>
           <div class="total-row"><span>MwSt. (${rates.vatPercent}%)</span><strong>${formatCurrency(acceptedVat)}</strong></div>
-          <div class="total-row gross"><span>Akzeptierter Angebotspreis</span><strong>${formatCurrency(calculation.acceptedPriceGross)}</strong></div>
+          <div class="total-row gross"><span>Preis inkl. MwSt.</span><strong>${formatCurrency(calculation.acceptedPriceGross)}</strong></div>
         </section>
         ${packingListHtml}
         ${notesHtml}

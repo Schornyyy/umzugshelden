@@ -98,6 +98,10 @@ function multiline(value: string) {
   return escapeHtml(value).replaceAll("\n", "<br>");
 }
 
+function isSurchargeLine(line: CrmInvoice["lineItems"][number]) {
+  return /^\s*Aufschlag(?:\s*\([^)]*\))?\s*$/i.test(line.description);
+}
+
 function formatDate(value: string) {
   const date = new Date(`${value}T12:00:00`);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("de-DE");
@@ -149,10 +153,22 @@ export function createInvoiceDocumentHtml(
     .filter((value) => value.trim())
     .map(escapeHtml)
     .join("<br>");
-  const rows = invoice.lineItems
+  const visibleLineItems = invoice.lineItems.filter((line) => !isSurchargeLine(line));
+  const visibleNet = visibleLineItems.reduce(
+    (total, line) => total + line.quantity * line.unitPrice,
+    0
+  );
+  const hiddenSurchargeNet = invoice.lineItems
+    .filter(isSurchargeLine)
+    .reduce((total, line) => total + line.quantity * line.unitPrice, 0);
+  const surchargeFactor =
+    visibleNet !== 0 ? (visibleNet + hiddenSurchargeNet) / visibleNet : 1;
+  const rows = visibleLineItems
     .map(
-      (line, index) =>
-        `<tr><td>${escapeHtml(index + 1)}</td><td>${escapeHtml(line.description)}</td><td>${escapeHtml(quantityFormatter.format(line.quantity))} ${escapeHtml(line.unit)}</td><td>${escapeHtml(currencyFormatter.format(line.unitPrice))}</td><td>${escapeHtml(currencyFormatter.format(line.quantity * line.unitPrice))}</td></tr>`
+      (line, index) => {
+        const unitPrice = line.unitPrice * surchargeFactor;
+        return `<tr><td>${escapeHtml(index + 1)}</td><td>${escapeHtml(line.description)}</td><td>${escapeHtml(quantityFormatter.format(line.quantity))} ${escapeHtml(line.unit)}</td><td>${escapeHtml(currencyFormatter.format(unitPrice))}</td><td>${escapeHtml(currencyFormatter.format(line.quantity * unitPrice))}</td></tr>`;
+      }
     )
     .join("");
   const taxIdentifiers = [
