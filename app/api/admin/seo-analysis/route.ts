@@ -314,6 +314,10 @@ Wenn keine auswertbare Wettbewerberseite vorliegt, ist das ein gültiger Analyse
 - Priorisiere passende interne Links aus availableBlogLinks. Wenn inhaltlich nichts Wesentliches fehlt, konzentriere die Empfehlungen auf diese internen Links.
 
 Erstelle zusätzlich zu Analyse und Empfehlungen eine vollständige, direkt umsetzbare Seitenarchitektur für das bestmögliche SEO- und Conversion-Ergebnis:
+- Plane primär eine Conversion-Landingpage und keinen ausführlichen Ratgeber. Fachinformationen dienen der Kaufentscheidung, Einwandbehandlung und Vertrauensbildung.
+- Gewichte Kundennutzen, Entlastung, konkrete nächste Schritte und Anfrageführung stärker als allgemeines Hintergrundwissen.
+- Plane neben Hero und Abschlusskontakt genau einen eigenständigen sectionType "conversion-cta" nach den wichtigsten Entscheidungs- und Vertrauensabschnitten.
+- Der Mid-Page-CTA muss den Nutzen knapp zusammenfassen, Hürden reduzieren und zur kostenlosen sowie unverbindlichen Anfrage führen, ohne künstliche Verknappung.
 - Erstelle in diesem Schritt nur die grobe Seitenstruktur und detaillierte Content-Briefings, noch keine ausformulierten Seitentexte.
 - Leite Suchintention, Zielgruppe, primäres Keyword, Nebenkeywords, Tonalität und sinnvollen Gesamtumfang ab.
 - Plane die gesamte Seite vom Hero bis zum Abschluss-CTA in einer logischen Reihenfolge.
@@ -324,6 +328,10 @@ Erstelle zusätzlich zu Analyse und Empfehlungen eine vollständige, direkt umse
 - Verwende für interne Links ausschließlich unveränderte URLs aus availableBlogLinks. Erfinde keine Linkziele.
 - Ordne jeden Link über sectionOrder genau dem Abschnitt zu, in dem er später natürlich und hilfreich eingebaut werden soll.
 - Plane interne Links nutzerorientiert als Vertiefung konkreter Aussagen und nicht als isolierte Linkliste.
+- Plane genau zwei eigenständige E-E-A-T-Wissensabschnitte mit sectionType "eeat-blog". Jeder dieser Abschnitte beantwortet eine konkrete Nutzerfrage und verweist auf einen anderen, thematisch passenden Artikel aus availableBlogLinks.
+- Halte diese beiden Wissensabschnitte kompakt. Sie sollen Expertise belegen und danach zur Dienstleistung zurückführen, nicht den Charakter der Seite dominieren.
+- Leite die Themen aus Suchintention und Seitenkontext ab. Beispiele sind "Sperrmüll anmelden" und "Müll richtig trennen", sofern passende Blogartikel vorhanden sind.
+- Weise jedem E-E-A-T-Wissensabschnitt über sectionOrder genau seinen Bloglink zu. Verwende zwei unterschiedliche Blog-URLs.
 - Gib konkrete Vertrauenselemente und geeignete Schema.org-Typen an.
 - Erstelle mindestens 8 substanzielle Seitenabschnitte. Vermeide generische oder doppelte Abschnitte.
 - Halte den JSON-Report kompakt: höchstens 6 Stärken, 6 Wettbewerbsvorteile, 10 Empfehlungen, 10 FAQ, 12 Nebenkeywords, 8 Vertrauenselemente und 12 interne Links.
@@ -442,7 +450,10 @@ export async function POST(request: Request) {
     }
     const targetUrl = new URL(targetPage.url, generationSiteUrl()).toString();
     const searchDiscovery = await discoverSeoSearchResults(input.keyword, targetUrl, 5);
-    const blogLinks = availablePages.filter((page) => page.url !== targetPage.url);
+    const blogLinks = availablePages.filter(
+      (page) =>
+        page.url !== targetPage.url && page.targetType === "blog",
+    );
     const uniqueUrls = [targetUrl];
     const keywords = [
       ...new Set(

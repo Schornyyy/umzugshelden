@@ -1,6 +1,7 @@
 "use client";
 import { redirectUser } from "@/actions/userActions";
 import { AdminSideBar } from "@/components/AdminSidebar";
+import AppointmentTimerProvider from "@/components/crm/AppointmentTimerProvider";
 import MobileAdminNavigation from "@/components/MobileAdminNavigation";
 import {
   SidebarInset,
@@ -60,7 +61,7 @@ const Layout = ({ children }: { children: ReactNode }) => {
               ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-0"
               : "px-3 py-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-5 md:p-0"
           }`}>
-          {children}
+          <AppointmentTimerProvider>{children}</AppointmentTimerProvider>
         </div>
         <MobileAdminNavigation />
       </SidebarInset>

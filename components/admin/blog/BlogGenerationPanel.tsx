@@ -136,6 +136,7 @@ export default function BlogGenerationPanel({
     try {
       const queued = await createQueue(batchSize);
       const completedProposals: string[] = [];
+      const failedBlogs: string[] = [];
       for (
         let workflowIndex = 0;
         workflowIndex < queued.workflowIds.length;
@@ -161,10 +162,13 @@ export default function BlogGenerationPanel({
           if (!response.ok || !data.success) {
             requestRetries += 1;
             if (requestRetries > 5) {
-              throw new Error(
-                data.error ||
-                  "Bloggenerierung ist nach fünf direkten Wiederholungen fehlgeschlagen.",
+              failedBlogs.push(
+                `Blog ${workflowIndex + 1}: ${
+                  data.error ||
+                  "Bloggenerierung ist nach fünf direkten Wiederholungen fehlgeschlagen."
+                }`,
               );
+              break;
             }
             setProgress(
               `Blog ${workflowIndex + 1}/${queued.workflowIds.length}: temporärer Fehler, direkter Versuch ${requestRetries}/5`,
@@ -203,8 +207,17 @@ export default function BlogGenerationPanel({
           completedProposals.length === 1
             ? "Blogvorschlag wurde"
             : "Blogvorschläge wurden"
-        } vollständig erstellt.`,
+        } vollständig erstellt.${
+          failedBlogs.length
+            ? ` ${failedBlogs.length} ${
+                failedBlogs.length === 1 ? "Blog wurde" : "Blogs wurden"
+              } nach fünf Fehlversuchen übersprungen.`
+            : ""
+        }`,
       );
+      if (failedBlogs.length) {
+        setError(failedBlogs.join(" | "));
+      }
       setProgress(null);
       setReloadKey((current) => current + 1);
     } catch (generationError) {

@@ -13,9 +13,12 @@ import {
 import MediathekDialog from "@/components/utils/MediathekDialog";
 import { database } from "@/config/firebase";
 import {
+  createJobCenterCostDetails,
   createOfferScopeItems,
   DEFAULT_OFFER_PAYMENT_TERMS,
+  isJobCenterOffer,
   OFFER_ISSUER,
+  type CrmOfferCostDetail,
 } from "@/lib/crmOfferDocument";
 import {
   calculateConfiguredSurcharges,
@@ -208,6 +211,7 @@ export type FurnitureAssemblySelection = {
 
 export type PlanningDetails = {
   serviceTypes: ServiceKey[];
+  jobCenterOrder: boolean;
   scopeDescription: string;
   date: string;
   contactName: string;
@@ -314,6 +318,7 @@ type SavedCalculation = Calculation & {
   createdAt: number;
   grossTotal?: number;
   rates: Rates;
+  costDetails?: CrmOfferCostDetail[];
 };
 
 type CalculatorData = {
@@ -429,6 +434,7 @@ const currencyFormatter = new Intl.NumberFormat("de-DE", {
 function createPlanning(): PlanningDetails {
   return {
     serviceTypes: [],
+    jobCenterOrder: false,
     scopeDescription: "",
     date: "",
     contactName: "",
@@ -590,6 +596,7 @@ function normalizePlanning(planning?: Partial<PlanningDetails>): PlanningDetails
     ...fallback,
     ...planning,
     serviceTypes: normalizeServiceTypes(planning?.serviceTypes),
+    jobCenterOrder: planning?.jobCenterOrder === true,
     rooms: planning?.rooms ?? fallback.rooms,
     extraServices: planning?.extraServices ?? [],
     paintSurfaceCondition: surfaceConditions.has(
@@ -1428,15 +1435,7 @@ function SectionHeading({
   );
 }
 
-type CalculationRow = {
-  id: string;
-  label: string;
-  formula: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  value: number;
-};
+type CalculationRow = CrmOfferCostDetail;
 
 function getCalculationRows(
   calculation: Calculation,
@@ -1511,7 +1510,8 @@ function getCalculationRows(
           }]
         : [];
   const disposalRows: CalculationRow[] =
-    calculation.autoEstimate
+    calculation.autoEstimate &&
+    calculation.planning.serviceTypes.includes("clearance")
       ? [
           ...(calculation.planning.clearanceDisposalIncluded && clearanceVolume > 0
             ? [{
@@ -1692,6 +1692,59 @@ function getCalculationRows(
       value: service.quantity * service.unitPrice,
     })),
   ];
+}
+
+function getJobCenterCostDetails(
+  calculation: Calculation,
+  rates: Rates,
+  materialCatalog: MaterialCatalogItem[],
+  pricingSettings: OfferPricingSettings,
+  grossTotal: number
+) {
+  const pricing = calculatePricing(calculation, rates, pricingSettings);
+  const rows = getCalculationRows(
+    calculation, rates, materialCatalog, pricingSettings
+  ).map((row) => {
+    if (row.id === "personal") {
+      return {
+        ...row,
+        quantity: calculation.employees * calculation.hoursPerEmployee,
+        unit: "Std.",
+      };
+    }
+    if (row.id.startsWith("vehicle:")) {
+      return {
+        ...row,
+        quantity: row.quantity * calculation.vehicleDays,
+        unit: "Fahrzeugtag",
+      };
+    }
+    return row;
+  });
+  for (const [id, label, value] of [
+    ["floorSurcharge", "Etagenzuschlag", pricing.floorSurcharge],
+    ["carryDistanceSurcharge", "Tragewegzuschlag", pricing.carryDistanceSurcharge],
+    ["surcharge", "Angebotsaufschlag", pricing.percentageSurcharge],
+    ["discount", "Angebotsrabatt", -pricing.discount],
+  ] as const) {
+    if (value !== 0) {
+      rows.push({
+        id,
+        label,
+        formula: label === "Angebotsaufschlag"
+          ? `${formatNumber(rates.surchargePercent)} % auf die Nettobasis`
+          : "Laut Angebotskalkulation",
+        quantity: 1,
+        unit: "Pauschale",
+        unitPrice: value,
+        value,
+      });
+    }
+  }
+  return createJobCenterCostDetails(
+    rows,
+    grossTotal / (1 + rates.vatPercent / 100)
+  );
 }
 
 function CalculationBreakdown({
@@ -1925,6 +1978,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
                   loadedPricingSettings
                 ),
               rates: savedRates,
+              costDetails: saved.costDetails,
             };
           }
         );
@@ -2106,6 +2160,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       : calculation.planning.serviceTypes[0];
   const usesMoveInventory =
     selectedServices.has("move") || selectedServices.has("seniorMove");
+  const jobCenterOrder = isJobCenterOffer(calculation.planning);
   const needsVehicle =
     usesMoveInventory ||
     selectedServices.has("clearance") ||
@@ -2294,6 +2349,10 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       setStatus("error");
       return;
     }
+    const offerGrossTotal =
+      calculation.acceptedPriceGross >= pricing.minimumGrossTotal
+        ? calculation.acceptedPriceGross
+        : pricing.grossTotal;
     const savedCalculation: SavedCalculation = {
       ...calculation,
       planning: {
@@ -2309,10 +2368,12 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       rates: { ...rates },
       id: crypto.randomUUID(),
       createdAt: Date.now(),
-      grossTotal:
-        calculation.acceptedPriceGross >= pricing.minimumGrossTotal
-          ? calculation.acceptedPriceGross
-          : pricing.grossTotal,
+      grossTotal: offerGrossTotal,
+      costDetails: isJobCenterOffer(calculation.planning)
+        ? getJobCenterCostDetails(
+            calculation, rates, materialCatalog, pricingSettings, offerGrossTotal
+          )
+        : undefined,
     };
     await persist([savedCalculation, ...savedCalculations]);
   }
@@ -2816,16 +2877,16 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
     const acceptedNetTotal =
       calculation.acceptedPriceGross / (1 + rates.vatPercent / 100);
     const acceptedVat = calculation.acceptedPriceGross - acceptedNetTotal;
-    const calculationRows = getCalculationRows(
-      calculation,
-      rates,
-      materialCatalog,
-      pricingSettings
-    );
+    const calculationRows = jobCenterOrder
+      ? getJobCenterCostDetails(
+          calculation, rates, materialCatalog, pricingSettings,
+          calculation.acceptedPriceGross
+        )
+      : getCalculationRows(calculation, rates, materialCatalog, pricingSettings);
     const rowsHtml = calculationRows
       .map(
         (row) => `<tr>
-          <td><strong>${escapePrintHtml(row.label)}</strong>${costEstimatePrintOptions.calculationDetails ? `<span>${escapePrintHtml(row.formula)}</span>` : ""}</td>
+          <td><strong>${escapePrintHtml(row.label)}</strong>${jobCenterOrder || costEstimatePrintOptions.calculationDetails ? `<span>${escapePrintHtml(row.formula)}</span>` : ""}</td>
           <td>${formatNumber(row.quantity)}</td>
           <td>${escapePrintHtml(row.unit)}</td>
           <td>${formatCurrency(row.unitPrice)}</td>
@@ -2852,7 +2913,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
         ? scopeItems.map((item) => `<section class="scope-item"><h3>${escapePrintHtml(item.title)}</h3><ul>${item.details.map((detail) => `<li>${escapePrintHtml(detail)}</li>`).join("")}</ul></section>`).join("")
         : '<p class="muted">Der konkrete Leistungsumfang wurde noch nicht festgelegt.</p>'}</div>`;
     const contactCardHtml = `<div class="card"><p class="label">Kunde / Auftraggeber</p><strong>${escapePrintHtml(customer)}</strong><div class="muted">${escapePrintHtml(calculation.customerAddress || "Anschrift nicht angegeben")}<br>${escapePrintHtml(calculation.planning.contactPhone || "Telefon nicht angegeben")}<br>${escapePrintHtml(calculation.planning.contactEmail || "E-Mail nicht angegeben")}</div></div>`;
-    const siteDetailsHtml = costEstimatePrintOptions.siteDetails
+    const siteDetailsHtml = jobCenterOrder || costEstimatePrintOptions.siteDetails
       ? `<h2>Objekt- und Einsatzdaten</h2>
         <section class="grid">
           <div class="card"><p class="label">Auszug / Einsatzort</p><strong>${escapePrintHtml(calculation.planning.oldAddress || "Adresse nicht angegeben")}</strong><div class="muted">Etage: ${escapePrintHtml(calculation.planning.oldFloor || "-")} · Aufzug: ${calculation.planning.oldElevator ? "vorhanden" : "nicht vorhanden"}</div></div>
@@ -2875,7 +2936,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
         </section>`
       )
       .join("");
-    const packingListHtml = costEstimatePrintOptions.packingList
+    const packingListHtml = jobCenterOrder || costEstimatePrintOptions.packingList
       ? `<h2>Packliste / Inventar</h2><div class="volume-summary"><span>Gesamtvolumen</span><strong>${calculateVolume(calculation.planning.rooms).toFixed(2)} m³</strong></div>${packingListRoomsHtml || '<p class="muted">Es wurden noch keine Gegenstände erfasst.</p>'}`
       : "";
     const notesHtml = costEstimatePrintOptions.notes && calculation.planning.notes
@@ -2958,6 +3019,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
         </section>
         ${siteDetailsHtml}
         ${scopeHtml}
+        ${jobCenterOrder ? '<p class="notice"><strong>JobCenter auftrag</strong><br>Detaillierte Kostenaufstellung zur Vorlage beim Jobcenter. Alle Einzelpreise und Positionssummen sind Nettobeträge.</p>' : ""}
         <h2>Leistungen und Kosten</h2>
         <table><thead><tr><th>Position / Berechnung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis</th><th>Gesamt</th></tr></thead><tbody>${rowsHtml}</tbody></table>
         <section class="totals">
@@ -3139,6 +3201,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
             <DialogTitle>Kostenvoranschlag drucken</DialogTitle>
             <DialogDescription>
               Im Kundendokument erscheint nur der akzeptierte Angebotspreis. Interner Mindest- und Verhandlungspreis bleiben im Adminbereich.
+              {jobCenterOrder && " Für JobCenter-Aufträge sind Adressdaten, Rechenwege und Inventar immer enthalten."}
             </DialogDescription>
           </DialogHeader>
           <div className='rounded-md border border-blue-200 bg-blue-50 p-4'>
@@ -3173,15 +3236,15 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
           </div>
           <div className='grid gap-3 py-2 sm:grid-cols-2'>
             <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
-              <Checkbox checked={costEstimatePrintOptions.siteDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("siteDetails", checked === true)} />
+              <Checkbox checked={jobCenterOrder || costEstimatePrintOptions.siteDetails} disabled={jobCenterOrder} onCheckedChange={(checked) => updateCostEstimatePrintOption("siteDetails", checked === true)} />
               <span><span className='block text-sm font-medium text-slate-950'>Objekt- und Adressdaten</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Auszug, Zielort, Etagen und Laufweg</span></span>
             </label>
             <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
-              <Checkbox checked={costEstimatePrintOptions.calculationDetails} onCheckedChange={(checked) => updateCostEstimatePrintOption("calculationDetails", checked === true)} />
+              <Checkbox checked={jobCenterOrder || costEstimatePrintOptions.calculationDetails} disabled={jobCenterOrder} onCheckedChange={(checked) => updateCostEstimatePrintOption("calculationDetails", checked === true)} />
               <span><span className='block text-sm font-medium text-slate-950'>Genaue Rechenwege</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Mengen, Stunden und Einzelpreise je Position</span></span>
             </label>
             <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
-              <Checkbox checked={costEstimatePrintOptions.packingList} onCheckedChange={(checked) => updateCostEstimatePrintOption("packingList", checked === true)} />
+              <Checkbox checked={jobCenterOrder || costEstimatePrintOptions.packingList} disabled={jobCenterOrder} onCheckedChange={(checked) => updateCostEstimatePrintOption("packingList", checked === true)} />
               <span><span className='block text-sm font-medium text-slate-950'>Packliste / Inventar</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Räume, Gegenstände, Mengen und Volumen</span></span>
             </label>
             <label className='flex cursor-pointer items-start gap-3 rounded-md border border-slate-200 p-3 hover:bg-slate-50'>
@@ -3391,6 +3454,18 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
                     })}
                   </div>
                 </>
+              )}
+              {usesMoveInventory && (
+                <label className='mt-4 flex cursor-pointer items-start gap-3 rounded-md border border-blue-200 bg-blue-50 p-4'>
+                  <Checkbox
+                    checked={calculation.planning.jobCenterOrder}
+                    onCheckedChange={(checked) => updatePlanning("jobCenterOrder", checked === true)}
+                  />
+                  <span>
+                    <span className='block text-sm font-semibold text-slate-950'>JobCenter auftrag</span>
+                    <span className='mt-1 block text-xs leading-5 text-slate-600'>Angebot mit vollständiger Kostenaufstellung, Mengen, Einzelpreisen und Inventar zur Vorlage beim Jobcenter.</span>
+                  </span>
+                </label>
               )}
               {!fixedService && <details className='mt-5 rounded-md border border-amber-200 bg-amber-50/60 p-4'>
                 <summary className='cursor-pointer text-sm font-semibold text-slate-950'>Kombi-Pakete verwalten (optional)</summary>

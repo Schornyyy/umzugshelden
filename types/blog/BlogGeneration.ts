@@ -12,7 +12,8 @@ export type BlogGenerationStage =
   | "links"
   | "quality"
   | "section-repair"
-  | "completed";
+  | "completed"
+  | "failed";
 
 export interface GeneratedBlogDraft {
   title: string;

@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     .filter(
       (document) =>
         document.get("stage") !== "completed" &&
+        document.get("stage") !== "failed" &&
         Number(document.get("nextAttemptAt") || 0) <= now,
     )
     .sort(
@@ -73,6 +74,31 @@ export async function GET(request: Request) {
 
   if (workflow) {
     const retryCount = Number(workflow.get("failureRetryCount") || 0) + 1;
+    const lastError =
+      typeof data?.error === "string"
+        ? data.error.slice(0, 1_000)
+        : "Blog-Workflow fehlgeschlagen";
+    if (retryCount >= 5) {
+      await workflow.ref.set(
+        {
+          stage: "failed",
+          failureRetryCount: retryCount,
+          lastError,
+          lastFailureAt: now,
+          nextAttemptAt: null,
+          updatedAt: now,
+        },
+        { merge: true },
+      );
+      return NextResponse.json({
+        success: true,
+        pending: true,
+        stage: "failed",
+        workflowId: workflow.id,
+        message:
+          "Der Blog-Workflow wurde nach fünf Fehlversuchen übersprungen. Der nächste Blog wird generiert.",
+      });
+    }
     const retryDelay = Math.min(
       24 * 60 * 60 * 1_000,
       5 * 60 * 1_000 * 2 ** Math.min(retryCount - 1, 8),
@@ -80,10 +106,7 @@ export async function GET(request: Request) {
     await workflow.ref.set(
       {
         failureRetryCount: retryCount,
-        lastError:
-          typeof data?.error === "string"
-            ? data.error.slice(0, 1_000)
-            : "Blog-Workflow fehlgeschlagen",
+        lastError,
         lastFailureAt: now,
         nextAttemptAt: now + retryDelay,
         updatedAt: now,

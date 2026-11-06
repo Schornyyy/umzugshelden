@@ -1,7 +1,7 @@
 "use client";
 
 import { useCompanyData } from "@/provider/CompanyDataProvider";
-import { Calculator, ClipboardCheck, LayoutDashboard, ReceiptText, UsersRound } from "lucide-react";
+import { Calculator, ClipboardCheck, LayoutDashboard, ListChecks, ReceiptText, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -10,6 +10,7 @@ const tabs = [
   { label: "Kunden", segment: "/crm/customers", icon: UsersRound },
   { label: "Rechnungen", segment: "/crm/invoices", icon: ReceiptText },
   { label: "Übergaben", segment: "/crm/protocols", icon: ClipboardCheck },
+  { label: "Checklisten", segment: "/crm/checklists", icon: ListChecks },
   { label: "Kalkulator", segment: "/crm/calculator", icon: Calculator },
 ];
 

@@ -190,8 +190,8 @@ export default function CityLandingContentEditor({
       setActiveTab("content");
       setGeneratedMessage(
         data.usedAnalysis
-          ? "KI-Entwurf aus der letzten SEO-Konkurrenzanalyse erstellt. Bitte prüfen und speichern."
-          : "KI-Entwurf erstellt. Für einen präziseren Vergleich zuerst eine SEO-Auswertung durchführen.",
+          ? "KI-Entwurf aus SEO-Analyse und n8n-RAG-Recherche erstellt. Bitte prüfen und speichern."
+          : "KI-Entwurf mit n8n-RAG-Recherche erstellt. Für einen präziseren Vergleich zuerst eine SEO-Auswertung durchführen.",
       );
     } catch (generationError) {
       setError(

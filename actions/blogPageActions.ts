@@ -152,7 +152,7 @@ const baseSchema = z.object({
   subcategorySlug: z.string().min(1),
   mainCategory: z.custom<AdminBlogMainCategory>(),
   thumbnailUrl: z.string().url().optional(),
-  keywords: z.array(z.string().min(1)).max(25).optional(),
+  keywords: z.array(z.string().min(1)).max(60).optional(),
   meta_description: z.string().max(300).optional(),
   sections: z.array(sectionSchema).max(20).default([]),
   faq: z.array(faqSchema).max(30).default([]),

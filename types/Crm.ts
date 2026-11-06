@@ -20,9 +20,49 @@ export interface CrmAppointmentPhoto {
   uploadedAt: number;
 }
 
+export type CrmAppointmentPhase =
+  | "beforeDeparture"
+  | "arrival"
+  | "work"
+  | "afterWork";
+
+export interface CrmAppointmentTimeSegment {
+  startedAt: number;
+  endedAt?: number;
+}
+
+export interface CrmAppointmentChecklistItem {
+  id: string;
+  phase: CrmAppointmentPhase;
+  title: string;
+  details: string;
+  required: boolean;
+  completed: boolean;
+  completedAt?: number;
+}
+
+export interface CrmAppointmentChecklistTemplateItem {
+  id: string;
+  phase: CrmAppointmentPhase;
+  title: string;
+  details: string;
+  required: boolean;
+}
+
+export interface CrmAppointmentChecklistTemplate {
+  id: string;
+  name: string;
+  description: string;
+  items: CrmAppointmentChecklistTemplateItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface CrmAppointmentSession {
   startedAt: number;
   endedAt?: number;
+  paused: boolean;
+  segments: CrmAppointmentTimeSegment[];
   note: string;
   photos: CrmAppointmentPhoto[];
 }
@@ -38,6 +78,25 @@ export interface CrmAppointment {
   createdAt: number;
   reminderSentAt?: number;
   session?: CrmAppointmentSession;
+  currentPhase?: CrmAppointmentPhase;
+  checklist?: CrmAppointmentChecklistItem[];
+  checklistTemplate?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface CrmActiveAppointment {
+  ownerId: string;
+  customerId: string;
+  appointmentId: string;
+  customerName: string;
+  title: string;
+  startedAt: number;
+  paused: boolean;
+  segments: CrmAppointmentTimeSegment[];
+  currentPhase: CrmAppointmentPhase;
+  updatedAt: number;
 }
 
 export type CrmOrderTaskPhase = "before" | "during" | "after";

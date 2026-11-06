@@ -3,6 +3,7 @@ import "server-only";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import type { SeoPageMetrics } from "@/types/city/SeoAnalysis";
+import { cleanArticleHtml } from "@/lib/blogResearchText";
 
 const MAX_HTML_BYTES = 1_500_000;
 const MAX_REDIRECTS = 4;
@@ -250,6 +251,7 @@ export async function analyzeSeoPage(
     } catch {
       // Malformed links are not counted.
     }
+
   });
   const schemaTypes = collectSchemaTypes(html);
   const checks = [
@@ -289,4 +291,16 @@ export async function analyzeSeoPage(
     externalLinks,
     score: checks.filter(Boolean).length * 10,
   };
+}
+
+export async function scrapeSeoPageText(rawUrl: string): Promise<{
+  finalUrl: string;
+  text: string;
+}> {
+  const { html, finalUrl } = await fetchHtml(rawUrl);
+  const text = cleanArticleHtml(html);
+  if (!text) {
+    throw new Error(`${rawUrl} enthält keinen lesbaren Artikeltext`);
+  }
+  return { finalUrl, text };
 }

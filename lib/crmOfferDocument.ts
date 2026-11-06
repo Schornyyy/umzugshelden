@@ -8,6 +8,7 @@ export type CrmOfferRates = {
 
 export type CrmOfferPlanning = {
   serviceTypes?: string[];
+  jobCenterOrder?: boolean;
   scopeDescription?: string;
   date?: string;
   contactName?: string;
@@ -104,7 +105,57 @@ export type CrmOfferDocument = {
   packageName?: string;
   rates?: CrmOfferRates;
   planning?: CrmOfferPlanning;
+  costDetails?: CrmOfferCostDetail[];
 };
+
+export type CrmOfferCostDetail = {
+  id: string;
+  label: string;
+  formula: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  value: number;
+};
+
+export function isJobCenterOffer(planning: CrmOfferPlanning) {
+  return planning.jobCenterOrder === true &&
+    (planning.serviceTypes ?? []).some(
+      (service) => service === "move" || service === "seniorMove"
+    );
+}
+
+export function createJobCenterCostDetails(
+  rows: CrmOfferCostDetail[],
+  netTotal: number
+): CrmOfferCostDetail[] {
+  if (!Number.isFinite(netTotal) || netTotal < 0) {
+    throw new Error("Der JobCenter-Angebotspreis ist ungültig.");
+  }
+  const details = rows.map((row) => {
+    if (![row.quantity, row.unitPrice, row.value].every(Number.isFinite)) {
+      throw new Error("Eine JobCenter-Angebotsposition ist ungültig.");
+    }
+    return { ...row, value: Math.round(row.value * 100) / 100 };
+  });
+  const differenceCents = Math.round(netTotal * 100) - details.reduce(
+    (total, row) => total + Math.round(row.value * 100),
+    0
+  );
+  if (differenceCents !== 0) {
+    const value = differenceCents / 100;
+    details.push({
+      id: "agreedPriceAdjustment",
+      label: value < 0 ? "Vereinbarter Preisnachlass" : "Vereinbarter Preisaufschlag",
+      formula: "Anpassung an den vereinbarten Angebotspreis",
+      quantity: 1,
+      unit: "Pauschale",
+      unitPrice: value,
+      value,
+    });
+  }
+  return details;
+}
 
 export type CrmOfferCustomer = {
   name: string;
@@ -434,6 +485,12 @@ export function createOfferDocumentHtml(
 ) {
   const rates = offer.rates ?? {};
   const planning = offer.planning ?? {};
+  const jobCenterOrder = isJobCenterOffer(planning);
+  if (jobCenterOrder && !offer.costDetails) {
+    throw new Error(
+      "Die JobCenter-Kostenaufstellung fehlt. Bitte das Angebot im CRM erneut speichern."
+    );
+  }
   const employeeHourlyRate = safeNumber(rates.employeeHourlyRate);
   const employees = safeNumber(offer.employees);
   const hoursPerEmployee = safeNumber(offer.hoursPerEmployee);
@@ -563,7 +620,10 @@ export function createOfferDocumentHtml(
         .join("")}</ul></section>`
     )
     .join("") : '<p class="muted">Der konkrete Leistungsumfang wurde noch nicht festgelegt.</p>'}</div>`;
-  const costRowsHtml = rows
+  const documentRows = jobCenterOrder
+    ? createJobCenterCostDetails(offer.costDetails ?? [], acceptedNetTotal)
+    : rows;
+  const costRowsHtml = documentRows
     .map(
       (row) => `<tr><td><strong>${escapeHtml(row.label)}</strong><span>${escapeHtml(row.formula)}</span></td><td>${formatNumber(row.quantity)}</td><td>${escapeHtml(row.unit)}</td><td>${formatCurrency(row.unitPrice)}</td><td>${formatCurrency(row.value)}</td></tr>`
     )
@@ -640,6 +700,7 @@ tr, .header, .card, .totals { break-inside: avoid; }
 </style></head><body><main class="document">
 <header class="header"><div><div class="brand">Umzugshelden</div><div class="document-type">Angebot · Kostenvoranschlag</div><div class="sender">${escapeHtml(OFFER_ISSUER.proprietor)} · ${escapeHtml(OFFER_ISSUER.street)} · ${escapeHtml(`${OFFER_ISSUER.postalCode} ${OFFER_ISSUER.city}`)}</div></div><div class="meta">Angebotsnummer<strong>${escapeHtml(offerNumber(offer))}</strong>Erstellt am<strong>${formatDate(offer.createdAt)}</strong>Gültig bis<strong>${offer.validUntil ? escapeHtml(formatInputDate(offer.validUntil)) : defaultValidUntil(offer.createdAt)}</strong></div></header>
 <h1>${escapeHtml(offer.title || "Ihr persönliches Angebot")}</h1>
+${jobCenterOrder ? '<p class="notice"><strong>JobCenter auftrag</strong><br>Detaillierte Kostenaufstellung zur Vorlage beim Jobcenter. Alle Einzelpreise und Positionssummen sind Nettobeträge.</p>' : ""}
 <section class="grid"><div class="card"><p class="label">Kunde</p><strong>${escapeHtml(customer.company || customer.name)}</strong>${customer.company ? `<div class="muted">${escapeHtml(customer.name)}</div>` : ""}<div class="muted">${customerAddress || "Adresse nicht angegeben"}<br>${escapeHtml(customer.email || "E-Mail nicht angegeben")}<br>${escapeHtml(customer.phone || "Telefon nicht angegeben")}${customer.customerNumber ? `<br>Kundennummer: ${escapeHtml(customer.customerNumber)}` : ""}</div></div><div class="card"><p class="label">Projekt</p><strong>${escapeHtml(services || "Leistung nach Vereinbarung")}</strong><div class="muted">Wunschtermin: ${escapeHtml(planning.date || "noch offen")}${offer.packageName ? `<br>Paket: ${escapeHtml(offer.packageName)}` : ""}</div></div></section>
 ${planning.oldAddress || planning.newAddress ? `<section class="grid"><div class="card"><p class="label">Auszug / Einsatzort</p><strong>${escapeHtml(planning.oldAddress || "Nicht angegeben")}</strong><div class="muted">Etage: ${escapeHtml(planning.oldFloor || "-")} · Aufzug: ${planning.oldElevator ? "vorhanden" : "nicht vorhanden"}</div></div><div class="card"><p class="label">Einzug / Zielort</p><strong>${escapeHtml(planning.newAddress || "Nicht angegeben")}</strong><div class="muted">Etage: ${escapeHtml(planning.newFloor || "-")} · Aufzug: ${planning.newElevator ? "vorhanden" : "nicht vorhanden"}</div></div></section>` : ""}
 ${scopeHtml}

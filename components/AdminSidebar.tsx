@@ -55,6 +55,11 @@ const data = {
           exact: true,
         },
         {
+          title: "Termin-Checklisten",
+          url: "/crm/checklists",
+          icon: ListChecks,
+        },
+        {
           title: "Städte",
           url: "/citys",
           icon: MapPinned,

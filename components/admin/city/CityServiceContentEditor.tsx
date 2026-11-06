@@ -40,6 +40,19 @@ type OptimizationState = {
   lastAcceptedAt: number | null;
 };
 
+type CityServiceGenerationResponse = {
+  success?: boolean;
+  error?: string;
+  pending?: boolean;
+  stage?: string;
+  message?: string;
+  completedSections?: number;
+  totalSections?: number;
+  qualityScore?: number;
+  proposalId?: string;
+  reviewUrl?: string;
+};
+
 function cloneBlocks(blocks: CityServiceBlock[]) {
   return structuredClone(blocks);
 }
@@ -232,44 +245,67 @@ export default function CityServiceContentEditor({
         throw new Error(
           "Keine aktive Anmeldung gefunden. Bitte neu einloggen.",
         );
-      const response = await fetch("/api/admin/generate-city-service-page", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${token}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          ownerId,
-          cityName,
-          citySlug,
-          serviceKey,
-          serviceName,
-          primaryKeyword,
-          keywords: seo.keywords,
-          currentImage: seo.image,
-          currentImageAlt: seo.imageAlt,
-          currentBlocks: blocks,
-          currentSeo: seo,
-          analysisId,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error || "Die KI-Seitenerstellung ist fehlgeschlagen.",
-        );
+      let data: CityServiceGenerationResponse;
+      while (true) {
+        const response = await fetch("/api/admin/generate-city-service-page", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            ownerId,
+            cityName,
+            citySlug,
+            serviceKey,
+            serviceName,
+            primaryKeyword,
+            keywords: seo.keywords,
+            currentImage: seo.image,
+            currentImageAlt: seo.imageAlt,
+            currentBlocks: blocks,
+            currentSeo: seo,
+            analysisId,
+          }),
+        });
+        data = (await response.json().catch(() => ({}))) as CityServiceGenerationResponse;
+        if (!response.ok || !data.success) {
+          throw new Error(
+            data.error || "Die KI-Seitenerstellung ist fehlgeschlagen.",
+          );
+        }
+        if (!data.pending) break;
+        if (data.stage === "n8n-rag") {
+          setGeneratedMessage("n8n-RAG-Recherche abgeschlossen. SEO-Inhalte werden erstellt.");
+        } else if (data.stage === "eeat-blueprint") {
+          setGeneratedMessage(
+            "Zwei E-E-A-T-Wissensabschnitte mit passenden Blogverlinkungen wurden geplant.",
+          );
+        } else if (data.stage === "section") {
+          setGeneratedMessage(
+            `SEO-Sektion ${data.completedSections} von ${data.totalSections} erstellt.`,
+          );
+        } else if (data.stage === "internal-links") {
+          setGeneratedMessage("Interne Verlinkungen werden geprüft und optimiert.");
+        } else if (data.stage === "quality-check") {
+          setGeneratedMessage(`SEO-Qualitätsprüfung: ${data.qualityScore ?? 0}/100.`);
+        } else if (data.stage === "section-repair") {
+          setGeneratedMessage("Eine Sektion wird anhand der Qualitätsprüfung verbessert.");
+        }
       }
-      if (!data.reviewUrl) {
+      if (!data.reviewUrl || !data.proposalId) {
         throw new Error("Für den KI-Vorschlag fehlt die Freigabe-Ansicht.");
       }
+      const reviewUrl = data.reviewUrl;
+      const proposalId = data.proposalId;
       if (reviewWindow) {
         reviewWindow.opener = null;
-        reviewWindow.location.href = data.reviewUrl;
+        reviewWindow.location.href = reviewUrl;
       } else {
-        window.open(data.reviewUrl, "_blank", "noopener,noreferrer");
+        window.open(reviewUrl, "_blank", "noopener,noreferrer");
       }
       setOptimizationState((current) => ({
-        pendingProposalId: data.proposalId,
+        pendingProposalId: proposalId,
         targetRank: current?.targetRank ?? null,
         suspendedForTopFive: false,
         lastGeneratedAt: Date.now(),

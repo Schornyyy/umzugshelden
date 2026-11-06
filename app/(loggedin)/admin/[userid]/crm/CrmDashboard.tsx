@@ -15,6 +15,13 @@ import { auth, database, storage } from "@/config/firebase";
 import { createCustomerNumber } from "@/lib/crmIdentifiers";
 import type { CrmOfferDocument } from "@/lib/crmOfferDocument";
 import {
+  copyAppointmentTemplate,
+  CRM_APPOINTMENT_PHASE_LABELS,
+  CRM_APPOINTMENT_PHASES,
+  normalizeCrmAppointment,
+} from "@/lib/crmAppointmentWorkflow";
+import { subscribeAppointmentTemplates } from "@/lib/crmAppointmentStore";
+import {
   CRM_TASK_TEMPLATE_CATALOG_VERSION,
   createOrderFromOffer,
   DEFAULT_CRM_TASK_TEMPLATES,
@@ -27,6 +34,9 @@ import {
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type {
   CrmAppointment,
+  CrmAppointmentChecklistItem,
+  CrmAppointmentChecklistTemplate,
+  CrmAppointmentPhase,
   CrmAppointmentType,
   CrmCustomer,
   CrmCustomerStatus,
@@ -65,6 +75,7 @@ import {
   Mail,
   MapPin,
   NotebookPen,
+  Pencil,
   Phone,
   Plus,
   Play,
@@ -123,6 +134,9 @@ type AppointmentForm = {
   endAt: string;
   type: CrmAppointmentType;
   details: string;
+  templateId: string;
+  templateName: string;
+  checklist: CrmAppointmentChecklistItem[];
 };
 
 type OfferEmailForm = {
@@ -152,6 +166,9 @@ function createEmptyAppointment(): AppointmentForm {
     endAt: dateTimeInputValue(new Date(start.getTime() + 60 * 60 * 1000)),
     type: "call",
     details: "",
+    templateId: "",
+    templateName: "",
+    checklist: [],
   };
 }
 
@@ -273,6 +290,12 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   const [appointmentForm, setAppointmentForm] = useState<AppointmentForm>(
     createEmptyAppointment
   );
+  const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(
+    null,
+  );
+  const [appointmentTemplates, setAppointmentTemplates] = useState<
+    CrmAppointmentChecklistTemplate[]
+  >([]);
   const [appointmentError, setAppointmentError] = useState("");
   const [isSavingAppointment, setIsSavingAppointment] = useState(false);
   const [sendingReminderId, setSendingReminderId] = useState<string | null>(null);
@@ -536,6 +559,18 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
   }, [crmOwnerId, requestOwnerId, customerId, loadAttempt]);
 
   useEffect(() => {
+    if (!crmOwnerId) return;
+    return subscribeAppointmentTemplates(
+      crmOwnerId,
+      setAppointmentTemplates,
+      (error) => {
+        console.error("Termin-Checklisten konnten nicht geladen werden.", error);
+        setAppointmentError("Die Checklisten-Vorlagen konnten nicht geladen werden.");
+      },
+    );
+  }, [crmOwnerId]);
+
+  useEffect(() => {
     const customer = customers.find((item) => item.id === selectedCustomerId) ?? null;
     setDraft(customer ? { ...customer, tags: [...customer.tags] } : null);
   }, [customers, selectedCustomerId]);
@@ -770,8 +805,92 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
 
   function openAppointmentDialog() {
     setAppointmentForm(createEmptyAppointment());
+    setEditingAppointmentId(null);
     setAppointmentError("");
     setIsAppointmentDialogOpen(true);
+  }
+
+  function openAppointmentEditDialog(appointment: CrmAppointment) {
+    const normalized = normalizeCrmAppointment(appointment);
+    setAppointmentForm({
+      title: normalized.title,
+      startAt: normalized.startAt,
+      endAt: normalized.endAt ?? normalized.startAt,
+      type: normalized.type,
+      details: normalized.details,
+      templateId: normalized.checklistTemplate?.id ?? "",
+      templateName: normalized.checklistTemplate?.name ?? "",
+      checklist: (normalized.checklist ?? []).map((item) => ({ ...item })),
+    });
+    setEditingAppointmentId(appointment.id);
+    setAppointmentError("");
+    setIsAppointmentDialogOpen(true);
+  }
+
+  function selectAppointmentTemplate(templateId: string) {
+    if (!templateId) {
+      setAppointmentForm({
+        ...appointmentForm,
+        templateId: "",
+        templateName: "",
+      });
+      return;
+    }
+    const template = appointmentTemplates.find(
+      (candidate) => candidate.id === templateId,
+    );
+    if (!template) return;
+    if (
+      appointmentForm.checklist.some((item) => item.completed) &&
+      !window.confirm(
+        "Die aktuelle Checkliste enthält bereits Fortschritt. Wirklich durch die Vorlage ersetzen?",
+      )
+    ) {
+      return;
+    }
+    const copied = copyAppointmentTemplate(template);
+    setAppointmentForm({
+      ...appointmentForm,
+      templateId: template.id,
+      templateName: template.name,
+      checklist: copied.checklist ?? [],
+    });
+  }
+
+  function addAppointmentChecklistItem(phase: CrmAppointmentPhase) {
+    setAppointmentForm({
+      ...appointmentForm,
+      checklist: [
+        ...appointmentForm.checklist,
+        {
+          id: crypto.randomUUID(),
+          phase,
+          title: "Neuer Punkt",
+          details: "",
+          required: false,
+          completed: false,
+        },
+      ],
+    });
+  }
+
+  function updateAppointmentChecklistItem(
+    id: string,
+    updates: Partial<CrmAppointmentChecklistItem>,
+  ) {
+    setAppointmentForm({
+      ...appointmentForm,
+      checklist: appointmentForm.checklist.map((item) =>
+        item.id === id ? { ...item, ...updates } : item,
+      ),
+    });
+  }
+
+  function removeAppointmentChecklistItem(id: string) {
+    setAppointmentForm({
+      ...appointmentForm,
+      checklist: appointmentForm.checklist.filter((item) => item.id !== id),
+    });
   }
 
   function updateAppointmentStart(startAt: string) {
@@ -795,19 +914,45 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       return;
     }
 
+    const existingAppointment = editingAppointmentId
+      ? draft.appointments.find(
+          (appointment) => appointment.id === editingAppointmentId,
+        )
+      : undefined;
     const appointment: CrmAppointment = {
-      id: crypto.randomUUID(),
+      ...existingAppointment,
+      id: existingAppointment?.id ?? crypto.randomUUID(),
       title: appointmentForm.title.trim(),
       startAt: appointmentForm.startAt,
       endAt: appointmentForm.endAt,
       type: appointmentForm.type,
       details: appointmentForm.details.trim(),
-      completed: false,
-      createdAt: Date.now(),
+      completed: existingAppointment?.completed ?? false,
+      createdAt: existingAppointment?.createdAt ?? Date.now(),
+      currentPhase: existingAppointment?.currentPhase ?? "beforeDeparture",
+      checklist: appointmentForm.checklist
+        .filter((item) => item.title.trim())
+        .map((item) => ({
+          ...item,
+          title: item.title.trim(),
+          details: item.details.trim(),
+        })),
+      ...(appointmentForm.templateId
+        ? {
+          checklistTemplate: {
+            id: appointmentForm.templateId,
+            name: appointmentForm.templateName,
+          },
+        }
+        : {}),
     };
     const updatedCustomer = {
       ...draft,
-      appointments: [...draft.appointments, appointment],
+      appointments: existingAppointment
+        ? draft.appointments.map((candidate) =>
+            candidate.id === appointment.id ? appointment : candidate,
+          )
+        : [...draft.appointments, appointment],
       updatedAt: Date.now(),
     };
     setIsSavingAppointment(true);
@@ -819,6 +964,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       replaceCustomer(updatedCustomer);
       if (addToCalendar) downloadAppointmentCalendar(updatedCustomer, appointment);
       setAppointmentForm(createEmptyAppointment());
+      setEditingAppointmentId(null);
       setIsAppointmentDialogOpen(false);
       setFeedback("saved");
     } catch {
@@ -936,30 +1082,18 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
     }
   }
 
-  async function toggleAppointment(appointmentId: string) {
-    if (!draft) return;
-    const updatedCustomer = {
-      ...draft,
-      appointments: draft.appointments.map((appointment) =>
-        appointment.id === appointmentId
-          ? { ...appointment, completed: !appointment.completed }
-          : appointment
-      ),
-      updatedAt: Date.now(),
-    };
-    try {
-      await updateDoc(doc(database, CRM_COLLECTION, draft.id), {
-        appointments: updatedCustomer.appointments,
-        updatedAt: updatedCustomer.updatedAt,
-      });
-      replaceCustomer(updatedCustomer);
-    } catch {
-      setFeedback("error");
-    }
-  }
-
   async function removeAppointment(appointmentId: string) {
     if (!draft) return;
+    const selectedAppointment = draft.appointments.find(
+      (appointment) => appointment.id === appointmentId,
+    );
+    if (selectedAppointment?.session?.startedAt && !selectedAppointment.session.endedAt) {
+      setAppointmentFeedback({
+        type: "error",
+        message: "Ein laufender Termin kann nicht gelöscht werden.",
+      });
+      return;
+    }
     const updatedCustomer = {
       ...draft,
       appointments: draft.appointments.filter((appointment) => appointment.id !== appointmentId),
@@ -1490,7 +1624,7 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
                 <section>
                   <div className='mb-3 flex items-center justify-between'><h3 className='flex items-center gap-2 text-sm font-semibold text-slate-950'><CalendarDays size={17} /> Termine & Aufgaben</h3><Button variant='outline' size='sm' onClick={openAppointmentDialog}><Plus /> Neu</Button></div>
                   {appointmentFeedback && <p className={`mb-3 rounded-md px-3 py-2 text-sm font-medium ${appointmentFeedback.type === "sent" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{appointmentFeedback.message}</p>}
-                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-start ${appointment.completed ? "bg-slate-50" : "bg-white"}`}><div className='flex min-w-0 flex-1 items-start gap-3'><button type='button' onClick={() => void toggleAppointment(appointment.id)} className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent hover:border-emerald-500"}`} title={appointment.completed ? "Als offen markieren" : "Erledigen"}><Check size={13} /></button><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through opacity-65" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span>{appointment.session?.startedAt && <><span>·</span><span className='font-medium text-emerald-700'>{appointment.session.endedAt ? "Protokoll gespeichert" : "Tracking läuft"}</span></>}</p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div></div><div className='flex shrink-0 flex-wrap justify-end gap-1'>{appointment.type === "visit" && <><Button variant='outline' size='sm' disabled={sendingReminderId === appointment.id} onClick={() => void sendAppointmentReminder(appointment)}>{sendingReminderId === appointment.id ? <LoaderCircle className='animate-spin' size={15} /> : <BellRing size={15} />} Erinnerung senden</Button><Button asChild variant={appointment.session?.startedAt ? "outline" : "default"} size='sm'><Link href={`/admin/${companyData?.id}/crm/customers/${draft.id}/appointments/${appointment.id}`}><Play size={15} /> {appointment.session?.startedAt ? "Termin öffnen" : "Besichtigungstermin starten"}</Link></Button></>}<Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div></div>)}</div>}
+                  {draft.appointments.length === 0 ? <div className='rounded-md border border-dashed border-slate-300 px-4 py-8 text-center text-sm text-slate-500'>Noch keine Termine oder Aufgaben vorhanden.</div> : <div className='divide-y divide-slate-200 rounded-md border border-slate-200'>{[...draft.appointments].sort((left, right) => left.startAt.localeCompare(right.startAt)).map((appointment) => <div key={appointment.id} className={`flex flex-col gap-3 p-3 sm:flex-row sm:items-start ${appointment.completed ? "bg-slate-50" : "bg-white"}`}><div className='flex min-w-0 flex-1 items-start gap-3'><span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${appointment.completed ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent"}`} title={appointment.completed ? "Abgeschlossen" : "Im Terminablauf abschließen"}><Check size={13} /></span><div className='min-w-0 flex-1'><p className={`text-sm font-medium text-slate-950 ${appointment.completed ? "line-through opacity-65" : ""}`}>{appointment.title}</p><p className='mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-500'><span>{getAppointmentType(appointment.type)}</span><span>·</span><span>{formatAppointmentDate(appointment.startAt, appointment.endAt)}</span>{appointment.session?.startedAt && <><span>·</span><span className='font-medium text-emerald-700'>{appointment.session.endedAt ? "Protokoll gespeichert" : appointment.session.paused ? "Tracking pausiert" : "Tracking läuft"}</span></>}</p>{appointment.details && <p className='mt-2 text-sm leading-5 text-slate-600'>{appointment.details}</p>}</div></div><div className='flex shrink-0 flex-wrap justify-end gap-1'>{appointment.type === "visit" && <Button variant='outline' size='sm' disabled={sendingReminderId === appointment.id} onClick={() => void sendAppointmentReminder(appointment)}>{sendingReminderId === appointment.id ? <LoaderCircle className='animate-spin' size={15} /> : <BellRing size={15} />} Erinnerung senden</Button>}<Button asChild variant={appointment.session?.startedAt ? "outline" : "default"} size='sm'><Link href={`/admin/${companyData?.id}/crm/customers/${draft.id}/appointments/${appointment.id}`}><Play size={15} /> {appointment.session?.startedAt ? "Termin öffnen" : "Termin starten"}</Link></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin bearbeiten' onClick={() => openAppointmentEditDialog(appointment)}><Pencil size={15} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0 text-blue-700' title='In Kalender eintragen' onClick={() => downloadAppointmentCalendar(draft, appointment)}><CalendarPlus size={16} /></Button><Button variant='ghost' size='icon' className='h-8 w-8 shrink-0' title='Termin löschen' onClick={() => void removeAppointment(appointment.id)}><Trash2 size={15} className='text-red-600' /></Button></div></div>)}</div>}
                 </section>
 
                 <section className='border-t border-slate-200 pt-5'>
@@ -1521,13 +1655,51 @@ export default function CrmDashboard({ view, customerId }: CrmDashboardProps) {
       </Dialog>
 
       <Dialog open={isAppointmentDialogOpen} onOpenChange={setIsAppointmentDialogOpen}>
-        <DialogContent className='sm:max-w-lg'>
-          <DialogHeader><DialogTitle>Termin oder Aufgabe</DialogTitle><DialogDescription>Lege Start und Ende fest und übertrage den Eintrag bei Bedarf direkt in deinen Kalender.</DialogDescription></DialogHeader>
-          <div className='space-y-4 py-2'>
+        <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-3xl'>
+          <DialogHeader>
+            <DialogTitle>{editingAppointmentId ? "Termin bearbeiten" : "Termin oder Aufgabe"}</DialogTitle>
+            <DialogDescription>
+              Lege Zeitraum und individuelle Checkliste fest. Eine Vorlage wird als unabhängige Kopie übernommen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className='space-y-5 py-2'>
             <CustomerField label='Titel *' value={appointmentForm.title} onChange={(value) => setAppointmentForm({ ...appointmentForm, title: value })} placeholder='z. B. Vor-Ort-Besichtigung' />
             <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Art<select value={appointmentForm.type} onChange={(event) => setAppointmentForm({ ...appointmentForm, type: event.target.value as CrmAppointmentType })} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm'>{appointmentTypes.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
             <div className='grid gap-4 sm:grid-cols-2'><label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Beginn *<input type='datetime-local' value={appointmentForm.startAt} onChange={(event) => updateAppointmentStart(event.target.value)} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm' /></label><label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Ende *<input type='datetime-local' min={appointmentForm.startAt} value={appointmentForm.endAt} onChange={(event) => { setAppointmentForm({ ...appointmentForm, endAt: event.target.value }); setAppointmentError(""); }} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm' /></label></div>
             <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>Details<textarea value={appointmentForm.details} onChange={(event) => setAppointmentForm({ ...appointmentForm, details: event.target.value })} rows={3} className='rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500' /></label>
+
+            <section className='space-y-4 border-t border-slate-200 pt-5'>
+              <div>
+                <h3 className='font-semibold text-slate-950'>Termin-Checkliste</h3>
+                <p className='mt-1 text-xs text-slate-500'>Vorlage wählen oder Punkte direkt für diesen Termin anpassen.</p>
+              </div>
+              <label className='flex flex-col gap-1.5 text-sm font-medium text-slate-700'>
+                Vorlage
+                <select value={appointmentForm.templateId} onChange={(event) => selectAppointmentTemplate(event.target.value)} className='h-10 rounded-md border border-slate-200 bg-white px-3 text-sm'>
+                  <option value=''>Keine Vorlage / individuelle Liste</option>
+                  {appointmentTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                </select>
+              </label>
+              {CRM_APPOINTMENT_PHASES.map((phase) => (
+                <div key={phase} className='rounded-md border border-slate-200 bg-slate-50 p-3'>
+                  <div className='mb-3 flex items-center justify-between gap-3'>
+                    <h4 className='text-sm font-semibold text-slate-950'>{CRM_APPOINTMENT_PHASE_LABELS[phase]}</h4>
+                    <Button type='button' variant='outline' size='sm' onClick={() => addAppointmentChecklistItem(phase)}><Plus size={14} /> Punkt</Button>
+                  </div>
+                  <div className='space-y-2'>
+                    {appointmentForm.checklist.filter((item) => item.phase === phase).map((item) => (
+                      <div key={item.id} className='grid gap-2 rounded-md border border-slate-200 bg-white p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] sm:items-center'>
+                        <input value={item.title} onChange={(event) => updateAppointmentChecklistItem(item.id, { title: event.target.value })} placeholder='Aufgabe' className='h-9 rounded-md border border-slate-200 px-2 text-sm' />
+                        <input value={item.details} onChange={(event) => updateAppointmentChecklistItem(item.id, { details: event.target.value })} placeholder='Hinweis (optional)' className='h-9 rounded-md border border-slate-200 px-2 text-sm' />
+                        <label className='flex items-center gap-2 text-xs font-medium text-slate-600'><input type='checkbox' checked={item.required} onChange={(event) => updateAppointmentChecklistItem(item.id, { required: event.target.checked })} /> Pflicht</label>
+                        <Button type='button' variant='ghost' size='icon' title='Punkt löschen' onClick={() => removeAppointmentChecklistItem(item.id)}><Trash2 size={15} className='text-red-600' /></Button>
+                      </div>
+                    ))}
+                    {!appointmentForm.checklist.some((item) => item.phase === phase) && <p className='py-2 text-center text-xs text-slate-500'>Noch keine Punkte.</p>}
+                  </div>
+                </div>
+              ))}
+            </section>
             {appointmentError && <p className='text-sm font-medium text-red-600'>{appointmentError}</p>}
           </div>
           <DialogFooter><Button variant='outline' onClick={() => setIsAppointmentDialogOpen(false)}>Abbrechen</Button><Button variant='outline' onClick={() => void addAppointment()} disabled={isSavingAppointment || !appointmentForm.title.trim() || !appointmentRangeValid}>Speichern</Button><Button onClick={() => void addAppointment(true)} disabled={isSavingAppointment || !appointmentForm.title.trim() || !appointmentRangeValid}>{isSavingAppointment ? <LoaderCircle className='animate-spin' /> : <CalendarPlus />} Speichern & Kalender</Button></DialogFooter>
