@@ -5,9 +5,6 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { CookieIcon } from "lucide-react";
 import AnalyticsCookies from "./cookies/AnalyticsCookie";
-import ClarityCookie from "./cookies/ClarityCookie";
-import { useEffect } from "react";
-import Clarity from "@microsoft/clarity";
 import { usePathname } from "next/navigation";
 
 const CookieSettings: React.FC = () => {
@@ -19,15 +16,9 @@ const CookieSettings: React.FC = () => {
     window.location.reload();
   };
 
-  const CLARITY_ID = process.env.NEXT_PUBLIC_CLARITY_ID || "";
-  useEffect(() => {
-    Clarity.init(CLARITY_ID);
-  }, [CLARITY_ID]);
-
   return (
     <>
       <AnalyticsCookies />
-      <ClarityCookie />
       {!isLandingpage && (
         <motion.div
           initial={{ opacity: 0, x: 50 }}

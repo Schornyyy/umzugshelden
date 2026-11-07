@@ -146,9 +146,12 @@ const Datenschutz = () => {
             7. Cookies und Tracking
           </h2>
           <p className='text-gray-700 mb-4'>
-            Unsere Website verwendet nur notwendige Cookies oder ist
-            cookie-frei, sofern Sie dem nicht ausdrücklich zugestimmt haben.
-            Soweit Dienste Dritter genutzt werden, informieren wir gesondert.
+            Unsere Website verwendet Google Analytics und Microsoft Clarity
+            zur Analyse der Nutzung. Microsoft Clarity kann unter anderem
+            Klicks, Scrollverhalten und Sitzungsaufzeichnungen erfassen.
+            Beide Dienste werden unabhängig von der Auswahl im Cookie-Banner
+            geladen. Die Statistik-Auswahl steuert die zusätzliche
+            Analyse mit Vercel Analytics.
           </p>
         </section>
 
