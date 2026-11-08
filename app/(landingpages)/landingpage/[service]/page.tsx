@@ -23,6 +23,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import AblaufVergleich from "./AblaufVergleich";
 import EntruempelungLeadFunnel from "./EntruempelungLeadFunnel";
+import UmzugLandingPage from "./UmzugLandingPage";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";
@@ -34,18 +35,41 @@ const PROJECT_IMAGE_DIRECTORY = path.join(
 );
 const PROJECT_IMAGE_EXTENSIONS = /\.(avif|jpe?g|png|webp)$/i;
 
-export const metadata: Metadata = {
-  title: "Entrümpelung zum Festpreis | Kostenlose Besichtigung",
-  description:
-    "Professionelle Entrümpelung: diskret, besenrein und zum verbindlichen Festpreis. Jetzt kostenlos und unverbindlich anfragen.",
-  alternates: {
-    canonical: "https://www.umzugshelden.io/landingpage/entrümpelung",
-  },
-  robots: {
-    index: false,
-    follow: false,
-  },
+const LANDINGPAGE_ROBOTS = {
+  index: false,
+  follow: false,
 };
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ service: string }>;
+}): Promise<Metadata> {
+  const { service } = await params;
+  const normalizedService = normalizeServiceSlug(service);
+
+  if (normalizedService === "umzug") {
+    return {
+      title: "Professioneller Umzug zum Festpreis | Umzugshelden",
+      description:
+        "Stressfrei umziehen mit den Umzugshelden: sorgfältige Planung, versicherter Transport und verbindliches Angebot. Jetzt kostenlos anfragen.",
+      alternates: {
+        canonical: "https://www.umzugshelden.io/landingpage/umzug",
+      },
+      robots: LANDINGPAGE_ROBOTS,
+    };
+  }
+
+  return {
+    title: "Entrümpelung zum Festpreis | Kostenlose Besichtigung",
+    description:
+      "Professionelle Entrümpelung: diskret, besenrein und zum verbindlichen Festpreis. Jetzt kostenlos und unverbindlich anfragen.",
+    alternates: {
+      canonical: "https://www.umzugshelden.io/landingpage/entrümpelung",
+    },
+    robots: LANDINGPAGE_ROBOTS,
+  };
+}
 
 const promises = [
   {
@@ -151,25 +175,28 @@ async function getProjectImages() {
   }
 }
 
-export default async function EntruempelungLandingpage({
+export default async function Landingpage({
   params,
   searchParams,
 }: {
   params: Promise<{ service: string }>;
   searchParams: Promise<{ stadt?: string | string[] }>;
 }) {
-  const [{ service }, { stadt }, projectImages] = await Promise.all([
-    params,
-    searchParams,
-    getProjectImages(),
-  ]);
+  const { service } = await params;
   const normalizedService = normalizeServiceSlug(service);
+  if (normalizedService === "umzug") {
+    return <UmzugLandingPage />;
+  }
   if (
     normalizedService !== "entrümpelung" &&
     normalizedService !== "entruempelung"
   ) {
     notFound();
   }
+  const [{ stadt }, projectImages] = await Promise.all([
+    searchParams,
+    getProjectImages(),
+  ]);
   const city = sanitizeCity(stadt);
 
   return (

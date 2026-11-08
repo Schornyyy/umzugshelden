@@ -1,14 +1,14 @@
 import React, { ReactNode } from "react";
 import Navbar from "./_components/Navbar";
 import Footer from "./_components/Footer";
-import WhatsAppBtn from "./_components/WhatsAppBtn";
+import MobileCallButton from "./_components/MobileCallButton";
 
 const layout = ({ children }: { children: ReactNode }) => {
   return (
     <>
       <Navbar />
       {children}
-      <WhatsAppBtn />
+      <MobileCallButton />
       <Footer />
     </>
   );

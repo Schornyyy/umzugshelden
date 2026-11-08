@@ -16,15 +16,15 @@ export default function LandingpageLayout({
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-5 gap-y-1 text-center text-xs font-semibold sm:text-sm">
           <span className="inline-flex items-center gap-1.5">
             <CheckCircle2 size={14} className="text-primary" />
-            Kostenlose Besichtigung
+            Kostenlose Anfrage
           </span>
           <span className="inline-flex items-center gap-1.5">
             <CheckCircle2 size={14} className="text-primary" />
-            Verbindlicher Festpreis
+            Persönliche Beratung
           </span>
           <span className="inline-flex items-center gap-1.5">
             <CheckCircle2 size={14} className="text-primary" />
-            Diskret &amp; besenrein
+            Transparente Leistungen
           </span>
         </div>
       </div>
@@ -45,7 +45,7 @@ export default function LandingpageLayout({
                 Umzugshelden
               </span>
               <span className="mt-1 block text-xs text-slate-500">
-                Entrümpelung aus einer Hand
+                Umzug &amp; Entrümpelung aus einer Hand
               </span>
             </span>
           </div>

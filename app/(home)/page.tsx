@@ -2,8 +2,8 @@ import { Button } from "@/components/ui/button";
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { StarIcon } from "lucide-react";
 import ContactForm from "@/components/ContactForm";
+import ReviewCarousel from "@/components/reviews/ReviewCarousel";
 
 export async function generateMetadata() {
   return {
@@ -41,7 +41,7 @@ const page = () => {
       <WhyUsSection />
       <ServicesSection />
       <AboutSection />
-      <ReviewsSection />
+      <ReviewCarousel />
       <CTASection />
     </div>
   );
@@ -202,7 +202,7 @@ const ServicesSection = () => {
 
 /* ─────────────────────────── ABOUT / STATS ─────────────────────────── */
 const stats = [
-  { value: "10+", label: "Erfolgreiche Umzüge" },
+  { value: "100+", label: "Erfolgreiche Umzüge" },
   { value: "24 H", label: "Schnelle Umzüge" },
   { value: "Günstig", label: "Günstige Preisgestaltung" },
 ];
@@ -257,61 +257,6 @@ const AboutSection = () => {
               </Button>
             </Link>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-};
-
-/* ─────────────────────────── REVIEWS ─────────────────────────── */
-const reviews = [
-  {
-    name: "Oliver W.",
-    rating: 5,
-    text: "Absolut reibungsloser Umzug! Das Team war pünktlich, professionell und hat alles sicher transportiert. Sehr empfehlenswert!",
-  },
-  {
-    name: "Ahmet D.",
-    rating: 5,
-    text: "Bester Umzugsservice den ich je erlebt habe! Top Arbeit geleistet und vor allem alles sauber hinterlassen. Sehr freundlich und absolut fairer Preis!",
-  },
-  {
-    name: "Anke R.",
-    rating: 5,
-    text: "Nettes, fleißiges Team das sauber und schnell arbeitet. Unser Umzug hat deutlich weniger Zeit in Anspruch genommen als erwartet.",
-  },
-];
-
-const ReviewsSection = () => {
-  return (
-    <section className='py-20 bg-white'>
-      <div className='container mx-auto px-4'>
-        <h2 className='font-sans font-bold text-3xl md:text-4xl text-navy text-center mb-12'>
-          Was unsere Kunden sagen
-        </h2>
-        <div className='grid grid-cols-1 md:grid-cols-3 gap-8'>
-          {reviews.map((review) => (
-            <div
-              key={review.name}
-              className='bg-gray-50 rounded-xl p-8 shadow-sm border border-gray-100 flex flex-col gap-4 hover:shadow-md transition-shadow'>
-              {/* Stars */}
-              <div className='flex gap-1'>
-                {Array.from({ length: review.rating }).map((_, i) => (
-                  <StarIcon
-                    key={i}
-                    className='text-primary fill-primary'
-                    size={18}
-                  />
-                ))}
-              </div>
-              <h4 className='font-sans font-semibold text-navy'>
-                {review.name}
-              </h4>
-              <p className='font-body text-gray-600 text-sm leading-relaxed'>
-                {review.text}
-              </p>
-            </div>
-          ))}
         </div>
       </div>
     </section>
