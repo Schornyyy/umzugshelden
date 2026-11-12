@@ -88,7 +88,7 @@ function isPrivateAddress(address: string): boolean {
   );
 }
 
-async function validatePublicUrl(rawUrl: string): Promise<URL> {
+export async function validatePublicUrl(rawUrl: string): Promise<URL> {
   const url = new URL(rawUrl);
   if (!["http:", "https:"].includes(url.protocol)) {
     throw new Error(`Nicht unterstütztes URL-Protokoll: ${rawUrl}`);

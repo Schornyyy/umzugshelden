@@ -4,22 +4,11 @@ import { createHash } from "node:crypto";
 import { discoverSeoCompetitorUrls } from "@/lib/googleSeoSearch";
 import { scrapeSeoPageText } from "@/lib/seoPageAnalyzer";
 import { createOverlappingTextChunks } from "@/lib/blogResearchText";
+import { upsertVectorRecords } from "@/lib/vectorIndex";
 import { slugify } from "@/utils/slugify";
 
-const EMBEDDING_DIMENSION = 768;
-const EMBEDDING_BATCH_SIZE = 100;
-const PINECONE_UPSERT_BATCH_SIZE = 100;
 const DEFAULT_INDEX_NAME = "blog-knowledge";
 const DEFAULT_NAMESPACE = "blog-research";
-
-type PineconeIndexDescription = {
-  dimension?: number;
-  host?: string;
-};
-
-type GeminiEmbeddingResponse = {
-  embeddings?: Array<{ values?: number[] }>;
-};
 
 type ResearchChunk = {
   id: string;
@@ -42,141 +31,6 @@ export type BlogResearchIndexResult = {
   }>;
   failures: Array<{ url: string; error: string }>;
 };
-
-function getRequiredApiKey(name: "GEMINI_API_KEY" | "PINECONE_API_KEY") {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} fehlt in der Umgebung`);
-  return value;
-}
-
-async function embedChunks(chunks: ResearchChunk[]): Promise<number[][]> {
-  const apiKey = getRequiredApiKey("GEMINI_API_KEY");
-  const model =
-    process.env.GEMINI_EMBEDDING_MODEL?.trim() || "gemini-embedding-001";
-  const modelId = model.replace(/^models\//, "");
-  const apiModel = `models/${modelId}`;
-  const embeddings: number[][] = [];
-
-  for (let offset = 0; offset < chunks.length; offset += EMBEDDING_BATCH_SIZE) {
-    const batch = chunks.slice(offset, offset + EMBEDDING_BATCH_SIZE);
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelId)}:batchEmbedContents`,
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-goog-api-key": apiKey,
-        },
-        body: JSON.stringify({
-          requests: batch.map((chunk) => ({
-            model: apiModel,
-            content: { parts: [{ text: chunk.text }] },
-            taskType: "RETRIEVAL_DOCUMENT",
-            outputDimensionality: EMBEDDING_DIMENSION,
-          })),
-        }),
-        signal: AbortSignal.timeout(30_000),
-      },
-    );
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error("Gemini embedding request failed", response.status, detail);
-      throw new Error("Die Gemini-Embeddings konnten nicht erstellt werden.");
-    }
-    const payload = (await response.json()) as GeminiEmbeddingResponse;
-    const values = payload.embeddings?.map((embedding) => embedding.values);
-    if (
-      !values ||
-      values.length !== batch.length ||
-      values.some(
-        (embedding) =>
-          !embedding || embedding.length !== EMBEDDING_DIMENSION,
-      )
-    ) {
-      throw new Error("Gemini hat unvollständige Embeddings geliefert.");
-    }
-    embeddings.push(...(values as number[][]));
-  }
-  return embeddings;
-}
-
-async function getPineconeIndexHost(
-  apiKey: string,
-  indexName: string,
-): Promise<string> {
-  const configuredHost = process.env.PINECONE_INDEX_HOST?.trim();
-  if (configuredHost) return configuredHost.replace(/^https?:\/\//i, "");
-
-  const response = await fetch(
-    `https://api.pinecone.io/indexes/${encodeURIComponent(indexName)}`,
-    {
-      headers: {
-        "Api-Key": apiKey,
-        "X-Pinecone-API-Version": "2025-10",
-      },
-      signal: AbortSignal.timeout(10_000),
-    },
-  );
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    console.error("Pinecone index lookup failed", response.status, detail);
-    throw new Error(`Der Pinecone-Index "${indexName}" wurde nicht gefunden.`);
-  }
-  const index = (await response.json()) as PineconeIndexDescription;
-  if (index.dimension !== EMBEDDING_DIMENSION) {
-    throw new Error(
-      `Der Pinecone-Index "${indexName}" benötigt Dimension ${EMBEDDING_DIMENSION}, hat aber ${index.dimension ?? "keine Angabe"}.`,
-    );
-  }
-  if (!index.host) {
-    throw new Error(`Pinecone hat für "${indexName}" keinen Index-Host geliefert.`);
-  }
-  return index.host;
-}
-
-async function upsertChunks(
-  chunks: ResearchChunk[],
-  embeddings: number[][],
-  indexName: string,
-  namespace: string,
-) {
-  const apiKey = getRequiredApiKey("PINECONE_API_KEY");
-  const host = await getPineconeIndexHost(apiKey, indexName);
-  for (
-    let offset = 0;
-    offset < chunks.length;
-    offset += PINECONE_UPSERT_BATCH_SIZE
-  ) {
-    const batch = chunks.slice(offset, offset + PINECONE_UPSERT_BATCH_SIZE);
-    const response = await fetch(`https://${host}/vectors/upsert`, {
-      method: "POST",
-      headers: {
-        "Api-Key": apiKey,
-        "content-type": "application/json",
-        "X-Pinecone-API-Version": "2025-10",
-      },
-      body: JSON.stringify({
-        namespace,
-        vectors: batch.map((chunk, index) => ({
-          id: chunk.id,
-          values: embeddings[offset + index],
-          metadata: {
-            keyword: chunk.keyword,
-            source_url: chunk.sourceUrl,
-            source_rank: chunk.sourceRank,
-            text: chunk.text,
-          },
-        })),
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error("Pinecone upsert failed", response.status, detail);
-      throw new Error("Die Research-Chunks konnten nicht in Pinecone gespeichert werden.");
-    }
-  }
-}
 
 export async function indexBlogKeywordResearch(
   keyword: string,
@@ -234,8 +88,19 @@ export async function indexBlogKeywordResearch(
     throw new Error("Keine der Top-Seiten enthielt indexierbaren Artikeltext.");
   }
 
-  const embeddings = await embedChunks(chunks);
-  await upsertChunks(chunks, embeddings, indexName, namespace);
+  await upsertVectorRecords(
+    chunks.map((chunk) => ({
+      id: chunk.id,
+      text: chunk.text,
+      metadata: {
+        keyword: chunk.keyword,
+        source_url: chunk.sourceUrl,
+        source_rank: chunk.sourceRank,
+      },
+    })),
+    indexName,
+    namespace,
+  );
   return {
     indexName,
     namespace,

@@ -30,7 +30,6 @@ type LeadData = {
   name: string;
   phone: string;
   email: string;
-  privacyAccepted: boolean;
 };
 
 const initialLead: LeadData = {
@@ -41,7 +40,6 @@ const initialLead: LeadData = {
   name: "",
   phone: "",
   email: "",
-  privacyAccepted: false,
 };
 
 function normalizeMoveDate(value: string) {
@@ -117,10 +115,6 @@ export default function UmzugLeadFunnel() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.email.trim())) {
       setError("Bitte geben Sie eine gültige E-Mail-Adresse ein.");
-      return;
-    }
-    if (!lead.privacyAccepted) {
-      setError("Bitte stimmen Sie der Verarbeitung Ihrer Daten zu.");
       return;
     }
     const ownerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
@@ -391,28 +385,6 @@ export default function UmzugLeadFunnel() {
                 className="mt-1.5 h-12 w-full rounded-lg border border-slate-300 px-4 text-base font-normal outline-none focus:border-primary focus:ring-2 focus:ring-orange-100"
                 placeholder="name@beispiel.de"
               />
-            </label>
-            <label className="flex items-start gap-3 text-xs leading-5 text-slate-600">
-              <input
-                type="checkbox"
-                checked={lead.privacyAccepted}
-                onChange={(event) =>
-                  update("privacyAccepted", event.target.checked)
-                }
-                className="mt-1 h-4 w-4 rounded border-slate-300 accent-primary"
-              />
-              <span>
-                Ich stimme der Verarbeitung meiner Angaben zur Bearbeitung der
-                Anfrage zu. Hinweise stehen in der{" "}
-                <a
-                  href="/datenschutz"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-semibold text-navy underline">
-                  Datenschutzerklärung
-                </a>
-                .
-              </span>
             </label>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import ReviewCarousel from "@/components/reviews/ReviewCarousel";
+import { getPublicLandingPage } from "@/lib/landingPageSettingsServer";
 import type { Metadata } from "next";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
@@ -23,6 +24,7 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import AblaufVergleich from "./AblaufVergleich";
 import EntruempelungLeadFunnel from "./EntruempelungLeadFunnel";
+import GeneratedLandingPage from "./GeneratedLandingPage";
 import UmzugLandingPage from "./UmzugLandingPage";
 
 const PHONE_HREF = "tel:+4915168567708";
@@ -55,6 +57,18 @@ export async function generateMetadata({
         "Stressfrei umziehen mit den Umzugshelden: sorgfältige Planung, versicherter Transport und verbindliches Angebot. Jetzt kostenlos anfragen.",
       alternates: {
         canonical: "https://www.umzugshelden.io/landingpage/umzug",
+      },
+      robots: LANDINGPAGE_ROBOTS,
+    };
+  }
+
+  const generatedPage = await getPublicLandingPage(normalizedService);
+  if (generatedPage) {
+    return {
+      title: `${generatedPage.serviceName} unverbindlich anfragen | Umzugshelden`,
+      description: generatedPage.subtitle,
+      alternates: {
+        canonical: `https://www.umzugshelden.io/landingpage/${generatedPage.slug}`,
       },
       robots: LANDINGPAGE_ROBOTS,
     };
@@ -186,6 +200,10 @@ export default async function Landingpage({
   const normalizedService = normalizeServiceSlug(service);
   if (normalizedService === "umzug") {
     return <UmzugLandingPage />;
+  }
+  const generatedPage = await getPublicLandingPage(normalizedService);
+  if (generatedPage) {
+    return <GeneratedLandingPage page={generatedPage} />;
   }
   if (
     normalizedService !== "entrümpelung" &&

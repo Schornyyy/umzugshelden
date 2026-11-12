@@ -21,15 +21,22 @@ import { Button } from "./ui/button";
 import {
   ArrowLeft,
   BriefcaseBusiness,
+  Building2,
   Calculator,
+  ChevronDown,
   ClipboardList,
   FileText,
+  Factory,
   Inbox,
   ListChecks,
+  LayoutTemplate,
   MapPinned,
   MessageSquareQuote,
+  MessagesSquare,
   PackageCheck,
   PackagePlus,
+  Search,
+  Settings,
   Trash2,
   UsersRound,
   Wrench,
@@ -63,13 +70,21 @@ const data = {
           title: "Städte",
           url: "/citys",
           icon: MapPinned,
-        },
-        {
-          title: "Freigaben",
-          url: "/citys/freigaben",
-          icon: ListChecks,
-          exact: true,
-          subItem: true,
+          collapsible: "cities",
+          children: [
+            {
+              title: "Übersicht",
+              url: "/citys",
+              icon: MapPinned,
+              exact: true,
+            },
+            {
+              title: "Freigaben",
+              url: "/citys/freigaben",
+              icon: ListChecks,
+              exact: true,
+            },
+          ],
         },
         {
           title: "Blogs",
@@ -95,56 +110,57 @@ const data = {
           title: "Kalkulator",
           url: "/crm/calculator",
           icon: Calculator,
-          exact: true,
-        },
-        {
-          title: "Umzugspreisberechnung",
-          url: "/crm/calculator/pricing",
-          icon: Calculator,
-          exact: true,
-          subItem: true,
-        },
-        {
-          title: "Entrümpelungskalkulation",
-          url: "/crm/calculator/clearance",
-          icon: Trash2,
-          exact: true,
-          subItem: true,
-        },
-        {
-          title: "Entrümpelungspreise",
-          url: "/crm/calculator/clearance/pricing",
-          icon: Calculator,
-          exact: true,
-          subItem: true,
-        },
-        {
-          title: "Möbelmontage kalkulieren",
-          url: "/crm/calculator/furniture-assembly",
-          icon: Wrench,
-          exact: true,
-          subItem: true,
-        },
-        {
-          title: "Möbelmontagepreise",
-          url: "/crm/calculator/furniture-assembly/pricing",
-          icon: Calculator,
-          exact: true,
-          subItem: true,
-        },
-        {
-          title: "Ein-/Auspacken kalkulieren",
-          url: "/crm/calculator/packing",
-          icon: PackagePlus,
-          exact: true,
-          subItem: true,
-        },
-        {
-          title: "Ein-/Auspackpreise",
-          url: "/crm/calculator/packing/pricing",
-          icon: Calculator,
-          exact: true,
-          subItem: true,
+          collapsible: "calculator",
+          children: [
+            {
+              title: "Übersicht",
+              url: "/crm/calculator",
+              icon: Calculator,
+              exact: true,
+            },
+            {
+              title: "Umzugspreisberechnung",
+              url: "/crm/calculator/pricing",
+              icon: Calculator,
+              exact: true,
+            },
+            {
+              title: "Entrümpelungskalkulation",
+              url: "/crm/calculator/clearance",
+              icon: Trash2,
+              exact: true,
+            },
+            {
+              title: "Entrümpelungspreise",
+              url: "/crm/calculator/clearance/pricing",
+              icon: Calculator,
+              exact: true,
+            },
+            {
+              title: "Möbelmontage kalkulieren",
+              url: "/crm/calculator/furniture-assembly",
+              icon: Wrench,
+              exact: true,
+            },
+            {
+              title: "Möbelmontagepreise",
+              url: "/crm/calculator/furniture-assembly/pricing",
+              icon: Calculator,
+              exact: true,
+            },
+            {
+              title: "Ein-/Auspacken kalkulieren",
+              url: "/crm/calculator/packing",
+              icon: PackagePlus,
+              exact: true,
+            },
+            {
+              title: "Ein-/Auspackpreise",
+              url: "/crm/calculator/packing/pricing",
+              icon: Calculator,
+              exact: true,
+            },
+          ],
         },
         {
           title: "Material-Preisliste",
@@ -162,6 +178,32 @@ const data = {
           url: "/page-builder/bewertungen",
           icon: MessageSquareQuote,
         },
+        {
+          title: "Landingpages",
+          url: "/page-builder/landingpages",
+          icon: LayoutTemplate,
+        },
+      ],
+    },
+    {
+      title: "Wissen",
+      url: "/knowledge",
+      items: [
+        {
+          title: "Chat",
+          url: "/knowledge/chat",
+          icon: MessagesSquare,
+        },
+        {
+          title: "Firmenwissen",
+          url: "/knowledge/company",
+          icon: Factory,
+        },
+        {
+          title: "Einstellungen",
+          url: "/knowledge/settings",
+          icon: Settings,
+        },
       ],
     },
   ],
@@ -174,6 +216,19 @@ export function AdminSideBar({
   const { setOpenMobile } = useSidebar();
   const pathname = usePathname();
   const router = useRouter();
+  const [b2bOpen, setB2bOpen] = React.useState(pathname.includes("/b2b"));
+  const [citiesOpen, setCitiesOpen] = React.useState(
+    pathname.includes("/citys"),
+  );
+  const [calculatorOpen, setCalculatorOpen] = React.useState(
+    pathname.includes("/crm/calculator"),
+  );
+
+  React.useEffect(() => {
+    if (pathname.includes("/b2b")) setB2bOpen(true);
+    if (pathname.includes("/citys")) setCitiesOpen(true);
+    if (pathname.includes("/crm/calculator")) setCalculatorOpen(true);
+  }, [pathname]);
 
   async function handleLogout() {
     await signOut(auth);
@@ -204,6 +259,59 @@ export function AdminSideBar({
         </p>
       </SidebarHeader>
       <SidebarContent className='px-3 py-4 group-data-[collapsible=icon]:px-2'>
+        <SidebarGroup>
+          <SidebarGroupLabel className='px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500'>
+            Vertrieb
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu className='gap-1'>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  type='button'
+                  tooltip='B2B'
+                  isActive={pathname.includes(`/admin/${companyData?.id}/b2b`)}
+                  aria-expanded={b2bOpen}
+                  onClick={() => setB2bOpen((current) => !current)}
+                  className='h-11 rounded-md px-3 text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
+                  <Building2 className='h-5 w-5' />
+                  <span>B2B</span>
+                  <ChevronDown
+                    className={`ml-auto h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${
+                      b2bOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </SidebarMenuButton>
+                {b2bOpen && (
+                  <SidebarMenu className='mt-1 gap-1 group-data-[collapsible=icon]:hidden'>
+                    {[
+                      { title: "CRM", url: "/b2b/crm", icon: UsersRound },
+                      {
+                        title: "Lead-Recherche",
+                        url: "/b2b/recherche",
+                        icon: Search,
+                      },
+                    ].map((item) => {
+                      const href = `/admin/${companyData?.id}${item.url}`;
+                      return (
+                        <SidebarMenuItem key={item.url}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={pathname.startsWith(href)}
+                            className='ml-5 h-10 w-[calc(100%-1.25rem)] rounded-md px-3 text-xs text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
+                            <Link href={href} onClick={() => setOpenMobile(false)}>
+                              <item.icon className='h-4 w-4' />
+                              {item.title}
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                )}
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         {data.navMain.map((item) => (
           <SidebarGroup key={item.title}>
             <SidebarGroupLabel className='px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500'>
@@ -211,44 +319,88 @@ export function AdminSideBar({
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className='gap-1'>
-                {item.items.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      tooltip={item.title}
-                      isActive={
-                        "exact" in item && item.exact
-                          ? pathname === `/admin/${companyData?.id}${item.url}`
-                          : pathname.startsWith(
-                                `/admin/${companyData?.id}${item.url}`,
-                              ) &&
-                            !(
-                              item.url === "/citys" &&
-                              pathname.startsWith(
-                                `/admin/${companyData?.id}/citys/freigaben`,
-                              )
-                            ) &&
-                            !(
-                              item.url === "/crm/calculator" &&
-                              pathname.startsWith(
-                                `/admin/${companyData?.id}/crm/calculator/pricing`,
-                              )
-                            )
-                      }
-                      className={`h-11 rounded-md text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white ${
-                        "subItem" in item && item.subItem
-                          ? "ml-5 w-[calc(100%-1.25rem)] px-3 text-xs"
-                          : "px-3"
-                      }`}>
-                      <Link
-                        href={`/admin/${companyData?.id}${item.url}`}
-                        onClick={() => setOpenMobile(false)}>
-                        <item.icon className='h-5 w-5' />
-                        {item.title}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {item.items.map((item) => {
+                  if ("children" in item && item.children) {
+                    const children = item.children;
+                    const isOpen =
+                      item.collapsible === "cities"
+                        ? citiesOpen
+                        : calculatorOpen;
+                    const setIsOpen =
+                      item.collapsible === "cities"
+                        ? setCitiesOpen
+                        : setCalculatorOpen;
+                    const parentHref = `/admin/${companyData?.id}${item.url}`;
+
+                    return (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton
+                          type='button'
+                          tooltip={item.title}
+                          isActive={pathname.startsWith(parentHref)}
+                          aria-expanded={isOpen}
+                          onClick={() => setIsOpen((current) => !current)}
+                          className='h-11 rounded-md px-3 text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
+                          <item.icon className='h-5 w-5' />
+                          <span>{item.title}</span>
+                          <ChevronDown
+                            className={`ml-auto h-4 w-4 transition-transform group-data-[collapsible=icon]:hidden ${
+                              isOpen ? "rotate-180" : ""
+                            }`}
+                          />
+                        </SidebarMenuButton>
+                        {isOpen && (
+                          <SidebarMenu className='mt-1 gap-1 group-data-[collapsible=icon]:hidden'>
+                            {children.map((child) => {
+                              const href = `/admin/${companyData?.id}${child.url}`;
+                              const isActive = child.exact
+                                ? pathname === href
+                                : pathname.startsWith(href);
+                              return (
+                                <SidebarMenuItem key={child.url}>
+                                  <SidebarMenuButton
+                                    asChild
+                                    isActive={isActive}
+                                    className='ml-5 h-10 w-[calc(100%-1.25rem)] rounded-md px-3 text-xs text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
+                                    <Link
+                                      href={href}
+                                      onClick={() => setOpenMobile(false)}>
+                                      <child.icon className='h-4 w-4' />
+                                      {child.title}
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              );
+                            })}
+                          </SidebarMenu>
+                        )}
+                      </SidebarMenuItem>
+                    );
+                  }
+
+                  const href = `/admin/${companyData?.id}${item.url}`;
+                  const isActive =
+                    "exact" in item && item.exact
+                      ? pathname === href
+                      : pathname.startsWith(href);
+
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        tooltip={item.title}
+                        isActive={isActive}
+                        className='h-11 rounded-md px-3 text-slate-300 hover:bg-slate-800 hover:text-white data-[active=true]:bg-blue-600 data-[active=true]:text-white'>
+                        <Link
+                          href={href}
+                          onClick={() => setOpenMobile(false)}>
+                          <item.icon className='h-5 w-5' />
+                          {item.title}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
