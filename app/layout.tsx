@@ -32,9 +32,9 @@ export default function RootLayout({
         <Script
           async
           src='https://www.googletagmanager.com/gtag/js?id=G-J23E7LL230'
-          strategy='beforeInteractive'
+          strategy='afterInteractive'
         />
-        <Script id='google-analytics' strategy='beforeInteractive'>
+        <Script id='google-analytics' strategy='afterInteractive'>
           {`
             window.dataLayer = window.dataLayer || [];
             window.gtag = window.gtag || function(){window.dataLayer.push(arguments);}
@@ -42,7 +42,7 @@ export default function RootLayout({
             window.gtag('config', 'G-J23E7LL230');
           `}
         </Script>
-        <Script id='ms-clarity' strategy='beforeInteractive'>
+        <Script id='ms-clarity' strategy='lazyOnload'>
           {`
             (function(c,l,a,r,i,t,y){
                 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

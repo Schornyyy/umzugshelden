@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import Cookies from "js-cookie";
 import { Switch } from "@/components/ui/switch";
-import { motion } from "framer-motion";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -71,10 +70,7 @@ const CookieBanner: React.FC = () => {
   if (isLandingpage || !showBanner) return null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 50 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
+    <div
       className='fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-6 rounded-t-lg shadow-lg z-50'>
       <p className='mb-4 text-sm'>
         Diese Website verwendet Cookies, um ihre Funktionalität sicherzustellen
@@ -106,14 +102,12 @@ const CookieBanner: React.FC = () => {
         </div>
       </div>
 
-      <motion.button
-        whileHover={{ scale: 1.009 }}
-        whileTap={{ scale: 0.95 }}
-        className='mt-4 w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2 rounded-lg transition-all'
+      <button
+        className='mt-4 w-full bg-primary hover:bg-primary/90 active:scale-[0.98] text-white font-semibold py-2 rounded-lg transition-all'
         onClick={handleAccept}>
         Akzeptieren
-      </motion.button>
-    </motion.div>
+      </button>
+    </div>
   );
 };
 

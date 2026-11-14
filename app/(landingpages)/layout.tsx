@@ -11,8 +11,8 @@ export default function LandingpageLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-white pb-16 text-slate-950 md:pb-0">
-      <div className="bg-navy px-4 py-2 text-white">
+    <div className="min-h-screen bg-white pb-24 text-slate-950 sm:pb-0">
+      <div className="hidden bg-navy px-4 py-2 text-white sm:block">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-5 gap-y-1 text-center text-xs font-semibold sm:text-sm">
           <span className="inline-flex items-center gap-1.5">
             <CheckCircle2 size={14} className="text-primary" />
@@ -29,8 +29,8 @@ export default function LandingpageLayout({
         </div>
       </div>
 
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+      <header className="bg-navy sm:border-b sm:border-slate-200 sm:bg-white">
+        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-4 sm:h-auto sm:px-6 sm:py-3 lg:px-8">
           <div className="flex items-center gap-3" aria-label="Umzugshelden">
             <Image
               src="/images/Umzugshelden.png"
@@ -38,13 +38,13 @@ export default function LandingpageLayout({
               width={52}
               height={52}
               priority
-              className="h-11 w-11 object-contain"
+              className="hidden h-11 w-11 object-contain sm:block"
             />
             <span>
-              <span className="block font-sans text-lg font-bold leading-none text-navy">
+              <span className="block font-sans text-base font-bold leading-none text-white sm:text-lg sm:text-navy">
                 Umzugshelden
               </span>
-              <span className="mt-1 block text-xs text-slate-500">
+              <span className="mt-1 hidden text-xs text-slate-500 sm:block">
                 Umzug &amp; Entrümpelung aus einer Hand
               </span>
             </span>
@@ -71,7 +71,8 @@ export default function LandingpageLayout({
 
       <a
         href={PHONE_HREF}
-        className="fixed inset-x-0 bottom-0 z-50 flex min-h-14 items-center justify-center gap-2 bg-primary px-4 font-sans text-base font-bold text-white shadow-[0_-8px_30px_rgba(15,23,42,0.18)] md:hidden">
+        className="fixed inset-x-4 z-50 flex min-h-14 items-center justify-center gap-2 rounded-full bg-primary px-5 font-sans text-base font-bold text-white shadow-[0_8px_30px_rgba(15,23,42,0.35)] sm:hidden"
+        style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}>
         <Phone size={20} /> Kostenlos anrufen
       </a>
     </div>
