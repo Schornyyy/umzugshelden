@@ -12,6 +12,7 @@ import {
   Phone,
   ShieldCheck,
   Sparkles,
+  Star,
   Truck,
   Users,
 } from "lucide-react";
@@ -121,38 +122,29 @@ const faqs = [
 export default function UmzugLandingPage() {
   return (
     <main>
-      <section className="relative overflow-hidden bg-navy text-white">
-        <div className="absolute inset-0 opacity-20">
-          <Image
-            src="/images/Umzugsunternehmen_Olpe.png"
-            alt=""
-            fill
-            priority
-            className="object-cover"
-            sizes="100vw"
-          />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-navy via-navy/95 to-navy/70" />
-        <div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 sm:py-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(400px,0.95fr)] lg:items-center lg:px-8 lg:py-20">
-          <div>
+      <section className="overflow-hidden bg-navy text-white">
+        <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(400px,0.95fr)] lg:items-start lg:gap-12 lg:px-8 lg:py-16">
+          <div className="lg:sticky lg:top-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.13em] text-orange-200">
-              <BadgeCheck size={16} /> Persönlich geplant, sicher transportiert
+              <BadgeCheck size={16} /> Direkt von den Gründern begleitet
             </div>
-            <h1 className="mt-6 max-w-3xl text-4xl font-extrabold leading-[1.08] sm:text-5xl lg:text-6xl">
-              Ihr Umzug.
-              <span className="block text-primary">Einfach gut organisiert.</span>
+            <h1 className="mt-5 max-w-3xl text-4xl font-extrabold leading-[1.06] sm:text-5xl lg:text-6xl">
+              Entspannt umziehen.
+              <span className="block text-primary">
+                Wir kümmern uns darum.
+              </span>
             </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-200">
-              Wir planen und transportieren Ihren privaten oder gewerblichen
-              Umzug zuverlässig – mit persönlichem Ansprechpartner und einem
-              Angebot, das zu Ihrem Bedarf passt.
+            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-200 sm:text-lg sm:leading-8">
+              Persönlich geplant, sorgfältig transportiert und passend zu Ihrem
+              Bedarf kalkuliert. Fordern Sie jetzt kostenlos Ihr individuelles
+              Umzugsangebot an.
             </p>
-            <div className="mt-6 grid gap-3 text-sm text-slate-100 sm:grid-cols-2">
+            <div className="mt-5 grid gap-2.5 text-sm text-slate-100 sm:grid-cols-2">
               {[
-                "Kostenlose Anfrage",
+                "Kostenlos & unverbindlich",
+                "Fester Ansprechpartner",
                 "Transparente Leistungen",
-                "Sorgfältiger Transport",
-                "Optionaler Komplettservice",
+                "Auf Wunsch Komplettservice",
               ].map((benefit) => (
                 <span key={benefit} className="flex items-center gap-2">
                   <Check
@@ -166,21 +158,71 @@ export default function UmzugLandingPage() {
             </div>
             <a
               href="#angebot"
-              className="mt-8 inline-flex min-h-14 items-center justify-center gap-2 rounded-lg bg-primary px-6 font-sans text-base font-bold text-white shadow-xl shadow-black/20 transition hover:bg-orange-600">
-              Jetzt Umzugsangebot anfordern <ArrowRight size={19} />
+              className="mt-7 inline-flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 font-sans text-base font-bold text-white shadow-xl shadow-black/20 transition hover:bg-orange-600 sm:w-auto">
+              Kostenloses Angebot starten <ArrowRight size={19} />
             </a>
-            <p className="mt-3 text-xs font-medium text-slate-300">
-              ✓ 100 % unverbindlich &nbsp; ✓ In wenigen Schritten ausgefüllt
+            <p className="mt-3 text-center text-xs font-medium text-slate-300 sm:text-left">
+              In ca. 2 Minuten ausgefüllt · Keine versteckten Kosten
             </p>
+
+            <figure className="relative mt-7 overflow-hidden rounded-2xl border border-white/15 bg-slate-800 shadow-2xl">
+              <Image
+                src="/images/person/gruender_vor_auto.jpeg"
+                alt="Die Gründer der Umzugshelden vor ihrem folierten Fahrzeug"
+                width={900}
+                height={1600}
+                priority
+                className="h-[320px] w-full object-cover object-[center_42%] sm:h-[430px] lg:h-[390px]"
+                sizes="(max-width: 1024px) 100vw, 52vw"
+              />
+              <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy via-navy/90 to-transparent px-5 pb-5 pt-14">
+                <span className="block font-sans text-lg font-bold">
+                  Echte Ansprechpartner statt Callcenter
+                </span>
+                <span className="mt-1 block text-sm text-slate-200">
+                  Wir begleiten Ihre Anfrage persönlich von der Planung bis zum
+                  Umzug.
+                </span>
+              </figcaption>
+            </figure>
           </div>
 
-          <div
-            id="angebot"
-            className="scroll-mt-6 rounded-2xl bg-white p-5 text-slate-950 shadow-2xl sm:p-7">
-            <UmzugLeadFunnel />
+          <div className="scroll-mt-4" id="angebot">
+            <div className="rounded-2xl bg-white p-5 text-slate-950 shadow-2xl sm:p-7">
+              <div className="mb-5 border-b border-slate-100 pb-4">
+                <p className="font-sans text-lg font-bold text-navy">
+                  Jetzt kostenloses Angebot anfordern
+                </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Wenige Angaben genügen für Ihre persönliche Rückmeldung.
+                </p>
+              </div>
+              <UmzugLeadFunnel />
+            </div>
+            <a
+              href="#kundenstimmen"
+              className="mt-4 flex items-center justify-between gap-4 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white transition hover:bg-white/15">
+              <span>
+                <span className="flex gap-0.5 text-amber-400" aria-hidden="true">
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <Star key={index} size={16} fill="currentColor" />
+                  ))}
+                </span>
+                <span className="mt-1 block text-sm font-bold">
+                  Bewertungen unserer Kunden
+                </span>
+              </span>
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-orange-200">
+                Ansehen <ArrowRight size={15} />
+              </span>
+            </a>
           </div>
         </div>
       </section>
+
+      <div id="kundenstimmen" className="scroll-mt-4">
+        <ReviewCarousel />
+      </div>
 
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto grid max-w-7xl gap-4 px-4 py-6 sm:grid-cols-3 sm:px-6 lg:px-8">
@@ -197,8 +239,6 @@ export default function UmzugLandingPage() {
           ))}
         </div>
       </section>
-
-      <ReviewCarousel />
 
       <section className="bg-white py-16 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
