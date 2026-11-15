@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import MediathekDialog from "@/components/utils/MediathekDialog";
-import { database } from "@/config/firebase";
+import { auth, database } from "@/config/firebase";
 import {
   createJobCenterCostDetails,
   createOfferScopeItems,
@@ -44,6 +44,7 @@ import {
   Check,
   ClipboardList,
   Clock3,
+  Download,
   Euro,
   Home,
   ImagePlus,
@@ -55,6 +56,7 @@ import {
   Printer,
   Save,
   Search,
+  Share2,
   Trash2,
   Users,
   Warehouse,
@@ -1924,6 +1926,11 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
   const [furnitureCatalogSearch, setFurnitureCatalogSearch] = useState("");
   const [costEstimatePrintOptions, setCostEstimatePrintOptions] =
     useState<CostEstimatePrintOptions>(defaultCostEstimatePrintOptions);
+  const [isCreatingCostEstimatePdf, setIsCreatingCostEstimatePdf] = useState(false);
+  const [costEstimatePdf, setCostEstimatePdf] = useState<{
+    file: File;
+    title: string;
+  } | null>(null);
 
   const draftDimensions = {
     lengthCm: toOptionalNumber(inventoryItemDraft.lengthCm),
@@ -2095,11 +2102,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
 
   useEffect(() => {
     setCalculation((current) => {
-      if (!current.autoEstimate) {
-        return current.employees === recommendation.employees
-          ? current
-          : { ...current, employees: recommendation.employees };
-      }
+      if (!current.autoEstimate) return current;
       const vehiclesMatch =
         current.planning.vehicleSelections.length ===
           recommendation.vehicleSelections.length &&
@@ -2841,13 +2844,14 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
     option: keyof CostEstimatePrintOptions,
     checked: boolean
   ) {
+    setCostEstimatePdf(null);
     setCostEstimatePrintOptions((current) => ({
       ...current,
       [option]: checked,
     }));
   }
 
-  function printCostEstimate() {
+  function buildCostEstimateDocument() {
     setPrintError(null);
     const pricing = calculatePricing(calculation, rates, pricingSettings);
     if (
@@ -2857,21 +2861,13 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       setPrintError(
         "Für ein Angebot müssen ein Kunde und mindestens eine Leistung erfasst sein."
       );
-      return;
+      return null;
     }
     if (calculation.acceptedPriceGross < pricing.minimumGrossTotal) {
       setPrintError(
         `Der akzeptierte Preis muss mindestens ${formatCurrency(pricing.minimumGrossTotal)} betragen.`
       );
-      return;
-    }
-
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) {
-      setPrintError(
-        "Das Druckfenster wurde blockiert. Bitte Pop-ups für diese Seite erlauben."
-      );
-      return;
+      return null;
     }
 
     const acceptedNetTotal =
@@ -2946,8 +2942,8 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
       ? `<section class="photos-section"><h2>Objektfotos</h2><div class="photos">${calculation.planning.photoUrls.map((url, index) => `<img src="${escapePrintHtml(url)}" alt="Objektfoto ${index + 1}" />`).join("")}</div></section>`
       : "";
 
-    printWindow.document.write(`<!doctype html>
-      <html lang="de"><head><title>Kostenvoranschlag - ${escapePrintHtml(calculation.title || customer)}</title>
+    const html = `<!doctype html>
+      <html lang="de"><head><meta charset="utf-8"><title>Kostenvoranschlag - ${escapePrintHtml(calculation.title || customer)}</title>
       <style>
         @page { margin: 15mm; }
         * { box-sizing: border-box; }
@@ -3033,15 +3029,109 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
         <div class="terms"><p><strong>Zahlungsbedingung:</strong> ${escapePrintHtml(calculation.paymentTerms || DEFAULT_OFFER_PAYMENT_TERMS)}</p><p><strong>Vertragsschluss:</strong> Dieses Angebot ist freibleibend. Ein Vertrag kommt durch unsere Auftragsbestätigung oder den Beginn der Leistungserbringung zustande.</p><p><strong>Grundlage:</strong> Es gelten unsere AGB unter umzugshelden.io/agb.</p></div>
         <div class="notice"><strong>Unverbindlicher Kostenanschlag:</strong> Die Kalkulation basiert auf den aktuell erfassten Angaben. Wird eine wesentliche Überschreitung erwartet, informieren wir den Auftraggeber unverzüglich (§ 649 BGB). Änderungen oder Zusatzleistungen werden nur nach Abstimmung ausgeführt und gesondert berechnet.</div>
         <footer class="footer"><span>${escapePrintHtml(OFFER_ISSUER.companyName)} · ${escapePrintHtml(OFFER_ISSUER.proprietor)} · ${escapePrintHtml(OFFER_ISSUER.legalForm)}<br>${escapePrintHtml(OFFER_ISSUER.street)} · ${escapePrintHtml(`${OFFER_ISSUER.postalCode} ${OFFER_ISSUER.city}`)} · ${escapePrintHtml(OFFER_ISSUER.country)}</span><span>${escapePrintHtml(OFFER_ISSUER.phone)}<br>${escapePrintHtml(OFFER_ISSUER.email)} · umzugshelden.io</span></footer>
-      </main></body></html>`);
+      </main></body></html>`;
+
+    return {
+      html,
+      filename: `Kostenvoranschlag-${calculation.offerNumber || customer}.pdf`,
+      title: `Kostenvoranschlag ${calculation.offerNumber || customer}`.trim(),
+      hasPhotos:
+        costEstimatePrintOptions.photos &&
+        calculation.planning.photoUrls.length > 0,
+    };
+  }
+
+  function printCostEstimate() {
+    const costEstimate = buildCostEstimateDocument();
+    if (!costEstimate) return;
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setPrintError(
+        "Das Druckfenster wurde blockiert. Bitte Pop-ups für diese Seite erlauben."
+      );
+      return;
+    }
+    printWindow.document.write(costEstimate.html);
     printWindow.document.close();
     printWindow.focus();
     window.setTimeout(
       () => printWindow.print(),
-      costEstimatePrintOptions.photos && calculation.planning.photoUrls.length > 0
-        ? 750
-        : 250
+      costEstimate.hasPhotos ? 750 : 250
     );
+  }
+
+  async function createCostEstimatePdf() {
+    const costEstimate = buildCostEstimateDocument();
+    if (!costEstimate) return;
+    setIsCreatingCostEstimatePdf(true);
+    setCostEstimatePdf(null);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken || !companyData?.id) {
+        throw new Error("Keine aktive Anmeldung gefunden. Bitte neu einloggen.");
+      }
+      const response = await fetch("/api/admin/offer-pdf", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          ownerId: companyData.id,
+          html: costEstimate.html,
+          filename: costEstimate.filename,
+        }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Das PDF konnte nicht erstellt werden.");
+      }
+      const blob = await response.blob();
+      setCostEstimatePdf({
+        file: new File([blob], costEstimate.filename.replace(/[\\/:*?"<>|]+/g, "-"), {
+          type: "application/pdf",
+        }),
+        title: costEstimate.title,
+      });
+    } catch (error) {
+      setPrintError(
+        error instanceof Error ? error.message : "Das PDF konnte nicht erstellt werden."
+      );
+    } finally {
+      setIsCreatingCostEstimatePdf(false);
+    }
+  }
+
+  function canShareCostEstimatePdf() {
+    if (!costEstimatePdf || typeof navigator === "undefined" || !navigator.canShare) {
+      return false;
+    }
+    return navigator.canShare({ files: [costEstimatePdf.file] });
+  }
+
+  async function shareCostEstimatePdf() {
+    if (!costEstimatePdf) return;
+    try {
+      await navigator.share({
+        files: [costEstimatePdf.file],
+        title: costEstimatePdf.title,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      downloadCostEstimatePdf();
+    }
+  }
+
+  function downloadCostEstimatePdf() {
+    if (!costEstimatePdf) return;
+    const url = URL.createObjectURL(costEstimatePdf.file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = costEstimatePdf.file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function printCustomerDocument() {
@@ -3195,10 +3285,10 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
           </Button>
         </div>
       )}
-      <Dialog open={isCostEstimateDialogOpen} onOpenChange={setIsCostEstimateDialogOpen}>
+      <Dialog open={isCostEstimateDialogOpen} onOpenChange={(open) => { setIsCostEstimateDialogOpen(open); setCostEstimatePdf(null); }}>
         <DialogContent className='max-h-[90vh] overflow-y-auto sm:max-w-2xl'>
           <DialogHeader>
-            <DialogTitle>Kostenvoranschlag drucken</DialogTitle>
+            <DialogTitle>Kostenvoranschlag drucken oder teilen</DialogTitle>
             <DialogDescription>
               Im Kundendokument erscheint nur der akzeptierte Angebotspreis. Interner Mindest- und Verhandlungspreis bleiben im Adminbereich.
               {jobCenterOrder && " Für JobCenter-Aufträge sind Adressdaten, Rechenwege und Inventar immer enthalten."}
@@ -3213,12 +3303,13 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
                   min={minimumGrossTotal}
                   step='0.01'
                   value={calculation.acceptedPriceGross || ""}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    setCostEstimatePdf(null);
                     updateCalculation(
                       "acceptedPriceGross",
                       toNumber(event.target.value)
-                    )
-                  }
+                    );
+                  }}
                   placeholder={formatNumber(grossTotal)}
                   className='h-11 w-full rounded-md border border-blue-200 bg-white px-3 pr-10 text-base font-semibold outline-none focus:border-blue-500'
                 />
@@ -3229,7 +3320,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
               <span className={calculation.acceptedPriceGross > 0 && calculation.acceptedPriceGross < minimumGrossTotal ? "font-medium text-red-700" : "text-slate-600"}>
                 Mindestpreis: {formatCurrency(minimumGrossTotal)}
               </span>
-              <Button type='button' variant='ghost' size='sm' onClick={() => updateCalculation("acceptedPriceGross", Math.round(grossTotal * 100) / 100)}>
+              <Button type='button' variant='ghost' size='sm' onClick={() => { setCostEstimatePdf(null); updateCalculation("acceptedPriceGross", Math.round(grossTotal * 100) / 100); }}>
                 Verhandlungspreis übernehmen
               </Button>
             </div>
@@ -3256,8 +3347,19 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
               <span><span className='block text-sm font-medium text-slate-950'>Objektfotos</span><span className='mt-1 block text-xs leading-5 text-slate-500'>Ausgewählte Bilder als Fotoseite</span></span>
             </label>
           </div>
-          <DialogFooter>
+          {printError && <p className='rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900'>{printError}</p>}
+          {costEstimatePdf && (
+            <div className='flex flex-col gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between'>
+              <p className='text-sm text-emerald-900'>PDF ist bereit: <span className='font-medium'>{costEstimatePdf.file.name}</span></p>
+              <div className='flex flex-col gap-2 sm:flex-row'>
+                {canShareCostEstimatePdf() && <Button type='button' onClick={() => void shareCostEstimatePdf()}><Share2 /> Teilen / Speichern</Button>}
+                <Button type='button' variant='outline' onClick={downloadCostEstimatePdf}><Download /> Herunterladen</Button>
+              </div>
+            </div>
+          )}
+          <DialogFooter className='gap-2'>
             <Button type='button' variant='outline' onClick={() => setIsCostEstimateDialogOpen(false)}>Abbrechen</Button>
+            <Button type='button' variant='outline' disabled={calculation.acceptedPriceGross < minimumGrossTotal || isCreatingCostEstimatePdf} onClick={() => void createCostEstimatePdf()}>{isCreatingCostEstimatePdf ? <LoaderCircle className='animate-spin' /> : <Download />} PDF erstellen</Button>
             <Button type='button' disabled={calculation.acceptedPriceGross < minimumGrossTotal} onClick={() => { setIsCostEstimateDialogOpen(false); printCostEstimate(); }}><Printer /> Jetzt drucken</Button>
           </DialogFooter>
         </DialogContent>
@@ -3671,7 +3773,7 @@ export default function OfferPlanner({ fixedService }: OfferPlannerProps = {}) {
               <NumberField label='Verhandlungsaufschlag' value={rates.surchargePercent} onChange={(value) => updateRate("surchargePercent", value)} suffix='%' step='0.1' />
               <NumberField label='Mehrwertsteuer' value={rates.vatPercent} onChange={(value) => updateRate("vatPercent", value)} suffix='%' step='0.1' />
               <NumberField label='Kombi-Rabatt' value={calculation.discountPercent} onChange={(value) => updateCalculation("discountPercent", Math.min(100, value))} suffix='%' step='0.5' />
-              <NumberField label='Mitarbeiter nach m³-Staffel' value={calculation.employees} onChange={() => undefined} suffix='Personen' disabled />
+              <NumberField label={`Mitarbeiter (Staffel: ${recommendation.employees})`} value={calculation.employees} onChange={(value) => updateManualCalculation("employees", Math.max(1, Math.round(value)))} suffix='Personen' />
               <NumberField label='Stunden je Mitarbeiter' value={calculation.hoursPerEmployee} onChange={(value) => updateManualCalculation("hoursPerEmployee", value)} suffix='Std.' step='0.25' />
               {needsVehicle && <NumberField label='Fahrzeugtage' value={calculation.vehicleDays} onChange={(value) => updateManualCalculation("vehicleDays", value)} suffix='Tage' step='0.5' />}
               {usesMoveInventory && <NumberField label='Logistik (Lift / Zone)' value={calculation.logisticsCost} onChange={(value) => updateManualCalculation("logisticsCost", value)} suffix='EUR' step='0.01' />}
