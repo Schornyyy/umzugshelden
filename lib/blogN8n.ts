@@ -21,9 +21,16 @@ function extractText(value: unknown, depth = 0): string {
 export async function fetchN8nRagText(
   keyword: string,
   timeoutMs: number,
+  options: {
+    /** Abweichender Webhook, fällt auf N8N_WEBHOOK_URL zurück. */
+    webhookUrl?: string;
+    /** Zusätzliche Felder neben dem Keyword. */
+    payload?: Record<string, string>;
+  } = {},
 ): Promise<string> {
   if (!keyword.trim()) throw new Error("Keyword ist erforderlich.");
-  const webhookUrl = process.env.N8N_WEBHOOK_URL?.trim();
+  const webhookUrl =
+    options.webhookUrl?.trim() || process.env.N8N_WEBHOOK_URL?.trim();
   if (!webhookUrl) throw new Error("N8N Webhook URL ist nicht konfiguriert.");
   const url = new URL(webhookUrl);
   if (!["http:", "https:"].includes(url.protocol)) {
@@ -36,7 +43,7 @@ export async function fetchN8nRagText(
     response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyword: keyword.trim() }),
+      body: JSON.stringify({ ...options.payload, keyword: keyword.trim() }),
       signal: AbortSignal.timeout(Math.max(1, Math.min(timeoutMs, 50_000))),
       cache: "no-store",
     });

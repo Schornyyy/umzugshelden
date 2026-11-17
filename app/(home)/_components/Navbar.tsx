@@ -102,6 +102,11 @@ const Navbar = () => {
           </div>
 
           <Link
+            href='/projekte'
+            className='font-body text-gray-600 hover:text-primary transition-colors'>
+            Projekte
+          </Link>
+          <Link
             href='/kontakt'
             className='font-body text-gray-600 hover:text-primary transition-colors'>
             Kontakt
@@ -180,6 +185,12 @@ const Navbar = () => {
               </Link>
             ))}
           </div>
+          <Link
+            href='/projekte'
+            onClick={handleLinkClick}
+            className='font-body text-gray-700 text-lg hover:text-primary'>
+            Projekte
+          </Link>
           <Link
             href='/kontakt'
             onClick={handleLinkClick}

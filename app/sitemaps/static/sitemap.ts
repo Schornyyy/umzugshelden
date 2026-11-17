@@ -1,4 +1,8 @@
+import { projectPath } from "@/lib/projects";
+import { listPublishedProjects } from "@/lib/projectPublicData";
 import type { MetadataRoute } from "next";
+
+export const revalidate = 3600;
 
 const BASE_URL = "https://www.umzugshelden.io";
 
@@ -16,17 +20,27 @@ const staticPages: { path: string; priority: number; changeFrequency: Freq }[] =
     { path: "/faq", priority: 0.8, changeFrequency: "monthly" },
     { path: "/jobs", priority: 0.7, changeFrequency: "weekly" },
     { path: "/blog", priority: 0.7, changeFrequency: "daily" },
+    { path: "/projekte", priority: 0.7, changeFrequency: "weekly" },
     { path: "/stadt", priority: 0.7, changeFrequency: "monthly" },
     { path: "/agb", priority: 0.4, changeFrequency: "yearly" },
     { path: "/datenschutz", priority: 0.4, changeFrequency: "yearly" },
     { path: "/impressum", priority: 0.3, changeFrequency: "yearly" },
   ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  return staticPages.map(({ path, priority, changeFrequency }) => ({
-    url: `${BASE_URL}${path}`,
-    lastModified: new Date(),
-    priority,
-    changeFrequency,
-  }));
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const projects = await listPublishedProjects();
+  return [
+    ...staticPages.map(({ path, priority, changeFrequency }) => ({
+      url: `${BASE_URL}${path}`,
+      lastModified: new Date(),
+      priority,
+      changeFrequency,
+    })),
+    ...projects.map((project) => ({
+      url: `${BASE_URL}${projectPath(project.slug)}`,
+      lastModified: new Date(project.updatedAt || project.createdAt),
+      priority: 0.6,
+      changeFrequency: "monthly" as Freq,
+    })),
+  ];
 }

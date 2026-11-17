@@ -1,6 +1,7 @@
 "use client";
 
 import { SimpleRichTextEditor } from "@/components/RichTextEditor";
+import { B2B_CATEGORY_LABELS } from "@/lib/b2bCategories";
 import { auth, database } from "@/config/firebase";
 import {
   defaultEmailDraft,
@@ -46,12 +47,7 @@ const statusOptions: Array<{ value: B2bLeadStatus; label: string }> = [
   { value: "lost", label: "Verloren" },
 ];
 
-const categoryLabels: Record<B2bLead["category"], string> = {
-  real_estate_agent: "Immobilienmakler",
-  property_management: "Immobilienverwaltung",
-  housing_company: "Wohnungsbaugesellschaft",
-  senior_care: "Senioren-/Pflegeheim",
-};
+const categoryLabels = B2B_CATEGORY_LABELS;
 
 function dateTimeInputValue(timestamp: number | null) {
   if (!timestamp) return "";

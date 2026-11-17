@@ -89,6 +89,9 @@ const Footer = () => {
               className='hover:text-primary transition-colors'>
               Dienstleistungen
             </Link>
+            <Link href='/projekte' className='hover:text-primary transition-colors'>
+              Projekte
+            </Link>
             <Link href='/faq' className='hover:text-primary transition-colors'>
               FAQ
             </Link>

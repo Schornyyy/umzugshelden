@@ -9,6 +9,10 @@
       "schedule": "*/59 * * * *"
     },
     {
+      "path": "/api/cron/generate-landingpages",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/crm-appointment-reminders",
       "schedule": "* * * * *"
     }

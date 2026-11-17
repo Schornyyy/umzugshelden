@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
+import KeywordLandingPageSection from "./_components/KeywordLandingPageSection";
 
 const responseSchema = z.object({ pages: z.array(landingPageSchema) });
 const legacyPages = [
@@ -183,6 +184,8 @@ export default function LandingpagesPage() {
           {success}
         </p>
       )}
+
+      <KeywordLandingPageSection ownerId={companyData?.id} />
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-start gap-3">

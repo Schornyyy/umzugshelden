@@ -1,4 +1,5 @@
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
+import { B2B_CATEGORY_LABELS as categoryLabels } from "@/lib/b2bCategories";
 import { parseGeneratedEmailMarkdown } from "@/lib/b2bEmailDraft";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { sendKnowledgeChatMessage } from "@/lib/knowledgeChatN8n";
@@ -22,12 +23,6 @@ const categoryApproaches: Record<B2bLeadCategory, string> = {
     "Biete planbare Unterstützung bei Mieterwechseln, Umzügen, Räumungen und Wohnungsübergaben für den Bestand an.",
   senior_care:
     "Biete einfühlsam organisierte Seniorenumzüge, Haushaltsauflösungen und Unterstützung für Bewohner und Angehörige an.",
-};
-const categoryLabels: Record<B2bLeadCategory, string> = {
-  real_estate_agent: "Immobilienmakler",
-  property_management: "Immobilienverwaltung",
-  housing_company: "Wohnungsbaugesellschaft",
-  senior_care: "Senioren-/Pflegeheim",
 };
 
 export async function POST(request: Request) {

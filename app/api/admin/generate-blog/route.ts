@@ -23,13 +23,26 @@ import {
 import { rawCities } from "@/statics/Lists";
 import {
   CITY_SERVICE_KEYS,
-  type CityServiceBlock,
   type CityServiceKey,
 } from "@/types/city/CityServicePage";
 import type { AdminBlogMainCategory } from "@/types/blog/AdminBlogCategory";
 import { slugify } from "@/utils/slugify";
 import { indexBlogKeywordResearch } from "@/lib/blogResearchIndex";
 import { fetchBlogN8nText } from "@/lib/blogN8n";
+import {
+  applyAuditedLinks,
+  auditInternalLinks,
+  blueprintSectionSchema,
+  countWords,
+  createFallbackSection,
+  createGeneratedContactBlock,
+  createGeneratedSectionBlocks,
+  ensureInternalLinks,
+  generatedSectionSchema,
+  parseGeneratedSection,
+  stripGeneratedLinks,
+  zodCorrection,
+} from "@/lib/seoGeneratedContent";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -41,7 +54,6 @@ const ROTATION_COLLECTION = "blogGenerationRotation";
 const KEYWORD_REGISTRY_COLLECTION = "blogKeywordRegistry";
 const BLOG_COLLECTION = "blogPages_umzugshelden";
 const SUBCATEGORY_COLLECTION = "blogSubcategories_umzugshelden";
-const IMAGE_PLACEHOLDER = "/images/image.png";
 const BLOG_OPTIMIZATION_INTERVAL_MS = 30 * 24 * 60 * 60 * 1_000;
 const KEYWORD_RESERVATION_MS = 24 * 60 * 60 * 1_000;
 
@@ -70,54 +82,12 @@ const contentSchema = z.object({
   description: z.string().trim().min(30).max(500),
   metaDescription: z.string().trim().min(120).max(165),
   keywords: z.array(z.string().trim().min(2).max(100)).min(3).max(MAX_BLOG_KEYWORDS),
-  sections: z.array(
-    z.object({
-      type: z.enum([
-        "text",
-        "imageText",
-        "cards",
-        "checklist",
-        "process",
-        "faq",
-        "cta",
-      ]),
-      heading: z.string().trim().min(3).max(300),
-      body: z.string().trim().max(15_000).default(""),
-      imageAlt: z.string().trim().max(300).optional(),
-      items: z
-        .array(
-          z.object({
-            title: z.string().trim().min(2).max(300),
-            text: z.string().trim().min(5).max(3_000),
-          }),
-        )
-        .max(12)
-        .default([]),
-      faqItems: z
-        .array(
-          z.object({
-            question: z.string().trim().min(5).max(300),
-            answer: z.string().trim().min(10).max(3_000),
-          }),
-        )
-        .max(12)
-        .default([]),
-    }),
-  ).min(4).max(16),
+  sections: z.array(generatedSectionSchema).min(4).max(16),
 });
 
 type GeneratedContent = z.infer<typeof contentSchema>;
 const additionalSectionsSchema = z.object({
   sections: contentSchema.shape.sections.min(3).max(8),
-});
-const linkAuditSchema = z.object({
-  links: z.array(
-    z.object({
-      sectionIndex: z.number().int().nonnegative(),
-      anchorText: z.string().trim().min(2).max(150),
-      targetUrl: z.string().trim().min(2).max(2_048),
-    }),
-  ).min(1).max(12),
 });
 
 const blueprintSchema = z.object({
@@ -125,25 +95,7 @@ const blueprintSchema = z.object({
   description: z.string().trim().min(30).max(500),
   metaDescription: z.string().trim().min(120).max(165),
   keywords: z.array(z.string().trim().min(2).max(100)).min(3).max(MAX_BLOG_KEYWORDS),
-  sections: z.array(
-    z.object({
-      type: z.enum([
-        "text",
-        "imageText",
-        "cards",
-        "checklist",
-        "process",
-        "faq",
-        "cta",
-      ]),
-      heading: z.string().trim().min(3).max(300),
-      purpose: z.string().trim().min(10).max(1_000),
-      contentBrief: z.string().trim().min(20).max(2_000),
-      keyPoints: z.array(z.string().trim().min(3).max(500)).min(2).max(8),
-      targetWords: z.number().int().min(80).max(500),
-      keywords: z.array(z.string().trim().min(2).max(100)).max(15),
-    }),
-  ).min(6).max(16),
+  sections: z.array(blueprintSectionSchema).min(6).max(16),
 });
 
 function collectBlogKeywords(input: {
@@ -168,23 +120,9 @@ function collectBlogKeywords(input: {
     .slice(0, MAX_BLOG_KEYWORDS);
 }
 
-const generatedBlogSectionSchema = contentSchema.shape.sections.element;
-
-function parseN8nSection(
-  value: unknown,
-  expectedType: z.infer<typeof generatedBlogSectionSchema>["type"],
-) {
-  const section = generatedBlogSectionSchema.parse(value);
-  if (
-    section.type !== expectedType ||
-    (["cards", "checklist", "process"].includes(section.type) && section.items.length < 2) ||
-    (section.type === "faq" && section.faqItems.length < 3) ||
-    (["text", "imageText"].includes(section.type) && !section.body)
-  ) {
-    throw new Error("Die n8n-Sektion entspricht nicht dem geplanten Pagebuilder-Format.");
-  }
-  return section;
-}
+const generatedBlogSectionSchema = generatedSectionSchema;
+const parseN8nSection = parseGeneratedSection;
+const createFallbackBlogSection = createFallbackSection;
 
 const qualitySchema = z.object({
   score: z.number().int().min(0).max(100),
@@ -206,193 +144,6 @@ function categoryForService(serviceKey: CityServiceKey): AdminBlogMainCategory {
   return "umzug";
 }
 
-function countWords(value: unknown): number {
-  if (typeof value === "string") {
-    return value.trim() ? value.trim().split(/\s+/u).length : 0;
-  }
-
-  if (Array.isArray(value)) {
-    return value.reduce((total, entry) => total + countWords(entry), 0);
-  }
-  if (value && typeof value === "object") {
-    return Object.values(value).reduce(
-      (total, entry) => total + countWords(entry),
-      0,
-    );
-  }
-  return 0;
-}
-
-function stripGeneratedLinks(content: GeneratedContent): GeneratedContent {
-  const strip = (value: string) =>
-    value.replace(
-      /\[([^\]\n]+)\]\((?:https?:\/\/|\/)[^)\s]+\)/gu,
-      "$1",
-    );
-  return {
-    ...content,
-    sections: content.sections.map((section) => ({
-      ...section,
-      body: strip(section.body),
-      items: section.items.map((item) => ({
-        ...item,
-        text: strip(item.text),
-      })),
-      faqItems: section.faqItems.map((item) => ({
-        ...item,
-        answer: strip(item.answer),
-      })),
-    })),
-  };
-}
-
-function applyAuditedLinks(
-  content: GeneratedContent,
-  links: z.infer<typeof linkAuditSchema>["links"],
-  allowedUrls: Set<string>,
-): GeneratedContent {
-  const sections = content.sections.map((section) => ({ ...section }));
-  for (const link of links) {
-    if (!allowedUrls.has(link.targetUrl)) continue;
-    const section = sections[link.sectionIndex];
-    if (!section || !section.body.includes(link.anchorText)) continue;
-    section.body = section.body.replace(
-      link.anchorText,
-      `**[${link.anchorText}](${link.targetUrl})**`,
-    );
-  }
-  return { ...content, sections };
-}
-
-function ensureInternalLinks(
-  content: GeneratedContent,
-  candidates: InternalLinkCandidate[],
-  minimumLinks = 3,
-): GeneratedContent {
-  const sections = content.sections.map((section) => ({ ...section }));
-  const serialized = JSON.stringify(sections);
-  const missing = candidates
-    .filter((candidate) => !serialized.includes(`](${candidate.url})`));
-  const existingCount = countInternalLinks(content, candidates);
-
-  missing.slice(0, Math.max(0, minimumLinks - existingCount)).forEach((link, index) => {
-    const sectionIndex = Math.min(index, Math.max(0, sections.length - 1));
-    const section = sections[sectionIndex];
-    if (!section) return;
-    section.body = `${section.body}\n\nPassende Informationen finden Sie auf unserer Seite **[${link.title}](${link.url})**.`;
-  });
-
-  return { ...content, sections };
-}
-
-function countInternalLinks(
-  content: GeneratedContent,
-  candidates: InternalLinkCandidate[],
-): number {
-  const serialized = JSON.stringify(content.sections);
-  return candidates.filter((candidate) =>
-    serialized.includes(`](${candidate.url})`),
-  ).length;
-}
-
-function createBlocks(content: GeneratedContent): CityServiceBlock[] {
-  const blocks = content.sections
-    .filter((section) => section.type !== "cta")
-    .map((section, index) => {
-    const base = {
-      id: `blog-ai-${index + 1}-${section.type}`,
-      enabled: true,
-      tone: index % 2 === 0 ? ("white" as const) : ("muted" as const),
-      headingLevel: 2 as const,
-    };
-    if (section.type === "imageText") {
-      return {
-        ...base,
-        type: "imageText" as const,
-        heading: section.heading,
-        paragraphs: [section.body],
-        image: IMAGE_PLACEHOLDER,
-        imageAlt: section.imageAlt || section.heading,
-        imagePosition: index % 2 === 0 ? ("left" as const) : ("right" as const),
-      };
-    }
-    if (section.type === "cards" && section.items.length >= 2) {
-      return {
-        ...base,
-        type: "cardGrid" as const,
-        heading: section.heading,
-        intro: section.body,
-        cards: section.items,
-        columns: section.items.length >= 3 ? (3 as const) : (2 as const),
-        numbered: false,
-      };
-    }
-    if (section.type === "checklist" && section.items.length >= 2) {
-      return {
-        ...base,
-        type: "checkList" as const,
-        heading: section.heading,
-        intro: section.body,
-        items: section.items.map((item) => `${item.title}: ${item.text}`),
-        columns: 2 as const,
-      };
-    }
-    if (section.type === "process" && section.items.length >= 2) {
-      return {
-        ...base,
-        type: "process" as const,
-        heading: section.heading,
-        intro: section.body,
-        steps: section.items.map((item) => `${item.title}: ${item.text}`),
-      };
-    }
-    if (section.type === "faq" && section.faqItems.length >= 3) {
-      return {
-        ...base,
-        type: "faq" as const,
-        heading: section.heading,
-        items: section.faqItems,
-        includeLocalQuestion: false,
-      };
-    }
-    return {
-      ...base,
-      type: "intro" as const,
-      heading: section.heading,
-      text: section.body,
-    };
-    });
-  return [
-    ...blocks,
-    {
-      id: "blog-contact",
-      type: "contact",
-      enabled: true,
-      tone: "accent",
-      headingLevel: 2,
-      heading: "Jetzt kostenlos und unverbindlich anfragen",
-      text: "Beschreiben Sie kurz Ihr Vorhaben. Wir melden uns persönlich bei Ihnen und besprechen die nächsten Schritte.",
-      showPhone: true,
-      showEmail: true,
-      showForm: true,
-    },
-  ];
-}
-
-function createFallbackBlogSection(
-  section: z.infer<typeof blueprintSchema>["sections"][number],
-): z.infer<typeof generatedBlogSectionSchema> {
-  return {
-    type: section.type,
-    heading: section.heading,
-    body: [section.contentBrief, ...section.keyPoints]
-      .filter(Boolean)
-      .join("\n\n"),
-    imageAlt: section.type === "imageText" ? section.heading : undefined,
-    items: [],
-    faqItems: [],
-  };
-}
 
 function createFallbackBlogBlueprint(input: {
   keyword: string;
@@ -526,12 +277,6 @@ async function chooseSubcategory(mainCategory: AdminBlogMainCategory) {
   return String(document.get("slug"));
 }
 
-function zodCorrection(error: z.ZodError) {
-  return error.issues
-    .slice(0, 8)
-    .map((issue) => `${issue.path.join(".") || "Antwort"}: ${issue.message}`)
-    .join("; ");
-}
 
 async function createQueuedWorkflows(input: {
   ownerId: string;
@@ -1490,49 +1235,25 @@ Antworte ausschließlich als JSON:
       ).slice(0, 30);
       const allowedUrls = new Set(internalLinks.map((link) => link.url));
       let linkedContent = generated;
-      if (internalLinks.length) {
-        const auditResponse = await generateGeminiJson({
-            temperature: 0.1,
-            timeoutMs: remainingApiTime(deadlineAt),
-            maxOutputTokens: 1_024,
-            thinkingBudget: 0,
-            systemInstruction: `Du bist Redakteur für interne SEO-Verlinkung.
-Prüfe den fertigen Blogartikel und wähle 3 bis 8 wirklich hilfreiche interne Links aus allowedInternalLinks.
-Jeder anchorText muss exakt und unverändert als zusammenhängender Text in body des angegebenen sectionIndex vorkommen.
-Verwende jede Ziel-URL höchstens einmal. Nutze ausschließlich URLs aus allowedInternalLinks und keine externen URLs.
-Bevorzuge thematisch passende Artikel und natürliche Ankertexte; vermeide generische Wörter wie "hier" oder "mehr".
-Berücksichtige neben passenden Blogartikeln und Ratgebern auch die Stadtseite und die passende Stadt-Dienstleistungsseite.
-Antworte ausschließlich als JSON:
-{"links":[{"sectionIndex":number,"anchorText":string,"targetUrl":string}]}`,
-            prompt: JSON.stringify({
-              article: {
-                title: generated.title,
-                keyword: workflow.keyword,
-                sections: generated.sections.map((section, sectionIndex) => ({
-                  sectionIndex,
-                  heading: section.heading,
-                  body: section.body,
-                })),
-              },
-              allowedInternalLinks: internalLinks,
-              correction: workflow.validationFeedback,
-            }),
-          });
-        const auditResult = linkAuditSchema.safeParse(auditResponse);
-        if (!auditResult.success) {
-          await workflowReference.update({
-            warnings: FieldValue.arrayUnion(
-              "Die interne Link-KI lieferte kein gültiges Format; geprüfte Links wurden regelbasiert ergänzt.",
-            ),
-          });
-        } else {
-          const audit = auditResult.data;
-          linkedContent = applyAuditedLinks(
-            generated,
-            audit.links,
-            allowedUrls,
-          );
-        }
+      const auditedLinks = await auditInternalLinks({
+        documentLabel: "den fertigen Blogartikel",
+        title: generated.title,
+        keyword: String(workflow.keyword),
+        sections: generated.sections,
+        candidates: internalLinks,
+        timeoutMs: remainingApiTime(deadlineAt),
+        extraRules:
+          "Berücksichtige neben passenden Blogartikeln und Ratgebern auch die Stadtseite und die passende Stadt-Dienstleistungsseite.",
+        correction: workflow.validationFeedback,
+      });
+      if (auditedLinks) {
+        linkedContent = applyAuditedLinks(generated, auditedLinks, allowedUrls);
+      } else if (internalLinks.length) {
+        await workflowReference.update({
+          warnings: FieldValue.arrayUnion(
+            "Die interne Link-KI lieferte kein gültiges Format; geprüfte Links wurden regelbasiert ergänzt.",
+          ),
+        });
       }
       linkedContent = filterGenerationContent(ensureInternalLinks(linkedContent, internalLinks), availablePages);
       await workflowReference.update({
@@ -1696,7 +1417,10 @@ Antworte ausschließlich als JSON:
         serviceKey,
         mainCategory,
         subcategorySlug: String(workflow.subcategorySlug),
-        blocks: ensureGeneratedPageReviews(createBlocks(linkedContent)),
+        blocks: ensureGeneratedPageReviews([
+          ...createGeneratedSectionBlocks(linkedContent.sections, "blog-ai"),
+          createGeneratedContactBlock("blog-contact"),
+        ]),
       };
       const now = Date.now();
       await database.runTransaction(async (transaction) => {

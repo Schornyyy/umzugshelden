@@ -2,6 +2,7 @@ import "server-only";
 
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { B2B_CATEGORY_QUERIES } from "@/lib/b2bCategories";
 import { generateGeminiJson } from "@/lib/gemini";
 import { launchPdfBrowser } from "@/lib/launchPdfBrowser";
 import type { B2bLeadCategory } from "@/types/B2b";
@@ -25,12 +26,6 @@ export type DiscoveredBusiness = {
   aiStatus: "selected" | "no_email" | "failed";
 };
 
-const categoryQueries: Record<B2bLeadCategory, string[]> = {
-  real_estate_agent: ["Immobilienmakler"],
-  property_management: ["Immobilienverwaltung", "Hausverwaltung"],
-  housing_company: ["Wohnungsbaugesellschaft", "Wohnungsunternehmen"],
-  senior_care: ["Seniorenheim", "Pflegeheim"],
-};
 
 const emailPattern = /[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+/gi;
 
@@ -377,7 +372,7 @@ export async function discoverBusinesses(input: {
     const searchPage = await browser.newPage();
     await searchPage.setViewport({ width: 1440, height: 1000 });
     const linkGroups: string[][] = [];
-    for (const query of categoryQueries[input.category]) {
+    for (const query of B2B_CATEGORY_QUERIES[input.category]) {
       linkGroups.push(await collectPlaceLinks(searchPage, query, input.center));
     }
     const links = Array.from(new Set(linkGroups.flat())).slice(0, 60);

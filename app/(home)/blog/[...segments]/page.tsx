@@ -16,9 +16,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { normalizeBlogPageSettings } from "@/lib/blogBuilder";
-import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
-import { getCityServiceSeoContent } from "@/lib/cityServiceSeo";
-import { getNearbyCities } from "@/statics/Lists";
+import { buildCityServiceRenderContext } from "@/lib/cityServiceRenderContext";
 import type { AdminBlogMainCategory } from "@/types/blog/AdminBlogCategory";
 import type { BlogPage } from "@/types/blog/BlogPage";
 import type { Metadata } from "next";
@@ -187,28 +185,11 @@ async function BlogPageView({ page }: { page: BlogPage }) {
   }[settings.contentWidth];
   const cityName = page.cityName || "Olpe";
   const serviceKey = page.serviceKey || "umzugsservice";
-  const serviceName = getDefaultCityServiceName(serviceKey);
-  const nearbyCities = getNearbyCities(cityName);
-  const primaryKeyword = page.keywords?.[0] || serviceName;
-  const localSeo = getCityServiceSeoContent({
+  const { localSeo, context: serviceContext } = buildCityServiceRenderContext({
     cityName,
     serviceKey,
-    serviceName,
-    primaryKeyword,
-    nearbyCities,
-    nearbyLimit: 3,
+    primaryKeyword: page.keywords?.[0],
   });
-  const serviceContext = {
-    city: cityName,
-    service: serviceName,
-    primaryKeyword,
-    region: localSeo.regionName,
-    localIntro: localSeo.introText,
-    nearbyCities: nearbyCities
-      .slice(0, 3)
-      .map((city) => city.name)
-      .join(", "),
-  };
   const renderedServiceBlocks = page.serviceBlocks?.filter(
     (block) => block.type !== "cta",
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { auth } from "@/config/firebase";
+import { B2B_CATEGORIES } from "@/lib/b2bCategories";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
 import type { B2bLeadCategory } from "@/types/B2b";
 import {
@@ -12,33 +13,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useState } from "react";
+import B2bCategoryPicker from "./_components/B2bCategoryPicker";
+import N8nLeadResearchPanel from "./_components/N8nLeadResearchPanel";
 
-const categories: Array<{
-  value: B2bLeadCategory;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "real_estate_agent",
-    label: "Immobilienmakler",
-    description: "Maklerbüros und Immobilienvermittler",
-  },
-  {
-    value: "property_management",
-    label: "Immobilienverwaltungen",
-    description: "Haus- und Mietverwaltungen",
-  },
-  {
-    value: "housing_company",
-    label: "Wohnungsbaugesellschaften",
-    description: "Kommunale und private Wohnungsunternehmen",
-  },
-  {
-    value: "senior_care",
-    label: "Senioren- und Pflegeheime",
-    description: "Stationäre Pflege- und Senioreneinrichtungen",
-  },
-];
+const categories = B2B_CATEGORIES;
 
 type CategoryResult = {
   success: boolean;
@@ -62,14 +40,6 @@ export default function B2bLeadResearch() {
     Partial<Record<B2bLeadCategory, CategoryResult>>
   >({});
   const [error, setError] = useState("");
-
-  function toggleCategory(category: B2bLeadCategory) {
-    setSelectedCategories((current) =>
-      current.includes(category)
-        ? current.filter((entry) => entry !== category)
-        : [...current, category],
-    );
-  }
 
   async function runResearch() {
     if (!companyData?.id || !center.trim() || !selectedCategories.length) return;
@@ -138,10 +108,8 @@ export default function B2bLeadResearch() {
           Öffentliche Geschäftskontakte finden
         </h1>
         <p className='mt-2 max-w-3xl text-sm leading-6 text-slate-600'>
-          Die Recherche durchsucht Google Maps mit Puppeteer, prüft den 50-km-Radius,
-          liest öffentliche Kontakt- und Impressumsseiten und lässt Gemini die passende
-          geschäftliche E-Mail für ein Kooperationsangebot auswählen. Treffer werden
-          automatisch ins B2B CRM übernommen.
+          Öffentliche Kontaktdaten aus Google Maps und Impressumsseiten finden und
+          direkt ins B2B CRM übernehmen.
         </p>
       </header>
 
@@ -151,7 +119,16 @@ export default function B2bLeadResearch() {
         </p>
       )}
 
+      <N8nLeadResearchPanel />
+
       <section className='rounded-xl border border-slate-200 bg-white p-6 shadow-sm'>
+        <h2 className='mb-1 text-lg font-bold text-slate-950'>
+          Alternative: Direktsuche ohne n8n
+        </h2>
+        <p className='mb-5 text-sm text-slate-600'>
+          Durchsucht Google Maps mit Puppeteer rund um einen einzelnen Mittelpunkt und
+          lässt Gemini die passende E-Mail auswählen.
+        </p>
         <div className='grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]'>
           <label className='text-sm font-semibold text-slate-700'>
             Mittelpunkt
@@ -174,31 +151,12 @@ export default function B2bLeadResearch() {
           </div>
         </div>
 
-        <div className='mt-6 grid gap-3 md:grid-cols-2'>
-          {categories.map((category) => {
-            const checked = selectedCategories.includes(category.value);
-            return (
-              <label
-                key={category.value}
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${
-                  checked ? "border-blue-300 bg-blue-50" : "border-slate-200"
-                }`}>
-                <input
-                  type='checkbox'
-                  checked={checked}
-                  disabled={running}
-                  onChange={() => toggleCategory(category.value)}
-                  className='mt-1 h-4 w-4'
-                />
-                <span>
-                  <span className='block font-semibold text-slate-950'>{category.label}</span>
-                  <span className='mt-1 block text-xs text-slate-500'>
-                    {category.description}
-                  </span>
-                </span>
-              </label>
-            );
-          })}
+        <div className='mt-6'>
+          <B2bCategoryPicker
+            selected={selectedCategories}
+            disabled={running}
+            onChange={setSelectedCategories}
+          />
         </div>
 
         <div className='mt-6 flex flex-wrap items-center justify-between gap-4'>

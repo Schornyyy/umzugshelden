@@ -8,16 +8,23 @@ export async function authorizeAdminOwner(
   request: Request,
   ownerId: string,
 ): Promise<boolean> {
+  const token = request.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .trim();
+  return authorizeAdminIdToken(token, ownerId);
+}
+
+/** Prüft ein Firebase-ID-Token direkt, z. B. in Server Actions. */
+export async function authorizeAdminIdToken(
+  token: string | undefined,
+  ownerId: string,
+): Promise<boolean> {
   const configuredOwnerId = process.env.NEXT_PUBLIC_OWNERID?.trim();
   if (!ownerId) {
     console.warn("Admin API authorization failed: owner missing");
     return false;
   }
-
-  const token = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "")
-    .trim();
   if (!token) {
     console.warn("Admin API authorization failed: token missing");
     return false;

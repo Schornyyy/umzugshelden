@@ -1,6 +1,6 @@
 const BASE_URL = "https://www.umzugshelden.io";
 
-const SITEMAPS = ["static", "blog", "companycity"] as const;
+const SITEMAPS = ["static", "blog", "companycity", "landingpages"] as const;
 
 export const dynamic = "force-static";
 
