@@ -1,6 +1,7 @@
 import { CheckCircle2, Phone } from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
+import MobileStickyCta from "./_components/MobileStickyCta";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";
@@ -11,7 +12,7 @@ export default function LandingpageLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-white pb-24 text-slate-950 sm:pb-0">
+    <div className="min-h-screen bg-white pb-20 text-slate-950 sm:pb-0">
       <div className="hidden bg-navy px-4 py-2 text-white sm:block">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-5 gap-y-1 text-center text-xs font-semibold sm:text-sm">
           <span className="inline-flex items-center gap-1.5">
@@ -37,7 +38,6 @@ export default function LandingpageLayout({
               alt=""
               width={52}
               height={52}
-              priority
               className="hidden h-11 w-11 object-contain sm:block"
             />
             <span>
@@ -49,6 +49,12 @@ export default function LandingpageLayout({
               </span>
             </span>
           </div>
+          <a
+            href={PHONE_HREF}
+            data-analytics-label="Landingpage Header Anruf"
+            className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 font-sans text-sm font-bold text-white sm:hidden">
+            <Phone size={15} /> Anrufen
+          </a>
           <a
             href={PHONE_HREF}
             className="hidden items-center gap-3 rounded-lg px-3 py-2 text-right transition hover:bg-slate-50 sm:flex">
@@ -69,12 +75,7 @@ export default function LandingpageLayout({
 
       {children}
 
-      <a
-        href={PHONE_HREF}
-        className="fixed inset-x-4 z-50 flex min-h-14 items-center justify-center gap-2 rounded-full bg-primary px-5 font-sans text-base font-bold text-white shadow-[0_8px_30px_rgba(15,23,42,0.35)] sm:hidden"
-        style={{ bottom: "max(12px, env(safe-area-inset-bottom))" }}>
-        <Phone size={20} /> Kostenlos anrufen
-      </a>
+      <MobileStickyCta phoneHref={PHONE_HREF} />
     </div>
   );
 }

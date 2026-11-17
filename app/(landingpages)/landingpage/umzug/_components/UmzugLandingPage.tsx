@@ -1,4 +1,5 @@
 import ReviewCarousel from "@/components/reviews/ReviewCarousel";
+import type { Review } from "@/lib/reviewSettings";
 import {
   ArrowRight,
   BadgeCheck,
@@ -43,8 +44,8 @@ const promises = [
 const processSteps = [
   {
     icon: MapPin,
-    title: "Umzugsdaten senden",
-    text: "Start, Ziel, Umfang und Wunschtermin in wenigen Schritten angeben.",
+    title: "Rückruf anfordern",
+    text: "Name und Telefonnummer eintragen – wir rufen Sie innerhalb von 60 Minuten zurück.",
   },
   {
     icon: ClipboardCheck,
@@ -115,62 +116,84 @@ const faqs = [
   {
     question: "Sind auch Umzüge über größere Entfernungen möglich?",
     answer:
-      "Ja. Neben regionalen Umzügen übernehmen wir nach Absprache auch längere Strecken. Start- und Zielort können Sie direkt im Anfrage-Funnel angeben.",
+      "Ja. Neben regionalen Umzügen übernehmen wir nach Absprache auch längere Strecken. Start- und Zielort besprechen wir einfach beim Rückruf.",
   },
 ];
 
-export default function UmzugLandingPage() {
+function ratingSummary(reviews: Review[] | undefined) {
+  if (!reviews?.length) return null;
+  const average = reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length;
+  return {
+    average: average.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+    count: reviews.length,
+  };
+}
+
+const heroBenefits = [
+  "Rückruf in 60 Minuten",
+  "Kostenlos & unverbindlich",
+  "Transparente Leistungen",
+  "Auf Wunsch Komplettservice",
+];
+
+export default function UmzugLandingPage({ reviews }: { reviews?: Review[] }) {
+  const rating = ratingSummary(reviews);
   return (
     <main>
-      <section className='overflow-hidden bg-navy text-white'>
-        <div className='mx-auto grid max-w-7xl gap-7 px-4 pb-8 pt-5 sm:px-6 sm:py-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(400px,0.95fr)] lg:items-start lg:gap-12 lg:px-8 lg:py-16'>
-          <div className='lg:sticky lg:top-6'>
-            <div className='inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-orange-200 sm:text-xs sm:tracking-[0.13em]'>
-              <BadgeCheck size={16} /> Direkt von den Gründern begleitet
-            </div>
-            <h1 className='mt-3 max-w-3xl text-[2rem] font-extrabold leading-[1.08] sm:mt-5 sm:text-5xl lg:text-6xl'>
+      <section className='bg-navy text-white'>
+        <div className='mx-auto grid max-w-7xl gap-5 px-4 pb-10 pt-4 sm:px-6 sm:pt-10 lg:grid-cols-[minmax(0,1.05fr)_minmax(400px,0.95fr)] lg:items-start lg:gap-x-12 lg:gap-y-8 lg:px-8 lg:py-16'>
+          {/* 1. Botschaft – auf dem Handy bewusst kurz, damit der Funnel sofort sichtbar ist */}
+          <div className='lg:col-start-1'>
+            {rating ? (
+              <a
+                href='#kundenstimmen'
+                className='inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold text-white sm:text-sm'>
+                <span className='flex gap-0.5 text-amber-400' aria-hidden='true'>
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <Star key={index} size={14} fill='currentColor' />
+                  ))}
+                </span>
+                {rating.average}/5 aus {rating.count} Kundenbewertungen
+              </a>
+            ) : (
+              <span className='inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-orange-200 sm:text-xs'>
+                <BadgeCheck size={16} /> Direkt von den Gründern begleitet
+              </span>
+            )}
+            <h1 className='mt-3 max-w-3xl text-[1.75rem] font-extrabold leading-[1.1] sm:mt-5 sm:text-5xl lg:text-6xl'>
               Entspannt umziehen.
               <span className='block text-primary'>Wir kümmern uns darum.</span>
             </h1>
-            <p className='mt-5 hidden max-w-2xl text-base leading-7 text-slate-200 sm:text-lg sm:leading-8 lg:block'>
-              Persönlich geplant, sorgfältig transportiert und passend zu Ihrem
-              Bedarf kalkuliert. Fordern Sie jetzt kostenlos Ihr individuelles
-              Umzugsangebot an.
+            <p className='mt-3 max-w-2xl text-sm leading-6 text-slate-200 sm:mt-5 sm:text-lg sm:leading-8'>
+              Name und Telefonnummer eintragen – wir rufen Sie innerhalb von
+              60 Minuten zurück und planen Ihren Umzug persönlich.
             </p>
-            <div className='mt-5 hidden gap-2.5 text-sm text-slate-100 sm:grid-cols-2 lg:grid'>
-              {[
-                "Kostenlos & unverbindlich",
-                "Fester Ansprechpartner",
-                "Transparente Leistungen",
-                "Auf Wunsch Komplettservice",
-              ].map((benefit) => (
-                <span key={benefit} className='flex items-center gap-2'>
-                  <Check
-                    size={18}
-                    className='shrink-0 text-primary'
-                    strokeWidth={3}
-                  />
-                  {benefit}
-                </span>
-              ))}
-            </div>
-            <a
-              href='#angebot'
-              className='mt-4 inline-flex min-h-13 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3.5 font-sans text-base font-bold text-white shadow-xl shadow-black/20 transition hover:bg-orange-600 sm:mt-7 sm:w-auto'>
-              In 30 Sek. Angebot starten <ArrowRight size={19} />
-            </a>
-            <p className='mt-2 text-center text-[11px] font-medium text-slate-300 sm:mt-3 sm:text-left sm:text-xs'>
-              Kostenlos · Unverbindlich · Kein Newsletter
-            </p>
+          </div>
 
-            <figure className='relative mt-4 overflow-hidden rounded-2xl border border-white/15 bg-slate-800 shadow-2xl sm:mt-7'>
+          {/* 2. Funnel – auf dem Handy direkt unter der Überschrift, am Desktop rechts und mitlaufend */}
+          <div id='angebot' className='scroll-mt-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1'>
+            <div className='rounded-2xl bg-white p-4 text-slate-950 shadow-2xl sm:p-7'>
+              <UmzugLeadFunnel />
+            </div>
+          </div>
+
+          {/* 3. Vertrauen – Vorteile und echte Gesichter */}
+          <div className='lg:col-start-1'>
+            <ul className='grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-slate-100'>
+              {heroBenefits.map((benefit) => (
+                <li key={benefit} className='flex items-center gap-2'>
+                  <Check size={17} className='shrink-0 text-primary' strokeWidth={3} />
+                  {benefit}
+                </li>
+              ))}
+            </ul>
+            <figure className='relative mt-5 overflow-hidden rounded-2xl border border-white/15 bg-slate-800 shadow-2xl'>
               <Image
                 src='/images/person/gruender_vor_auto.webp'
                 alt='Die Gründer der Umzugshelden vor ihrem folierten Fahrzeug'
                 width={720}
                 height={640}
-                priority
-                className='h-[220px] w-full object-cover sm:h-[360px] lg:h-[390px] object-bottom'
+                className='h-[220px] w-full object-cover object-bottom sm:h-[360px] lg:h-[390px]'
                 sizes='(max-width: 1024px) 100vw, 52vw'
               />
               <figcaption className='absolute inset-x-0 bottom-0 bg-gradient-to-t from-navy via-navy/90 to-transparent px-4 pb-3 pt-12 sm:px-5 sm:pb-5 sm:pt-14'>
@@ -178,54 +201,16 @@ export default function UmzugLandingPage() {
                   Echte Ansprechpartner statt Callcenter
                 </span>
                 <span className='mt-1 hidden text-sm text-slate-200 sm:block'>
-                  Wir begleiten Ihre Anfrage persönlich von der Planung bis zum
-                  Umzug.
+                  Wir begleiten Ihre Anfrage persönlich von der Planung bis zum Umzug.
                 </span>
               </figcaption>
             </figure>
-            <p className='mt-4 text-sm leading-6 text-slate-200 lg:hidden'>
-              Persönlich geplant und sorgfältig transportiert. Sie sprechen
-              direkt mit uns – von der Anfrage bis zum Umzug.
-            </p>
-          </div>
-
-          <div className='scroll-mt-4' id='angebot'>
-            <div className='rounded-2xl bg-white p-4 text-slate-950 shadow-2xl sm:p-7'>
-              <div className='mb-4 border-b border-slate-100 pb-3 sm:mb-5 sm:pb-4'>
-                <p className='font-sans text-lg font-bold text-navy'>
-                  Jetzt kostenloses Angebot anfordern
-                </p>
-                <p className='mt-1 text-sm text-slate-600'>
-                  Wenige Angaben genügen für Ihre persönliche Rückmeldung.
-                </p>
-              </div>
-              <UmzugLeadFunnel />
-            </div>
-            <a
-              href='#kundenstimmen'
-              className='mt-4 flex items-center justify-between gap-4 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-white transition hover:bg-white/15'>
-              <span>
-                <span
-                  className='flex gap-0.5 text-amber-400'
-                  aria-hidden='true'>
-                  {Array.from({ length: 5 }, (_, index) => (
-                    <Star key={index} size={16} fill='currentColor' />
-                  ))}
-                </span>
-                <span className='mt-1 block text-sm font-bold'>
-                  Bewertungen unserer Kunden
-                </span>
-              </span>
-              <span className='inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-orange-200'>
-                Ansehen <ArrowRight size={15} />
-              </span>
-            </a>
           </div>
         </div>
       </section>
 
       <div id='kundenstimmen' className='scroll-mt-4'>
-        <ReviewCarousel />
+        <ReviewCarousel initialReviews={reviews} />
       </div>
 
       <section className='border-b border-slate-200 bg-white'>
@@ -308,7 +293,7 @@ export default function UmzugLandingPage() {
             <a
               href='#angebot'
               className='mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-primary px-5 font-sans text-sm font-bold text-white hover:bg-orange-600'>
-              Umzug anfragen <ArrowRight size={18} />
+              Rückruf anfordern <ArrowRight size={18} />
             </a>
           </div>
           <div className='overflow-hidden rounded-2xl bg-slate-100 shadow-xl'>
@@ -410,14 +395,14 @@ export default function UmzugLandingPage() {
           Bereit für einen entspannten Umzug?
         </h2>
         <p className='mx-auto mt-4 max-w-2xl text-orange-50'>
-          Senden Sie uns jetzt die wichtigsten Eckdaten. Wir melden uns
-          persönlich und besprechen die nächsten Schritte.
+          Hinterlassen Sie Name und Telefonnummer. Wir rufen Sie innerhalb von
+          60 Minuten zurück und besprechen alles Weitere persönlich.
         </p>
         <div className='mt-8 flex flex-wrap justify-center gap-3'>
           <a
             href='#angebot'
             className='inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-white px-6 font-sans text-sm font-bold text-primary hover:bg-orange-50'>
-            Kostenlos anfragen <ArrowRight size={18} />
+            Rückruf in 60 Min. anfordern <ArrowRight size={18} />
           </a>
           <a
             href={PHONE_HREF}

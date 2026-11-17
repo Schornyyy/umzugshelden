@@ -1,4 +1,5 @@
 import ReviewCarousel from "@/components/reviews/ReviewCarousel";
+import { LANDING_PAGE_ROBOTS } from "@/lib/landingPageSettings";
 import { getPublicLandingPage } from "@/lib/landingPageSettingsServer";
 import type { Metadata } from "next";
 import { readdir } from "node:fs/promises";
@@ -25,7 +26,6 @@ import { notFound } from "next/navigation";
 import AblaufVergleich from "./AblaufVergleich";
 import EntruempelungLeadFunnel from "./EntruempelungLeadFunnel";
 import GeneratedLandingPage from "./GeneratedLandingPage";
-import UmzugLandingPage from "./UmzugLandingPage";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";
@@ -37,10 +37,6 @@ const PROJECT_IMAGE_DIRECTORY = path.join(
 );
 const PROJECT_IMAGE_EXTENSIONS = /\.(avif|jpe?g|png|webp)$/i;
 
-const LANDINGPAGE_ROBOTS = {
-  index: false,
-  follow: false,
-};
 
 export async function generateMetadata({
   params,
@@ -50,18 +46,6 @@ export async function generateMetadata({
   const { service } = await params;
   const normalizedService = normalizeServiceSlug(service);
 
-  if (normalizedService === "umzug") {
-    return {
-      title: "Professioneller Umzug zum Festpreis | Umzugshelden",
-      description:
-        "Stressfrei umziehen mit den Umzugshelden: sorgfältige Planung, versicherter Transport und verbindliches Angebot. Jetzt kostenlos anfragen.",
-      alternates: {
-        canonical: "https://www.umzugshelden.io/landingpage/umzug",
-      },
-      robots: LANDINGPAGE_ROBOTS,
-    };
-  }
-
   const generatedPage = await getPublicLandingPage(normalizedService);
   if (generatedPage) {
     return {
@@ -70,7 +54,7 @@ export async function generateMetadata({
       alternates: {
         canonical: `https://www.umzugshelden.io/landingpage/${generatedPage.slug}`,
       },
-      robots: LANDINGPAGE_ROBOTS,
+      robots: LANDING_PAGE_ROBOTS,
     };
   }
 
@@ -81,7 +65,7 @@ export async function generateMetadata({
     alternates: {
       canonical: "https://www.umzugshelden.io/landingpage/entrümpelung",
     },
-    robots: LANDINGPAGE_ROBOTS,
+    robots: LANDING_PAGE_ROBOTS,
   };
 }
 
@@ -198,9 +182,6 @@ export default async function Landingpage({
 }) {
   const { service } = await params;
   const normalizedService = normalizeServiceSlug(service);
-  if (normalizedService === "umzug") {
-    return <UmzugLandingPage />;
-  }
   const generatedPage = await getPublicLandingPage(normalizedService);
   if (generatedPage) {
     return <GeneratedLandingPage page={generatedPage} />;

@@ -40,6 +40,7 @@ export async function PUT(request: Request) {
     const settings = reviewSettingsSchema.parse(parsed.data);
     await settingsDocument().set(settings);
     revalidatePath("/stadt", "layout");
+    revalidatePath("/landingpage/umzug");
     return NextResponse.json(settings);
   } catch (error) {
     console.error("Bewertungen konnten nicht gespeichert werden:", error);

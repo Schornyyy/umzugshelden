@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Ads-Landingpages sollen nicht mit den SEO-Seiten konkurrieren. */
+export const LANDING_PAGE_ROBOTS = { index: false, follow: false } as const;
+
 export const LANDING_PAGE_SERVICE_KEYS = [
   "umzugsservice",
   "anstricharbeiten",
