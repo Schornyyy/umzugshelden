@@ -20,6 +20,8 @@ export interface CityDuplicateRow {
   maxSimilarityToOthers: number;
   wordCount: number;
   imageCount: number;
+  /** "rendered" = ausgelieferte Seite gemessen, "stored" = nur gespeicherte Blöcke. */
+  measured: "rendered" | "stored";
 }
 
 export interface CityDuplicateReport {

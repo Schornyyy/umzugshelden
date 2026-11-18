@@ -266,8 +266,9 @@ export function getCityServiceSeoContent({
 
   const introText = `Für ${serviceName} in ${cityName} klären wir ${service.planningDetails} vor dem Termin. So entsteht ein verbindlicher Leistungsumfang, der zur Adresse, zum Zeitplan und zum tatsächlichen Aufwand passt.`;
   const localParagraphs = [
-    `${cityName} liegt ${region.location}. Zu den nächstgelegenen Orten in unserem Einsatzgebiet zählen ${closestCityDistances} Luftlinie. Diese Entfernungen helfen bei der ersten regionalen Einordnung; das konkrete Angebot basiert immer auf den tatsächlichen Adressen und Leistungen.`,
-    `Für Aufträge in ${cityName} sowie in ${closestCityNames} gilt: ${service.regionalScope}. Sie erhalten dafür einen festen Ansprechpartner und ein nachvollziehbares Angebot.`,
+    // Nur ortsbezogene Fakten – feste Erklärsätze stünden sonst auf jeder Stadtseite gleich.
+    `${cityName} liegt ${region.location}. Zu den nächstgelegenen Orten in unserem Einsatzgebiet zählen ${closestCityDistances} Luftlinie.`,
+    `Unser Einsatzgebiet rund um ${cityName} umfasst unter anderem ${closestCityNames}.`,
   ] as const;
   const metaDescription = `${primaryKeyword} in ${cityName}, ${region.name}: ${service.metaPromise}. Kostenlos und unverbindlich anfragen.`;
 

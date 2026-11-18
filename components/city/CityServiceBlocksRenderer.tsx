@@ -54,6 +54,8 @@ type Props = {
    * Anfrage-Blöcke zwischen den Inhalten.
    */
   leadFocus?: { source: string; trackingSource: string; serviceLabel: string };
+  /** Stadt-spezifische Beschreibungen für Leistungskarten (sonst Standardtext). */
+  serviceSummaries?: Partial<Record<CityServiceKey, string>>;
 };
 
 /** Abschnitte mit Fließtext, nach denen ein Anfrage-Block sinnvoll ist. */
@@ -70,6 +72,7 @@ const LEAD_CTA_AFTER_TYPES = new Set([
   "accordion",
 ]);
 const LEAD_CTA_EVERY = 3;
+const LEAD_CTA_MAX = 2;
 const HERO_TRUST_POINTS = ["Kostenlos & unverbindlich", "Fester Ansprechpartner", "Faire Festpreise"];
 
 const sectionTone = {
@@ -263,6 +266,7 @@ export default function CityServiceBlocksRenderer({
   reviews,
   renderFaqSchema = true,
   leadFocus,
+  serviceSummaries,
 }: Props) {
   const text = (value: string) => resolveCityServiceText(value, context);
   const richText = (value: string) => renderInlineMarkdown(text(value));
@@ -273,7 +277,7 @@ export default function CityServiceBlocksRenderer({
   visibleBlocks.forEach((block, index) => {
     if (!LEAD_CTA_AFTER_TYPES.has(block.type)) return;
     contentCount += 1;
-    if (contentCount % LEAD_CTA_EVERY === 0) ctaAfterIndexes.add(index);
+    if (contentCount % LEAD_CTA_EVERY === 0 && ctaAfterIndexes.size < LEAD_CTA_MAX) ctaAfterIndexes.add(index);
   });
 
   // Ohne Hero gäbe es kein Formular, zu dem die Anfrage-Buttons springen können.
@@ -937,7 +941,10 @@ export default function CityServiceBlocksRenderer({
 
           if (block.type === "testimonials") {
             return (
-              <ReviewCarousel key={block.id} initialReviews={reviews} />
+              // Seitenweiter Baustein (überall dieselben Bewertungen) – für den Duplikat-Check markiert
+              <div key={block.id} data-sitewide='true'>
+                <ReviewCarousel initialReviews={reviews} />
+              </div>
             );
           }
 
@@ -1228,7 +1235,7 @@ export default function CityServiceBlocksRenderer({
                               {service.name}
                             </h3>
                             <p className='flex-1 font-body text-sm leading-relaxed text-gray-600'>
-                              {service.description}
+                              {serviceSummaries?.[key] ?? service.description}
                             </p>
                             <Link
                               href={`/stadt/${encodeURIComponent(citySlug)}/${key}`}>

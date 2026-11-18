@@ -172,3 +172,26 @@ export async function getPublicCityServiceSitemapRecords() {
     };
   });
 }
+
+/**
+ * Lokalisierte Kurzbeschreibungen (Meta-Description) der Stadt-Service-Seiten
+ * einer Stadt – für die Leistungskarten der Stadtseite statt überall desselben Texts.
+ */
+export async function getPublicCityServiceDescriptions(
+  citySlug: string,
+): Promise<Partial<Record<CityServiceKey, string>>> {
+  const snapshot = await getAdminDatabase()
+    .collection(PAGE_COLLECTION)
+    .where("ownerId", "==", ownerId())
+    .where("citySlug", "==", citySlug)
+    .get();
+  const descriptions: Partial<Record<CityServiceKey, string>> = {};
+  for (const document of snapshot.docs) {
+    const page = document.data() as CityServicePage;
+    const description = page.seo?.description?.trim();
+    if (page.inheritTemplate === false && description && !/\{[a-z]+\}/i.test(description)) {
+      descriptions[page.serviceKey] = description;
+    }
+  }
+  return descriptions;
+}

@@ -2,6 +2,7 @@ import "server-only";
 
 import { DEFAULT_SERVICE_IMAGES, type LayoutImage } from "@/lib/cityDefaultImages";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
+import { rotateBy } from "@/utils/stableHash";
 import { PROJECT_COLLECTION } from "@/lib/projects";
 import { CITY_SERVICE_KEYS, type CityServiceKey } from "@/types/city/CityServicePage";
 
@@ -31,12 +32,6 @@ export async function loadConfiguredImagePools(ownerId: string) {
   return (snapshot.get("imagePools") ?? {}) as Partial<Record<CityServiceKey, string[]>>;
 }
 
-function hash(value: string) {
-  let result = 0;
-  for (let index = 0; index < value.length; index += 1) result = (result * 31 + value.charCodeAt(index)) >>> 0;
-  return result;
-}
-
 /**
  * Bilder für eine Stadt-/Stadt-Service-Seite: Projektbilder (gleiche Stadt zuerst),
  * im Admin gepflegte Pools und echte Standardfotos. Jede Stadt bekommt eine andere
@@ -64,8 +59,7 @@ export function buildCityImagePool(input: {
     seen.add(image.src);
     return true;
   });
-  const offset = pool.length ? hash(`${input.cityName}/${input.serviceKey ?? "stadt"}`) % pool.length : 0;
-  return [...pool.slice(offset), ...pool.slice(0, offset)];
+  return rotateBy(pool, `${input.cityName}/${input.serviceKey ?? "stadt"}`);
 }
 
 export async function getCityImagePool(ownerId: string, cityName: string, serviceKey?: CityServiceKey) {

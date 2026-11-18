@@ -3,7 +3,7 @@ import { getResolvedCityServiceFaqs } from "@/lib/cityServiceStructuredData";
 import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
 import { ABOUT_IMAGE } from "@/lib/cityDefaultImages";
 import { getCityImagePool } from "@/lib/cityImagePool";
-import { composeCityPageLayout } from "@/lib/cityPageLayout";
+import { composeCityPageLayout, pickPageReviews } from "@/lib/cityPageLayout";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import MobileStickyCta from "@/components/leads/MobileStickyCta";
 import ServiceSchema from "@/components/ServiceSchema";
@@ -152,6 +152,7 @@ export default async function CityServicePageData({
   }
 
   const path = `/stadt/${encodeURIComponent(data.citySlug)}/${data.serviceKey}`;
+  const pageReviews = pickPageReviews(data.reviews, `${data.citySlug}/${data.serviceKey}`);
   const featureBlock = data.resolved.blocks.find(
     (block) => block.id === "features" && block.type === "checkList",
   );
@@ -203,8 +204,9 @@ export default async function CityServicePageData({
         ]}
         dateModified={CITY_SERVICE_CONTENT_LAST_MODIFIED}
         faqs={faqs}
-        reviews={data.reviews}
+        reviews={pageReviews}
       />
+      <div data-page-content='true'>
       <CityServiceBlocksRenderer
         blocks={composeCityPageLayout(data.resolved.blocks, {
           images: await getCityImagePool(process.env.NEXT_PUBLIC_OWNERID?.trim() || "default", data.cityName, data.serviceKey),
@@ -217,7 +219,7 @@ export default async function CityServicePageData({
         serviceKey={data.serviceKey}
         context={data.context}
         localSeo={data.localSeo}
-        reviews={data.reviews}
+        reviews={pageReviews}
         renderFaqSchema={false}
         leadFocus={{
           source: `Stadtseite ${data.cityName} – ${data.resolved.template.serviceName}`,
@@ -225,6 +227,7 @@ export default async function CityServicePageData({
           serviceLabel: data.resolved.template.serviceName,
         }}
       />
+      </div>
       <MobileStickyCta />
       <div aria-hidden='true' className='h-20 sm:hidden' />
     </>

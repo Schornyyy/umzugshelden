@@ -1,7 +1,9 @@
 import { createCityServiceBlock } from "@/lib/cityServiceBlockFactory";
 import type { LayoutImage } from "@/lib/cityDefaultImages";
 import { LEAD_FORM_ANCHOR } from "@/lib/leadContact";
+import type { Review } from "@/lib/reviewSettings";
 import type { CityServiceBlock, CityServiceBlockTone } from "@/types/city/CityServicePage";
+import { rotateBy } from "@/utils/stableHash";
 
 /** Platzhalterbilder, die nie auf einer fertigen Seite stehen sollen. */
 const PLACEHOLDER_IMAGES = new Set(["/images/image.png", "/images/Umzugsunternehmen_Olpe.png"]);
@@ -196,4 +198,11 @@ export function composeCityPageLayout(
     const tone: CityServiceBlockTone = stripe++ % 2 === 0 ? "white" : "muted";
     return { ...block, tone };
   });
+}
+
+/** Bewertungen pro Seite: eine andere Auswahl je Stadt statt überall alle. */
+export const REVIEWS_PER_PAGE = 3;
+
+export function pickPageReviews(reviews: readonly Review[], pageKey: string, count = REVIEWS_PER_PAGE): Review[] {
+  return rotateBy(reviews, pageKey).slice(0, count);
 }

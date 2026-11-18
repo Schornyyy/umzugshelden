@@ -1,10 +1,12 @@
 "use server";
 
+import { headers } from "next/headers";
 import { z } from "zod";
 import { authorizeAdminIdToken } from "@/lib/adminApiAuth";
 import { cleanCityContentLinks, type CityLinkCleanupResult } from "@/lib/cityInternalLinks";
 import {
   buildCityDuplicateReport,
+  CITY_PAGE_KINDS,
   CITY_LOCALIZATION_SETTINGS_COLLECTION,
   cityLocalizationRunReference,
   duplicateIndividualKeys,
@@ -15,6 +17,7 @@ import { getAdminDatabase } from "@/lib/firebaseAdmin";
 import { CITY_SERVICE_KEYS } from "@/types/city/CityServicePage";
 import type {
   CityDuplicateReport,
+  CityPageKind,
   CityLocalizationRun,
   CityLocalizationSettings,
 } from "@/types/city/CityLocalization";
@@ -29,6 +32,21 @@ const settingsSchema = authSchema.extend({
     similarityThreshold: z.number().min(0.2).max(0.8),
   }),
 });
+
+const kindSchema = z.enum(CITY_PAGE_KINDS as [CityPageKind, ...CityPageKind[]]);
+
+/** Basis-URL dieser Anfrage, um die ausgelieferten Seiten selbst abzurufen. */
+async function requestOrigin() {
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host");
+  if (!host) throw new Error("Host der Anfrage unbekannt.");
+  const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${protocol}://${host}`;
+}
+
+function kindOfKey(key: string) {
+  return key.slice(key.lastIndexOf("/") + 1) as CityPageKind;
+}
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -66,6 +84,7 @@ export async function getCityLocalizationOverview(
   run: CityLocalizationRun | null;
   settings: CityLocalizationSettings;
   pendingCount: number;
+  pendingByKind: Partial<Record<CityPageKind, number>>;
   individualDuplicateCount: number;
 }>> {
   try {
@@ -83,6 +102,11 @@ export async function getCityLocalizationOverview(
         run: run.exists ? serializeRun(run.data()!) : null,
         settings,
         pendingCount: pending.length,
+        pendingByKind: pending.reduce<Partial<Record<CityPageKind, number>>>((counts, key) => {
+          const kind = kindOfKey(key);
+          counts[kind] = (counts[kind] ?? 0) + 1;
+          return counts;
+        }, {}),
         individualDuplicateCount: individualDuplicates.length,
       },
     };
@@ -91,14 +115,21 @@ export async function getCityLocalizationOverview(
   }
 }
 
+/** Prüft einen Seitentyp anhand der ausgelieferten Seiten (inkl. vom Renderer ergänzter Texte). */
 export async function getCityDuplicateReport(
-  input: z.infer<typeof authSchema>,
+  input: z.infer<typeof authSchema> & { kind: CityPageKind },
 ): Promise<ActionResult<CityDuplicateReport>> {
   try {
-    const parsed = authSchema.parse(input);
+    const parsed = authSchema.extend({ kind: kindSchema }).parse(input);
     await authorize(parsed);
     const settings = await readCityLocalizationSettings(parsed.ownerId);
-    return { success: true, data: await buildCityDuplicateReport(parsed.ownerId, settings.similarityThreshold) };
+    return {
+      success: true,
+      data: await buildCityDuplicateReport(parsed.ownerId, settings.similarityThreshold, {
+        kind: parsed.kind,
+        origin: await requestOrigin(),
+      }),
+    };
   } catch (error) {
     return failure(error, "Duplikat-Prüfung fehlgeschlagen.");
   }
@@ -122,10 +153,12 @@ export async function saveCityLocalizationSettings(
 
 /** Startet einen Lauf über alle Seiten, die noch die Vorlage erben (optional auch zu ähnliche individuelle). */
 export async function startCityLocalization(
-  input: z.infer<typeof authSchema> & { includeIndividualDuplicates: boolean },
+  input: z.infer<typeof authSchema> & { includeIndividualDuplicates: boolean; kinds?: CityPageKind[] },
 ): Promise<ActionResult<number>> {
   try {
-    const parsed = authSchema.extend({ includeIndividualDuplicates: z.boolean() }).parse(input);
+    const parsed = authSchema
+      .extend({ includeIndividualDuplicates: z.boolean(), kinds: z.array(kindSchema).min(1).optional() })
+      .parse(input);
     await authorize(parsed);
     const reference = cityLocalizationRunReference(parsed.ownerId);
     const existing = await reference.get();
@@ -138,7 +171,7 @@ export async function startCityLocalization(
       ...(parsed.includeIndividualDuplicates
         ? await duplicateIndividualKeys(parsed.ownerId, settings.similarityThreshold)
         : []),
-    ];
+    ].filter((key) => !parsed.kinds || parsed.kinds.includes(kindOfKey(key)));
     if (!queue.length) throw new Error("Keine Seite muss neu geschrieben werden.");
     const now = Date.now();
     await reference.set({

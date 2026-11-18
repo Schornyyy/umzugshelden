@@ -1,9 +1,9 @@
-import { getPublicResolvedCityLandingPage } from "@/lib/cityPublicData";
+import { getPublicCityServiceDescriptions, getPublicResolvedCityLandingPage } from "@/lib/cityPublicData";
 import { getResolvedCityServiceFaqs } from "@/lib/cityServiceStructuredData";
 import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
 import { ABOUT_IMAGE } from "@/lib/cityDefaultImages";
 import { getCityImagePool } from "@/lib/cityImagePool";
-import { composeCityPageLayout } from "@/lib/cityPageLayout";
+import { composeCityPageLayout, pickPageReviews } from "@/lib/cityPageLayout";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
 import MobileStickyCta from "@/components/leads/MobileStickyCta";
 import ServiceSchema from "@/components/ServiceSchema";
@@ -112,6 +112,8 @@ export default async function CityLandingPageData({
   if (!data || !data.resolved.page.published) redirect("/stadt");
 
   const path = `/stadt/${encodeURIComponent(data.citySlug)}`;
+  const pageReviews = pickPageReviews(data.reviews, data.citySlug);
+  const serviceSummaries = await getPublicCityServiceDescriptions(data.citySlug);
   const faqs = getResolvedCityServiceFaqs(
     data.resolved.blocks,
     data.context,
@@ -146,8 +148,9 @@ export default async function CityLandingPageData({
         ]}
         dateModified={CITY_SERVICE_CONTENT_LAST_MODIFIED}
         faqs={faqs}
-        reviews={data.reviews}
+        reviews={pageReviews}
       />
+      <div data-page-content='true'>
       <CityServiceBlocksRenderer
         blocks={composeCityPageLayout(data.resolved.blocks, {
           images: await getCityImagePool(process.env.NEXT_PUBLIC_OWNERID?.trim() || "default", data.cityName),
@@ -159,14 +162,16 @@ export default async function CityLandingPageData({
         citySlug={data.citySlug}
         context={data.context}
         localSeo={data.localSeo}
-        reviews={data.reviews}
+        reviews={pageReviews}
         renderFaqSchema={false}
+        serviceSummaries={serviceSummaries}
         leadFocus={{
           source: `Stadtseite ${data.cityName}`,
           trackingSource: "city_page",
           serviceLabel: "Umzug & Service",
         }}
       />
+      </div>
       <MobileStickyCta />
       <div aria-hidden='true' className='h-20 sm:hidden' />
     </>

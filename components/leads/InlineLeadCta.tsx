@@ -10,7 +10,7 @@ export default function InlineLeadCta({
   formAnchor?: string;
 }) {
   return (
-    <section className='bg-navy px-4 py-8 text-white sm:py-10'>
+    <section data-lead-ui='true' className='bg-navy px-4 py-8 text-white sm:py-10'>
       <div className='container mx-auto flex max-w-6xl flex-col gap-5 md:flex-row md:items-center md:justify-between'>
         <div>
           <p className='font-sans text-xl font-bold sm:text-2xl'>{heading}</p>

@@ -3,6 +3,7 @@
 import { getCityDuplicateReport } from "@/actions/cityLocalizationActions";
 import { getAdminIdToken } from "@/lib/adminIdToken";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
+import { CITY_SERVICE_KEYS } from "@/types/city/CityServicePage";
 import type { CityDuplicateReport, CityDuplicateRow, CityPageKind } from "@/types/city/CityLocalization";
 import { ExternalLink, LoaderCircle, ScanSearch } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +14,8 @@ const STATUS_LABEL: Record<CityDuplicateRow["status"], string> = {
   individual: "Individuell",
   localized: "KI-lokalisiert",
 };
+
+export const PAGE_KINDS: CityPageKind[] = ["stadt", ...CITY_SERVICE_KEYS];
 
 export function kindLabel(kind: CityPageKind) {
   return kind === "stadt" ? "Stadtseite" : getDefaultCityServiceName(kind);
@@ -39,13 +42,35 @@ export default function DuplicateReportPanel({ ownerId }: { ownerId: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [kind, setKind] = useState<CityPageKind | "all">("all");
+  const [progress, setProgress] = useState("");
 
+  /** Prüft Seitentyp für Seitentyp (Vergleiche finden nur innerhalb eines Typs statt). */
   async function check() {
     setLoading(true);
     setError("");
-    const result = await getCityDuplicateReport({ token: await getAdminIdToken(), ownerId });
-    if (result.success) setReport(result.data);
-    else setError(result.error);
+    const rows: CityDuplicateRow[] = [];
+    let threshold = 0.4;
+    for (const pageKind of PAGE_KINDS) {
+      setProgress(`${kindLabel(pageKind)} wird geprüft …`);
+      const result = await getCityDuplicateReport({ token: await getAdminIdToken(), ownerId, kind: pageKind });
+      if (!result.success) {
+        setError(result.error);
+        break;
+      }
+      threshold = result.data.threshold;
+      rows.push(...result.data.rows);
+    }
+    const score = (row: CityDuplicateRow) => Math.max(row.similarityToTemplate, row.maxSimilarityToOthers);
+    rows.sort((left, right) => score(right) - score(left));
+    setReport({
+      threshold,
+      generatedAt: Date.now(),
+      totalPages: rows.length,
+      duplicatePages: rows.filter((row) => score(row) > threshold).length,
+      averageSimilarity: rows.length ? rows.reduce((sum, row) => sum + score(row), 0) / rows.length : 0,
+      rows,
+    });
+    setProgress("");
     setLoading(false);
   }
 
@@ -62,7 +87,11 @@ export default function DuplicateReportPanel({ ownerId }: { ownerId: string }) {
           <h2 className='text-lg font-semibold text-slate-950'>Duplikat-Check</h2>
           <p className='mt-1 text-sm text-slate-600'>
             Misst pro Seite, wie viel Text (5-Wort-Folgen, Stadtnamen neutralisiert) wörtlich
-            auch in der Vorlage oder auf einer anderen Stadt derselben Dienstleistung steht.
+            auch in der Vorlage oder auf einer anderen Stadt desselben Seitentyps steht. Gemessen
+            wird die ausgelieferte Seite ohne Navigation und Footer – also inklusive Bewertungen,
+            Leistungskarten und anderer automatisch ergänzter Abschnitte. Formulare,
+            Anfrage-Buttons und seitenweite Bausteine wie das Bewertungs-Karussell zählen wie
+            Navigation und Footer nicht mit.
           </p>
         </div>
         <button
@@ -74,6 +103,11 @@ export default function DuplicateReportPanel({ ownerId }: { ownerId: string }) {
           {report ? "Erneut prüfen" : "Jetzt prüfen"}
         </button>
       </div>
+      {progress && (
+        <p className='mt-4 flex items-center gap-2 text-sm text-slate-600'>
+          <LoaderCircle className='h-4 w-4 animate-spin' /> {progress}
+        </p>
+      )}
       {error && <p role='alert' className='mt-4 rounded-md bg-red-50 p-3 text-sm text-red-700'>{error}</p>}
 
       {report && (

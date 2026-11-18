@@ -3,7 +3,7 @@
 import { getCityLocalizationOverview } from "@/actions/cityLocalizationActions";
 import { getAdminIdToken } from "@/lib/adminIdToken";
 import { useCompanyData } from "@/provider/CompanyDataProvider";
-import type { CityLocalizationRun, CityLocalizationSettings } from "@/types/city/CityLocalization";
+import type { CityLocalizationRun, CityLocalizationSettings, CityPageKind } from "@/types/city/CityLocalization";
 import { LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import DuplicateReportPanel from "./_components/DuplicateReportPanel";
@@ -15,12 +15,14 @@ type Overview = {
   run: CityLocalizationRun | null;
   settings: CityLocalizationSettings;
   pendingCount: number;
+  pendingByKind: Partial<Record<CityPageKind, number>>;
   individualDuplicateCount: number;
 };
 
 export default function CityLocalizationPage() {
   const { companyData } = useCompanyData();
-  const ownerId = companyData?.id;
+  // Stadtseiten gehören (wie in der Städte-Verwaltung) der Website-Owner-ID, nicht dem Benutzerkonto.
+  const ownerId = companyData ? process.env.NEXT_PUBLIC_OWNERID?.trim() || companyData.id : undefined;
   const [overview, setOverview] = useState<Overview | null>(null);
   const [error, setError] = useState("");
 
@@ -59,6 +61,7 @@ export default function CityLocalizationPage() {
             ownerId={ownerId}
             run={overview.run}
             pendingCount={overview.pendingCount}
+            pendingByKind={overview.pendingByKind}
             individualDuplicateCount={overview.individualDuplicateCount}
             onChanged={refresh}
           />

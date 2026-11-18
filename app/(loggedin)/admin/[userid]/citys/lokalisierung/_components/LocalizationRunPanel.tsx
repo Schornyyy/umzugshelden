@@ -6,7 +6,8 @@ import { getAdminIdToken } from "@/lib/adminIdToken";
 import type { CityLocalizationRun } from "@/types/city/CityLocalization";
 import { LoaderCircle, Pause, Play, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { kindLabel } from "./DuplicateReportPanel";
+import type { CityPageKind } from "@/types/city/CityLocalization";
+import { kindLabel, PAGE_KINDS } from "./DuplicateReportPanel";
 
 const STATUS_STYLE = {
   localized: "text-emerald-700",
@@ -25,12 +26,14 @@ export default function LocalizationRunPanel({
   ownerId,
   run,
   pendingCount,
+  pendingByKind,
   individualDuplicateCount,
   onChanged,
 }: {
   ownerId: string;
   run: CityLocalizationRun | null;
   pendingCount: number;
+  pendingByKind: Partial<Record<CityPageKind, number>>;
   individualDuplicateCount: number;
   onChanged: () => Promise<void>;
 }) {
@@ -39,8 +42,14 @@ export default function LocalizationRunPanel({
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [includeIndividual, setIncludeIndividual] = useState(false);
+  const [scope, setScope] = useState<"all" | "stadt" | "services">("all");
   const stopRef = useRef(false);
-  const startCount = pendingCount + (includeIndividual ? individualDuplicateCount : 0);
+  const scopeKinds: CityPageKind[] | undefined =
+    scope === "stadt" ? ["stadt"] : scope === "services" ? PAGE_KINDS.filter((kind) => kind !== "stadt") : undefined;
+  const scopedPending = scopeKinds
+    ? scopeKinds.reduce((sum, kind) => sum + (pendingByKind[kind] ?? 0), 0)
+    : pendingCount;
+  const startCount = scopedPending + (includeIndividual ? individualDuplicateCount : 0);
 
   useEffect(() => () => {
     stopRef.current = true;
@@ -100,7 +109,21 @@ export default function LocalizationRunPanel({
             Seiten unter der Übereinstimmungs-Schwelle gehen live. Bereits bearbeitete Seiten
             bleiben unverändert.
           </p>
-          <p className='mt-2 text-sm font-semibold text-slate-800'>{pendingCount} Seiten erben aktuell noch die Vorlage.</p>
+          <p className='mt-2 text-sm font-semibold text-slate-800'>
+            {pendingCount} Seiten erben aktuell noch die Vorlage, davon {pendingByKind.stadt ?? 0} Stadtseiten (/stadt/…).
+          </p>
+          <label className='mt-2 flex items-center gap-2 text-sm text-slate-700'>
+            Umfang
+            <select
+              value={scope}
+              disabled={running || busy}
+              onChange={(event) => setScope(event.target.value as typeof scope)}
+              className='rounded-md border border-slate-300 px-2 py-1.5'>
+              <option value='all'>Alle Seiten ({pendingCount})</option>
+              <option value='stadt'>Nur Stadtseiten /stadt/… ({pendingByKind.stadt ?? 0})</option>
+              <option value='services'>Nur Stadt-Service-Seiten ({pendingCount - (pendingByKind.stadt ?? 0)})</option>
+            </select>
+          </label>
           {individualDuplicateCount > 0 && (
             <label className='mt-2 flex items-start gap-2 text-sm text-slate-700'>
               <input
@@ -152,7 +175,12 @@ export default function LocalizationRunPanel({
                 disabled={busy || startCount === 0}
                 onClick={() => {
                   if (window.confirm(`${startCount} Seiten werden per KI neu geschrieben und nach bestandener Prüfung direkt veröffentlicht. Starten?`)) {
-                    void act(async () => startCityLocalization({ token: await getAdminIdToken(), ownerId, includeIndividualDuplicates: includeIndividual }), true);
+                    void act(async () => startCityLocalization({
+                        token: await getAdminIdToken(),
+                        ownerId,
+                        includeIndividualDuplicates: includeIndividual,
+                        kinds: scopeKinds,
+                      }), true);
                   }
                 }}
                 className='inline-flex items-center gap-2 rounded-md bg-violet-700 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50'>

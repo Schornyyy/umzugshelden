@@ -25,6 +25,7 @@ import { linkCityBlocks } from "@/lib/cityInternalLinks";
 import { buildCityImagePool, loadProjectImages, type ProjectImageSource } from "@/lib/cityImagePool";
 import { containment, contentFingerprint } from "@/lib/contentSimilarity";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
+import { fetchRenderedFingerprint, type RenderedFingerprint } from "@/lib/renderedPageContent";
 import { filterGenerationContent, type GenerationPage } from "@/lib/generationPagePolicy";
 import { getGenerationPages } from "@/lib/generationPages";
 import { GeminiInvalidJsonError, generateGeminiJson } from "@/lib/gemini";
@@ -165,10 +166,20 @@ function countImages(blocks: CityServiceBlock[]) {
 /* Duplikat-Report                                                      */
 /* ------------------------------------------------------------------ */
 
-export async function buildCityDuplicateReport(ownerId: string, threshold: number): Promise<CityDuplicateReport> {
+export async function buildCityDuplicateReport(
+  ownerId: string,
+  threshold: number,
+  options: {
+    /** Nur einen Seitentyp prüfen (Vergleiche finden ohnehin nur innerhalb eines Typs statt). */
+    kind?: CityPageKind;
+    /** Wenn gesetzt, wird die ausgelieferte Seite gemessen statt nur der gespeicherten Blöcke. */
+    origin?: string;
+  } = {},
+): Promise<CityDuplicateReport> {
   const [templates, pages] = await Promise.all([loadCityTemplates(ownerId), loadAllPages(ownerId)]);
-  const cityNames = [...cities];
-  const entries = cityPageTargets().flatMap((target) => {
+  const targets = cityPageTargets().filter((target) => !options.kind || target.kind === options.kind);
+  const rendered = options.origin ? await fetchRenderedFingerprints(options.origin, targets) : new Map<string, RenderedFingerprint>();
+  const entries = targets.flatMap((target) => {
     const page = pages.get(target.key);
     if (page?.published === false) return [];
     const individual = isIndividual(page);
@@ -176,16 +187,19 @@ export async function buildCityDuplicateReport(ownerId: string, threshold: numbe
     return [{
       target,
       status: individual ? (page?.localizedBy === "ai" ? "localized" as const : "individual" as const) : "template" as const,
-      fingerprint: contentFingerprint(blocks, cityNames),
-      templateFingerprint: contentFingerprint(resolveForCity(templates[target.kind].blocks, target), cityNames),
+      fingerprint: contentFingerprint(blocks, [target.cityName]),
+      templateFingerprint: contentFingerprint(resolveForCity(templates[target.kind].blocks, target), [target.cityName]),
       images: countImages(blocks),
+      rendered: rendered.get(target.key),
     }];
   });
 
   const rows: CityDuplicateRow[] = entries.map((entry) => {
     const sameKind = entries.filter((other) => other.target.kind === entry.target.kind && other !== entry);
+    // Ausgelieferte Seiten vergleichen, wenn gemessen – das ist, was Google sieht
+    const printOf = (candidate: typeof entry) => candidate.rendered?.shingles ?? candidate.fingerprint.shingles;
     const maxOther = sameKind.reduce(
-      (max, other) => Math.max(max, containment(entry.fingerprint.shingles, other.fingerprint.shingles)),
+      (max, other) => Math.max(max, containment(printOf(entry), printOf(other))),
       0,
     );
     return {
@@ -196,8 +210,9 @@ export async function buildCityDuplicateReport(ownerId: string, threshold: numbe
       status: entry.status,
       similarityToTemplate: containment(entry.fingerprint.shingles, entry.templateFingerprint.shingles),
       maxSimilarityToOthers: maxOther,
-      wordCount: entry.fingerprint.wordCount,
-      imageCount: entry.images,
+      wordCount: entry.rendered?.wordCount ?? entry.fingerprint.wordCount,
+      imageCount: entry.rendered?.imageCount ?? entry.images,
+      measured: entry.rendered ? "rendered" : "stored",
     };
   });
   const score = (row: CityDuplicateRow) => Math.max(row.similarityToTemplate, row.maxSimilarityToOthers);
@@ -209,6 +224,23 @@ export async function buildCityDuplicateReport(ownerId: string, threshold: numbe
     averageSimilarity: rows.length ? rows.reduce((sum, row) => sum + score(row), 0) / rows.length : 0,
     rows: rows.sort((left, right) => score(right) - score(left)),
   };
+}
+
+async function fetchRenderedFingerprints(origin: string, targets: readonly CityPageTarget[]) {
+  const result = new Map<string, RenderedFingerprint>();
+  const concurrency = 8;
+  for (let offset = 0; offset < targets.length; offset += concurrency) {
+    const batch = targets.slice(offset, offset + concurrency);
+    const prints = await Promise.all(
+      batch.map((target) =>
+        fetchRenderedFingerprint(origin, cityServicePath(target.citySlug, target.serviceKey), target.cityName).catch(() => null),
+      ),
+    );
+    prints.forEach((print, index) => {
+      if (print) result.set(batch[index].key, print);
+    });
+  }
+  return result;
 }
 
 /* ------------------------------------------------------------------ */
@@ -368,7 +400,7 @@ async function loadComparisonFingerprints(ownerId: string, target: CityPageTarge
   return snapshot.docs
     .filter((document) => document.get("citySlug") !== target.citySlug)
     .slice(0, COMPARISON_PAGES)
-    .map((document) => contentFingerprint(document.get("blocks"), cities).shingles);
+    .map((document) => contentFingerprint(document.get("blocks"), [String(document.get("cityName") ?? "")]).shingles);
 }
 
 export async function localizeCityPage(input: {
@@ -394,7 +426,7 @@ export async function localizeCityPage(input: {
 
   const template = input.templates[target.kind];
   const resolvedTemplate = resolveForCity(template.blocks, target);
-  const templatePrint = contentFingerprint(resolvedTemplate, cities).shingles;
+  const templatePrint = contentFingerprint(resolvedTemplate, [target.cityName]).shingles;
   // Bereits individuelle Seiten behalten Struktur und Bilder, nur der Text wird neu geschrieben.
   // Falsche Links (z. B. example.com) gar nicht erst an die KI geben
   const resolved = filterGenerationContent(
@@ -425,7 +457,7 @@ export async function localizeCityPage(input: {
       );
     }
 
-    const print = contentFingerprint(blocks, cities).shingles;
+    const print = contentFingerprint(blocks, [target.cityName]).shingles;
     const similarityToTemplate = containment(print, templatePrint);
     const maxSimilarityToOthers = others.reduce((max, other) => Math.max(max, containment(print, other)), 0);
     if (Math.max(similarityToTemplate, maxSimilarityToOthers) > threshold) {
