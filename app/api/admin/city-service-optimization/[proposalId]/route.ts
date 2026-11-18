@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authorizeAdminOwner } from "@/lib/adminApiAuth";
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
+import { filterGenerationContent } from "@/lib/generationPagePolicy";
+import { getGenerationPages } from "@/lib/generationPages";
 import {
   CITY_SERVICE_KEYS,
   type CityServiceKey,
@@ -77,6 +79,8 @@ export async function PUT(
       );
     }
     const database = getAdminDatabase();
+    // Wie beim Blog: Links auf nicht existierende oder fremde Seiten werden zu Text.
+    const availablePages = input.action === "accept" ? await getGenerationPages() : [];
     const proposalReference = database
       .collection("cityServiceOptimizationProposals")
       .doc(proposalId);
@@ -139,8 +143,8 @@ export async function PUT(
           serviceKey,
           templateId: `${safeDocumentPart(input.ownerId)}__${serviceKey}`,
           inheritTemplate: false,
-          blocks: proposal.draft.blocks,
-          seo: proposal.draft.seo,
+          blocks: filterGenerationContent(proposal.draft.blocks, availablePages),
+          seo: filterGenerationContent(proposal.draft.seo, availablePages),
           published:
             typeof current.published === "boolean" ? current.published : true,
           createdAt:

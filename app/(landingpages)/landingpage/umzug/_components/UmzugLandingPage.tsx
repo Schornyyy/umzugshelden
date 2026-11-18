@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import Image from "next/image";
-import UmzugLeadFunnel from "./UmzugLeadFunnel";
+import CallbackLeadForm from "@/components/leads/CallbackLeadForm";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";
@@ -173,7 +173,11 @@ export default function UmzugLandingPage({ reviews }: { reviews?: Review[] }) {
           {/* 2. Funnel – auf dem Handy direkt unter der Überschrift, am Desktop rechts und mitlaufend */}
           <div id='angebot' className='scroll-mt-4 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1'>
             <div className='rounded-2xl bg-white p-4 text-slate-950 shadow-2xl sm:p-7'>
-              <UmzugLeadFunnel />
+              <CallbackLeadForm
+                source='Google-Ads-Landingpage: Umzug'
+                trackingSource='google_ads_landingpage'
+                serviceLabel='Umzug'
+              />
             </div>
           </div>
 

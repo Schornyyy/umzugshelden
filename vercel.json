@@ -13,6 +13,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/city-localization",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/crm-appointment-reminders",
       "schedule": "* * * * *"
     }

@@ -1,6 +1,16 @@
 import "server-only";
 
 import { getAdminDatabase } from "@/lib/firebaseAdmin";
+import {
+  CITY_LANDING_PAGE_COLLECTION,
+  CITY_LANDING_TEMPLATE_COLLECTION,
+  CITY_SERVICE_PAGE_COLLECTION,
+  CITY_SERVICE_TEMPLATE_COLLECTION,
+  cityLandingPageId,
+  cityLandingTemplateId,
+  cityServicePageId,
+  cityServiceTemplateId,
+} from "@/lib/cityPageIds";
 import { createDefaultCityLandingTemplate } from "@/lib/cityLandingDefaults";
 import { createDefaultCityServiceTemplate } from "@/lib/cityServiceDefaults";
 import type {
@@ -13,41 +23,18 @@ import type {
   ResolvedCityServicePage,
 } from "@/types/city/CityServicePage";
 
-const TEMPLATE_COLLECTION = "cityServiceTemplates";
-const PAGE_COLLECTION = "cityServicePages";
-const LANDING_TEMPLATE_COLLECTION = "cityLandingTemplates";
-const LANDING_PAGE_COLLECTION = "cityLandingPages";
-
 function ownerId(): string {
   return process.env.NEXT_PUBLIC_OWNERID?.trim() || "default";
 }
 
-function safeDocumentPart(value: string): string {
-  return encodeURIComponent(value.trim().toLocaleLowerCase("de"));
-}
-
-function serviceTemplateId(
-  resolvedOwnerId: string,
-  serviceKey: CityServiceKey,
-): string {
-  return `${safeDocumentPart(resolvedOwnerId)}__${serviceKey}`;
-}
-
-function servicePageId(
-  resolvedOwnerId: string,
-  citySlug: string,
-  serviceKey: CityServiceKey,
-): string {
-  return `${safeDocumentPart(resolvedOwnerId)}__${citySlug}__${serviceKey}`;
-}
-
-function landingTemplateId(resolvedOwnerId: string): string {
-  return `${safeDocumentPart(resolvedOwnerId)}__city-overview`;
-}
-
-function landingPageId(resolvedOwnerId: string, citySlug: string): string {
-  return `${safeDocumentPart(resolvedOwnerId)}__${citySlug}`;
-}
+const TEMPLATE_COLLECTION = CITY_SERVICE_TEMPLATE_COLLECTION;
+const PAGE_COLLECTION = CITY_SERVICE_PAGE_COLLECTION;
+const LANDING_TEMPLATE_COLLECTION = CITY_LANDING_TEMPLATE_COLLECTION;
+const LANDING_PAGE_COLLECTION = CITY_LANDING_PAGE_COLLECTION;
+const serviceTemplateId = cityServiceTemplateId;
+const servicePageId = cityServicePageId;
+const landingTemplateId = cityLandingTemplateId;
+const landingPageId = cityLandingPageId;
 
 export async function getPublicResolvedCityServicePage(input: {
   cityName: string;

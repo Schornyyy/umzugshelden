@@ -1,4 +1,7 @@
 import ContactForm from "@/components/ContactForm";
+import CallbackLeadForm from "@/components/leads/CallbackLeadForm";
+import InlineLeadCta from "@/components/leads/InlineLeadCta";
+import { LEAD_FORM_ANCHOR, LEAD_PHONE_HREF, LEAD_PHONE_LABEL } from "@/lib/leadContact";
 import CityServiceBeforeAfter from "@/components/city/CityServiceBeforeAfter";
 import CityServiceCarousel from "@/components/city/CityServiceCarousel";
 import ReviewCarousel from "@/components/reviews/ReviewCarousel";
@@ -33,7 +36,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { Fragment, type CSSProperties, type ReactNode } from "react";
 
 type Props = {
   blocks: CityServiceBlock[];
@@ -46,7 +49,28 @@ type Props = {
   selectedBlockId?: string | null;
   reviews?: Review[];
   renderFaqSchema?: boolean;
+  /**
+   * Seiten, deren Ziel Anfragen sind: kurzes Rückruf-Formular im Hero und
+   * Anfrage-Blöcke zwischen den Inhalten.
+   */
+  leadFocus?: { source: string; trackingSource: string; serviceLabel: string };
 };
+
+/** Abschnitte mit Fließtext, nach denen ein Anfrage-Block sinnvoll ist. */
+const LEAD_CTA_AFTER_TYPES = new Set([
+  "intro",
+  "imageText",
+  "cardGrid",
+  "checkList",
+  "process",
+  "localArea",
+  "stats",
+  "gallery",
+  "imageCards",
+  "accordion",
+]);
+const LEAD_CTA_EVERY = 3;
+const HERO_TRUST_POINTS = ["Kostenlos & unverbindlich", "Fester Ansprechpartner", "Faire Festpreise"];
 
 const sectionTone = {
   white: "bg-white",
@@ -238,13 +262,41 @@ export default function CityServiceBlocksRenderer({
   selectedBlockId,
   reviews,
   renderFaqSchema = true,
+  leadFocus,
 }: Props) {
   const text = (value: string) => resolveCityServiceText(value, context);
   const richText = (value: string) => renderInlineMarkdown(text(value));
   const visibleBlocks = blocks.filter((block) => block.enabled);
+  // Nach jedem dritten Inhaltsabschnitt ein Anfrage-Block
+  const ctaAfterIndexes = new Set<number>();
+  let contentCount = 0;
+  visibleBlocks.forEach((block, index) => {
+    if (!LEAD_CTA_AFTER_TYPES.has(block.type)) return;
+    contentCount += 1;
+    if (contentCount % LEAD_CTA_EVERY === 0) ctaAfterIndexes.add(index);
+  });
+
+  // Ohne Hero gäbe es kein Formular, zu dem die Anfrage-Buttons springen können.
+  const needsLeadForm = Boolean(leadFocus) && !editorMode && !visibleBlocks.some((block) => block.type === "hero");
 
   return (
     <div className='flex flex-col'>
+      {needsLeadForm && leadFocus && (
+        <section className='bg-navy px-4 py-8 sm:py-12'>
+          <div
+            id={LEAD_FORM_ANCHOR}
+            className='container mx-auto max-w-xl scroll-mt-24 rounded-xl border border-white/10 bg-[#0b1f3a] p-5 sm:p-8'>
+            <CallbackLeadForm
+              variant='dark'
+              source={leadFocus.source}
+              trackingSource={leadFocus.trackingSource}
+              serviceLabel={leadFocus.serviceLabel}
+              cityName={cityName}
+              title={`${leadFocus.serviceLabel} in ${cityName} anfragen`}
+            />
+          </div>
+        </section>
+      )}
       {visibleBlocks
         .map((block) => {
           if (block.type === "hero") {
@@ -252,7 +304,7 @@ export default function CityServiceBlocksRenderer({
             return (
               <section
                 key={block.id}
-                className='relative flex min-h-[600px] items-center overflow-hidden'>
+                className='relative flex items-center overflow-hidden lg:min-h-[600px]'>
                 <Image
                   src={block.image}
                   alt={text(block.imageAlt)}
@@ -263,10 +315,10 @@ export default function CityServiceBlocksRenderer({
                   className='object-cover'
                 />
                 <div className='absolute inset-0 bg-navy/85' />
-                <div className='relative z-10 container mx-auto px-4 py-16'>
+                <div className='relative z-10 container mx-auto px-4 py-6 sm:py-12 lg:py-16'>
                   <nav
                     aria-label='Breadcrumb'
-                    className='mb-8 font-body text-sm text-gray-300'>
+                    className='mb-4 font-body text-xs text-gray-300 sm:mb-8 sm:text-sm'>
                     <ol className='flex flex-wrap items-center gap-2'>
                       <li>
                         <Link href='/' className='hover:text-white'>
@@ -291,42 +343,56 @@ export default function CityServiceBlocksRenderer({
                       )}
                     </ol>
                   </nav>
-                  <div className='grid grid-cols-1 items-center gap-12 lg:grid-cols-2'>
-                    <div className='order-2 rounded border border-white/10 bg-[#0b1f3a] p-6 shadow-2xl lg:order-1 lg:p-8'>
-                      <h2 className='mb-3 font-sans text-xl font-semibold text-white'>
-                        {richText(block.formTitle)}
-                      </h2>
-                      <p className='mb-5 font-body text-sm text-gray-300'>
-                        {richText(block.formText)}
-                      </p>
-                      <ContactForm dark />
+                  <div className='grid grid-cols-1 items-center gap-6 lg:grid-cols-2 lg:gap-12'>
+                    <div
+                      id={LEAD_FORM_ANCHOR}
+                      className='order-2 scroll-mt-24 rounded-xl border border-white/10 bg-[#0b1f3a] p-5 shadow-2xl lg:order-1 lg:p-8'>
+                      {leadFocus ? (
+                        <CallbackLeadForm
+                          variant='dark'
+                          source={leadFocus.source}
+                          trackingSource={leadFocus.trackingSource}
+                          serviceLabel={leadFocus.serviceLabel}
+                          cityName={cityName}
+                          title={text(block.formTitle)}
+                          description={text(block.formText)}
+                        />
+                      ) : (
+                        <>
+                          <h2 className='mb-3 font-sans text-xl font-semibold text-white'>
+                            {richText(block.formTitle)}
+                          </h2>
+                          <p className='mb-5 font-body text-sm text-gray-300'>
+                            {richText(block.formText)}
+                          </p>
+                          <ContactForm dark />
+                        </>
+                      )}
                     </div>
-                    <div className='order-1 flex flex-col gap-6 text-center lg:order-2 lg:text-left'>
-                      <h1 className='break-words font-sans text-4xl font-bold leading-tight text-white md:text-5xl'>
+                    <div className='order-1 flex flex-col gap-4 text-left sm:gap-6 lg:order-2'>
+                      <h1 className='break-words font-sans text-3xl font-bold leading-tight text-white sm:text-4xl md:text-5xl'>
                         <HeroTitle
                           title={title}
                           primaryKeyword={context.primaryKeyword}
                         />
                       </h1>
-                      <p className='whitespace-pre-line font-body text-lg text-gray-300'>
+                      <p className='whitespace-pre-line font-body text-base text-gray-300 sm:text-lg'>
                         {richText(block.description)}
                       </p>
-                      <div>
-                        <Link
-                          href={
-                            serviceKey
-                              ? `/stadt/${encodeURIComponent(citySlug)}`
-                              : "#services"
-                          }>
-                          <Button
-                            variant='outline'
-                            className='rounded border-white bg-transparent px-8 py-4 font-sans font-semibold text-white hover:bg-white/10'>
-                            {serviceKey
-                              ? "Zurück zur Übersicht"
-                              : "Dienstleistungen ansehen"}
-                          </Button>
-                        </Link>
-                      </div>
+                      <ul className='hidden gap-2 font-body text-sm text-gray-200 sm:grid'>
+                        {HERO_TRUST_POINTS.map((point) => (
+                          <li key={point} className='flex items-center gap-2'>
+                            <CheckIcon className='shrink-0 text-primary' size={18} />
+                            {point}
+                          </li>
+                        ))}
+                      </ul>
+                      <a
+                        href={LEAD_PHONE_HREF}
+                        data-analytics-label='Hero Anruf'
+                        className='hidden w-fit items-center gap-2 rounded-lg border border-white/40 px-5 py-3 font-sans text-sm font-semibold text-white hover:bg-white/10 sm:inline-flex'>
+                        <PhoneIcon size={18} /> Lieber direkt anrufen: {LEAD_PHONE_LABEL}
+                      </a>
                     </div>
                   </div>
                 </div>
@@ -1184,14 +1250,25 @@ export default function CityServiceBlocksRenderer({
         })
         .map((content, index) => {
           const block = visibleBlocks[index];
+          const nextType = visibleBlocks[index + 1]?.type;
+          const showLeadCta =
+            leadFocus &&
+            !editorMode &&
+            ctaAfterIndexes.has(index) &&
+            nextType !== "contact" &&
+            nextType !== "cta";
           return (
-            <BlockStyleBoundary
-              key={block.id}
-              block={block}
-              editorMode={editorMode}
-              selected={selectedBlockId === block.id}>
-              {content}
-            </BlockStyleBoundary>
+            <Fragment key={block.id}>
+              <BlockStyleBoundary
+                block={block}
+                editorMode={editorMode}
+                selected={selectedBlockId === block.id}>
+                {content}
+              </BlockStyleBoundary>
+              {showLeadCta && (
+                <InlineLeadCta heading={`${leadFocus.serviceLabel} in ${cityName}: jetzt kostenlos anfragen`} />
+              )}
+            </Fragment>
           );
         })}
     </div>

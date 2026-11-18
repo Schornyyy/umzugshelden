@@ -1,7 +1,11 @@
 import { getPublicResolvedCityLandingPage } from "@/lib/cityPublicData";
 import { getResolvedCityServiceFaqs } from "@/lib/cityServiceStructuredData";
 import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
+import { ABOUT_IMAGE } from "@/lib/cityDefaultImages";
+import { getCityImagePool } from "@/lib/cityImagePool";
+import { composeCityPageLayout } from "@/lib/cityPageLayout";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
+import MobileStickyCta from "@/components/leads/MobileStickyCta";
 import ServiceSchema from "@/components/ServiceSchema";
 import { getDefaultCityServiceName } from "@/lib/cityServiceDefaults";
 import {
@@ -145,14 +149,26 @@ export default async function CityLandingPageData({
         reviews={data.reviews}
       />
       <CityServiceBlocksRenderer
-        blocks={data.resolved.blocks}
+        blocks={composeCityPageLayout(data.resolved.blocks, {
+          images: await getCityImagePool(process.env.NEXT_PUBLIC_OWNERID?.trim() || "default", data.cityName),
+          cityName: data.cityName,
+          serviceLabel: "Umzug & Service",
+          aboutImage: ABOUT_IMAGE,
+        })}
         cityName={data.cityName}
         citySlug={data.citySlug}
         context={data.context}
         localSeo={data.localSeo}
         reviews={data.reviews}
         renderFaqSchema={false}
+        leadFocus={{
+          source: `Stadtseite ${data.cityName}`,
+          trackingSource: "city_page",
+          serviceLabel: "Umzug & Service",
+        }}
       />
+      <MobileStickyCta />
+      <div aria-hidden='true' className='h-20 sm:hidden' />
     </>
   );
 }

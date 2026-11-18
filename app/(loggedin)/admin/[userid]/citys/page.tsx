@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { cities } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 import { redirectUser } from "@/actions/userActions";
@@ -152,6 +153,15 @@ export default function AdminCitiesPage() {
       <h1 className='mb-5 text-2xl font-bold'>Städte Übersicht</h1>
       {companyData && ownerId && (
         <>
+          <Link
+            href={`/admin/${encodeURIComponent(companyData.id)}/citys/lokalisierung`}
+            className='mb-5 flex items-center justify-between gap-3 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900 hover:bg-violet-100'>
+            <span>
+              <span className='block font-semibold'>Duplicate Content prüfen & Seiten lokalisieren</span>
+              <span className='text-violet-700'>Übereinstimmung messen und alle Stadtseiten eigenständig neu schreiben lassen.</span>
+            </span>
+            <span aria-hidden='true'>→</span>
+          </Link>
           <CityServiceOptimizationTrigger ownerId={ownerId} />
           <CityServiceMigrationPanel ownerId={ownerId} userId={companyData.id} />
         </>

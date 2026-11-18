@@ -17,6 +17,7 @@ import { getGenerationPages } from "@/lib/generationPages";
 import {
   filterGenerationContent,
   generationSiteUrl,
+  rankLinkCandidates,
   type GenerationPage,
 } from "@/lib/generationPagePolicy";
 import {
@@ -173,37 +174,6 @@ function createFallbackLocalization(
     metaTitle: truncateAtWord(`${keyword} ${cityName} | Umzugshelden`, 65),
     metaDescription: truncateAtWord(`${keyword} in ${cityName}: persönliche Beratung, transparente Planung und zuverlässige Durchführung. Jetzt kostenlos und unverbindlich anfragen.`, 160),
   };
-}
-
-/** Ordnet eigene Seiten nach Relevanz für eine Stadt-Landingpage. */
-function rankLinkCandidates(
-  pages: readonly GenerationPage[],
-  citySlug: string,
-  serviceKey: CityServiceKey,
-  keyword: string,
-): GenerationPage[] {
-  const tokens = slugify(keyword).split("-").filter((token) => token.length > 3);
-  const score = (page: GenerationPage) => {
-    if (page.url === `/stadt/${citySlug}/${serviceKey}`) return 100;
-    if (page.url === `/stadt/${citySlug}`) return 90;
-    if (page.targetType === "dienstleistung") {
-      return page.url.startsWith(`/stadt/${citySlug}/`) ? 30 : 0;
-    }
-    if (page.targetType === "blog") {
-      const haystack = slugify(
-        [page.title, page.description ?? "", ...(page.keywords ?? [])].join(" "),
-      );
-      const overlap = tokens.filter((token) => haystack.includes(token)).length;
-      return overlap ? 20 + overlap * 10 : 5;
-    }
-    return 0;
-  };
-  return pages
-    .map((page) => ({ page, score: score(page) }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 25)
-    .map((entry) => entry.page);
 }
 
 async function acquireLock(reference: FirebaseFirestore.DocumentReference, deadlineAt: number) {

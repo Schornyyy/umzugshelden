@@ -2,16 +2,17 @@
 
 import { ArrowRight, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
+import { LEAD_FORM_ANCHOR, LEAD_PHONE_HREF } from "@/lib/leadContact";
 
 /**
  * Mobile Aktionsleiste für Landingpages: Anruf + Sprung zum Formular (#angebot).
  * Wird ausgeblendet, solange das Formular sichtbar ist, damit sie es nicht verdeckt.
  */
 export default function MobileStickyCta({
-  phoneHref,
-  formAnchor = "angebot",
+  phoneHref = LEAD_PHONE_HREF,
+  formAnchor = LEAD_FORM_ANCHOR,
 }: {
-  phoneHref: string;
+  phoneHref?: string;
   formAnchor?: string;
 }) {
   const [formVisible, setFormVisible] = useState(true);

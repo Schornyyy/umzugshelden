@@ -20,12 +20,22 @@ import type { CityFAQ } from "@/types/city/CityFAQType";
 import type { CityPageSection } from "@/types/city/CityPageSection";
 import { slugify } from "@/utils/slugify";
 import { revalidatePath } from "next/cache";
+import {
+  CITY_LANDING_PAGE_COLLECTION,
+  CITY_LANDING_TEMPLATE_COLLECTION,
+  CITY_SERVICE_PAGE_COLLECTION,
+  CITY_SERVICE_TEMPLATE_COLLECTION,
+  cityLandingPageId,
+  cityLandingTemplateId,
+  cityServicePageId,
+  cityServiceTemplateId,
+} from "@/lib/cityPageIds";
 import { z } from "zod";
 
-const TEMPLATE_COLLECTION = "cityServiceTemplates";
-const PAGE_COLLECTION = "cityServicePages";
-const LANDING_TEMPLATE_COLLECTION = "cityLandingTemplates";
-const LANDING_PAGE_COLLECTION = "cityLandingPages";
+const TEMPLATE_COLLECTION = CITY_SERVICE_TEMPLATE_COLLECTION;
+const PAGE_COLLECTION = CITY_SERVICE_PAGE_COLLECTION;
+const LANDING_TEMPLATE_COLLECTION = CITY_LANDING_TEMPLATE_COLLECTION;
+const LANDING_PAGE_COLLECTION = CITY_LANDING_PAGE_COLLECTION;
 const LEGACY_CITY_PAGE_COLLECTION = "cityPages";
 
 const toneSchema = z.enum(["white", "muted", "navy", "accent"]);
@@ -448,29 +458,10 @@ function assertOwner(ownerId: string) {
   }
 }
 
-function safeDocumentPart(value: string) {
-  return encodeURIComponent(value.trim().toLowerCase());
-}
-
-function templateId(ownerId: string, serviceKey: CityServiceKey) {
-  return `${safeDocumentPart(ownerId)}__${serviceKey}`;
-}
-
-function pageId(
-  ownerId: string,
-  citySlug: string,
-  serviceKey: CityServiceKey,
-) {
-  return `${safeDocumentPart(ownerId)}__${citySlug}__${serviceKey}`;
-}
-
-function landingTemplateId(ownerId: string) {
-  return `${safeDocumentPart(ownerId)}__city-overview`;
-}
-
-function landingPageId(ownerId: string, citySlug: string) {
-  return `${safeDocumentPart(ownerId)}__${citySlug}`;
-}
+const templateId = cityServiceTemplateId;
+const pageId = cityServicePageId;
+const landingTemplateId = cityLandingTemplateId;
+const landingPageId = cityLandingPageId;
 
 function stripUndefinedDeep<T>(value: T): T {
   if (Array.isArray(value)) {

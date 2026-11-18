@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { LEAD_FORM_ANCHOR } from "@/lib/leadContact";
 
 const services = [
   { label: "Umzugsservice", href: "/umzugsservice" },
@@ -12,6 +14,9 @@ const services = [
 ];
 
 const Navbar = () => {
+  const pathname = usePathname();
+  // Seiten mit eigenem Anfrageformular: Button springt dorthin, statt die Seite zu verlassen.
+  const offerHref = pathname.startsWith("/stadt/") ? `#${LEAD_FORM_ANCHOR}` : "/#anfrage";
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -112,7 +117,7 @@ const Navbar = () => {
             Kontakt
           </Link>
           <Link
-            href='/#anfrage'
+            href={offerHref}
             className='font-sans bg-primary text-white px-5 py-2.5 rounded font-medium hover:bg-primary/90 transition-colors text-sm'>
             Kostenloses Angebot anfordern!
           </Link>
@@ -198,7 +203,7 @@ const Navbar = () => {
             Kontakt
           </Link>
           <Link
-            href='/#anfrage'
+            href={offerHref}
             onClick={handleLinkClick}
             className='font-sans bg-primary text-white px-6 py-3 rounded font-medium hover:bg-primary/90 transition-colors'>
             Kostenloses Angebot anfordern!

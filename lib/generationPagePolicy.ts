@@ -1,6 +1,7 @@
 import { cities, getServices } from "@/statics/Lists";
 import { slugify } from "@/utils/slugify";
 import type { SeoAiReport, SeoPageMetrics } from "@/types/city/SeoAnalysis";
+import type { CityServiceKey } from "@/types/city/CityServicePage";
 
 export type GenerationPage = {
   title: string;
@@ -126,4 +127,47 @@ export function restrictGenerationAnalysis<T extends {
       } : {}),
     },
   };
+}
+
+/**
+ * Ordnet eigene, veröffentlichte Seiten nach Relevanz als interne Linkziele für
+ * eine Stadt-/Stadt-Service-Seite (Stadtseite, passende Dienstleistung, Ratgeber).
+ * `excludeUrl` verhindert, dass eine Seite auf sich selbst verlinkt.
+ */
+export function rankLinkCandidates(
+  pages: readonly GenerationPage[],
+  citySlug: string,
+  serviceKey: CityServiceKey,
+  keyword: string,
+  excludeUrl?: string,
+): GenerationPage[] {
+  const tokens = slugify(keyword).split("-").filter((token) => token.length > 3);
+  const score = (page: GenerationPage) => {
+    if (page.url === excludeUrl) return 0;
+    if (page.url === `/stadt/${citySlug}/${serviceKey}`) return 100;
+    if (page.url === `/stadt/${citySlug}`) return 90;
+    if (page.targetType === "dienstleistung") {
+      return page.url.startsWith(`/stadt/${citySlug}/`) ? 30 : 0;
+    }
+    if (page.targetType === "blog") {
+      const haystack = slugify(
+        [page.title, page.description ?? "", ...(page.keywords ?? [])].join(" "),
+      );
+      const overlap = tokens.filter((token) => haystack.includes(token)).length;
+      const titleSlug = slugify(page.title);
+      // Ratgeber zur selben Stadt bevorzugen, Ratgeber zu anderen Städten abwerten
+      const sameCity = titleSlug.includes(citySlug);
+      const otherCity = !sameCity && otherCitySlugs.some((slug) => titleSlug.includes(slug));
+      const base = overlap ? 20 + overlap * 10 : 5;
+      return Math.max(0, base + (sameCity ? 30 : 0) - (otherCity ? 18 : 0));
+    }
+    return 0;
+  };
+  const otherCitySlugs = cities.map(slugify).filter((slug) => slug !== citySlug && slug.length > 3);
+  return pages
+    .map((page) => ({ page, score: score(page) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 25)
+    .map((entry) => entry.page);
 }

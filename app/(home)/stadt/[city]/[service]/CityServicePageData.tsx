@@ -1,7 +1,11 @@
 import { getPublicResolvedCityServicePage } from "@/lib/cityPublicData";
 import { getResolvedCityServiceFaqs } from "@/lib/cityServiceStructuredData";
 import { getPublicReviewSettings } from "@/lib/reviewSettingsServer";
+import { ABOUT_IMAGE } from "@/lib/cityDefaultImages";
+import { getCityImagePool } from "@/lib/cityImagePool";
+import { composeCityPageLayout } from "@/lib/cityPageLayout";
 import CityServiceBlocksRenderer from "@/components/city/CityServiceBlocksRenderer";
+import MobileStickyCta from "@/components/leads/MobileStickyCta";
 import ServiceSchema from "@/components/ServiceSchema";
 import {
   assertCitySeoCoverage,
@@ -202,7 +206,12 @@ export default async function CityServicePageData({
         reviews={data.reviews}
       />
       <CityServiceBlocksRenderer
-        blocks={data.resolved.blocks}
+        blocks={composeCityPageLayout(data.resolved.blocks, {
+          images: await getCityImagePool(process.env.NEXT_PUBLIC_OWNERID?.trim() || "default", data.cityName, data.serviceKey),
+          cityName: data.cityName,
+          serviceLabel: data.resolved.template.serviceName,
+          aboutImage: ABOUT_IMAGE,
+        })}
         cityName={data.cityName}
         citySlug={data.citySlug}
         serviceKey={data.serviceKey}
@@ -210,7 +219,14 @@ export default async function CityServicePageData({
         localSeo={data.localSeo}
         reviews={data.reviews}
         renderFaqSchema={false}
+        leadFocus={{
+          source: `Stadtseite ${data.cityName} – ${data.resolved.template.serviceName}`,
+          trackingSource: "city_service_page",
+          serviceLabel: data.resolved.template.serviceName,
+        }}
       />
+      <MobileStickyCta />
+      <div aria-hidden='true' className='h-20 sm:hidden' />
     </>
   );
 }

@@ -1,7 +1,7 @@
 import { CheckCircle2, Phone } from "lucide-react";
 import Image from "next/image";
 import type { ReactNode } from "react";
-import MobileStickyCta from "./_components/MobileStickyCta";
+import MobileStickyCta from "@/components/leads/MobileStickyCta";
 
 const PHONE_HREF = "tel:+4915168567708";
 const PHONE_LABEL = "+49 151 68567708";

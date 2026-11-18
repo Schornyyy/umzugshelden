@@ -8,6 +8,8 @@ const PHONE_HREF = "tel:+4915168567708";
 export default function MobileCallButton() {
   const pathname = usePathname();
   if (pathname === "/blog" || pathname.startsWith("/blog/")) return null;
+  // Stadt- und Stadt-Service-Seiten haben eine eigene Leiste mit Anfrage-Button.
+  if (pathname.startsWith("/stadt/")) return null;
 
   return (
     <>

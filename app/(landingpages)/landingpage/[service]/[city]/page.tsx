@@ -57,6 +57,11 @@ export default async function SeoCityLandingPage(props: Props) {
         serviceKey={page.serviceKey}
         context={context}
         localSeo={localSeo}
+        leadFocus={{
+          source: `SEO-Landingpage ${page.keyword} – ${page.cityName}`,
+          trackingSource: "seo_landingpage",
+          serviceLabel: page.keyword,
+        }}
       />
     </main>
   );
